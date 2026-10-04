@@ -403,7 +403,7 @@ void MainWindow::queueStream(const StreamCatalog::Station &station)
     m_osd->showValue(tr("Added to Playlist"), station.name);
 }
 
-void MainWindow::onFileFailed(const QString &path, const QString & /*error*/)
+void MainWindow::onFileFailed(const QString &path, const QString &error)
 {
     if (m_liveStreams)
         m_liveStreams->markUnavailable(path);
@@ -416,8 +416,12 @@ void MainWindow::onFileFailed(const QString &path, const QString & /*error*/)
         m_osd->showValue(tr("Trying another source:"), name);
         return;
     }
+    // mpv's reason tells a dead or blocked server ("loading failed") apart
+    // from a stream this build can't decode ("no audio or video data played").
+    qWarning("Stream failed: %s: %s", qUtf8Printable(path), qUtf8Printable(error));
     m_osd->showValue(m_streamRadio ? tr("Station unavailable:") : tr("Channel unavailable:"),
-                     tr("%1 (offline, or not available in your region)").arg(name));
+                     error.isEmpty() ? tr("%1 (offline, or not available in your region)").arg(name)
+                                     : tr("%1 (%2)").arg(name, error));
 }
 
 bool MainWindow::startSession(bool restore)
