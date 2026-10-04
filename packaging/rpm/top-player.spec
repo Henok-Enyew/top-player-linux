@@ -1,10 +1,10 @@
 # Built in CI by .github/workflows/release.yml, which replaces Version with
 # the release tag. Local build from a checkout:
 #
-#   git archive --prefix=top-player-1.0.2/ -o ~/rpmbuild/SOURCES/top-player-1.0.2.tar.gz HEAD
+#   git archive --prefix=top-player-1.0.3/ -o ~/rpmbuild/SOURCES/top-player-1.0.3.tar.gz HEAD
 #   rpmbuild -ba packaging/rpm/top-player.spec
 Name:           top-player
-Version:        1.0.2
+Version:        1.0.3
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -63,6 +63,13 @@ appstreamcli validate --no-net %{buildroot}%{_metainfodir}/org.github.topplayer.
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Sun Oct 04 2026 Henok Enyew Andargie - 1.0.3-1
+- Ask to resume or start over when reopening a file
+- Synced lyrics: LRCLIB download, karaoke-style view, load from file
+- AI prompt for lyrics no site has, with Paste AI Answer
+- Tap-to-sync editor for lyrics and subtitles
+- Custom audio artwork shows over visualizers; drop an image to set it
+
 * Sat Oct 03 2026 Henok Enyew Andargie - 1.0.2-1
 - Media keys and desktop media controls through MPRIS
 - Drag or scroll sideways over the video to seek

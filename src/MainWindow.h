@@ -16,11 +16,13 @@ class AudioEffectsController;
 class ControlBar;
 class EmptyStateWidget;
 class LiveStreamDialog;
+class LyricsController;
 class MpvWidget;
 class OsdWidget;
 class PlayerMenu;
 class PlaylistController;
 class PlaylistDrawer;
+class ResumeManager;
 class ThumbnailGenerator;
 class ThumbnailPopup;
 class TitleBar;
@@ -58,6 +60,8 @@ public:
     bool startSession(bool restore);
     PlaylistController *playlist() const { return m_playlist; }
     AudioController *audio() const { return m_audio; }
+    LyricsController *lyrics() const { return m_lyrics; }
+    ResumeManager *resume() const { return m_resume; }
     AudioEffectsController *audioEffects() const { return m_audioEffects; }
     // Audio -> Audio Control & Equalizer; created on first use.
     void openAudioControlDialog();
@@ -143,6 +147,8 @@ private:
     PlaylistDrawer *m_drawer = nullptr;
     PlaylistController *m_playlist = nullptr;
     AudioController *m_audio = nullptr;
+    LyricsController *m_lyrics = nullptr;
+    ResumeManager *m_resume = nullptr;
     ThumbnailGenerator *m_thumbnails = nullptr;
     ThumbnailPopup *m_thumbnailPopup = nullptr;
     LiveStreamDialog *m_liveStreams = nullptr;

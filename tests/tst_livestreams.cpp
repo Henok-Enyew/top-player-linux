@@ -4,6 +4,7 @@
 // clips, so no network access is needed. Needs a display (run under
 // xvfb-run) and ffmpeg, which generates the test clips.
 
+#include "ResumeManager.h"
 #include "AudioController.h"
 #include "LiveStreamDialog.h"
 #include "MainWindow.h"
@@ -505,6 +506,8 @@ int main(int argc, char *argv[])
     qputenv("XDG_CONFIG_HOME", (home.path() + QStringLiteral("/config")).toLocal8Bit());
     qputenv("XDG_CACHE_HOME", (home.path() + QStringLiteral("/cache")).toLocal8Bit());
     QApplication app(argc, argv);
+    // Reopened files play from the start instead of asking to resume (tst_resume covers that).
+    ResumeManager::setMode(ResumeManager::Mode::Never);
     // libmpv requires the C numeric locale; QApplication may have changed it.
     std::setlocale(LC_NUMERIC, "C");
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);

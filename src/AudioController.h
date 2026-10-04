@@ -51,6 +51,8 @@ public:
 
 Q_SIGNALS:
     void message(const QString &label, const QString &value = QString());
+    // The cover for the current file changed (null when it has none).
+    void artworkChanged(const QImage &image);
 
 private:
     void onFileLoaded();
@@ -71,6 +73,9 @@ private:
     QImage m_artwork;
     ArtworkSource m_source = ArtworkSource::None;
     bool m_extracting = false;
+    // A custom cover the user picked for this track is shown even while a
+    // visualization is selected, until they pick a visualization again.
+    bool m_customWins = false;
     // Audio track fed to the visualization graph.
     QString m_audioId;
     // The visualization filter in the current graph, empty if none.

@@ -28,6 +28,8 @@ QString folderCover(const QString &trackPath);
 QString customArtwork(const QString &trackPath);
 void setCustomArtwork(const QString &trackPath, const QString &imagePath);
 void clearCustomArtwork(const QString &trackPath);
+// True for a file Qt can read as an image (by its suffix).
+bool isImageFile(const QString &path);
 // QFileDialog name filter for images Qt can read.
 QString imageFileFilter();
 

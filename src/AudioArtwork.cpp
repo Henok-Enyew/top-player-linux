@@ -111,6 +111,12 @@ void clearCustomArtwork(const QString &trackPath)
     QSettings(artworkFile(), QSettings::IniFormat).remove(trackKey(trackPath));
 }
 
+bool isImageFile(const QString &path)
+{
+    const QByteArray suffix = QFileInfo(path).suffix().toLower().toLatin1();
+    return !suffix.isEmpty() && QImageReader::supportedImageFormats().contains(suffix) && QFileInfo(path).isFile();
+}
+
 QString imageFileFilter()
 {
     QStringList patterns;

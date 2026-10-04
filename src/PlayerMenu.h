@@ -40,6 +40,7 @@ private:
     // Audio -> Visualizations, and the custom artwork items.
     void buildVisualizationMenu(QMenu *audio);
     void buildSubtitleMenu();
+    void buildLyricsMenu();
     void buildPlaybackMenu();
     void buildToolsMenu();
     void buildWindowMenu();

@@ -6,6 +6,7 @@
 #include "ControlBar.h"
 #include "EmptyStateWidget.h"
 #include "LiveStreamDialog.h"
+#include "LyricsController.h"
 #include "MediaCutterDialog.h"
 #include "MediaDownloaderDialog.h"
 #include "MediaFiles.h"
@@ -17,6 +18,7 @@
 #include "PlayerMenu.h"
 #include "PlaylistController.h"
 #include "PlaylistDrawer.h"
+#include "ResumeManager.h"
 #include "SeekBar.h"
 #include "SubtitleDownloadDialog.h"
 #include "ThumbnailGenerator.h"
@@ -134,12 +136,14 @@ MainWindow::MainWindow(QWidget *parent)
     layout->addWidget(m_controlBar);
     setCentralWidget(m_root);
 
-    // Stacked over the video in creation order: the audio view, then the start
-    // screen, then the OSD on top.
+    // Stacked over the video in creation order: the audio view, the lyrics,
+    // then the start screen, the OSD and the resume prompt on top.
     m_audio = new AudioController(m_mpv, this);
+    m_lyrics = new LyricsController(m_mpv, m_audio, this);
     m_audioEffects = new AudioEffectsController(m_mpv, this);
     m_emptyState = new EmptyStateWidget(m_mpv);
     m_osd = new OsdWidget(m_mpv);
+    m_resume = new ResumeManager(m_mpv, m_mpv);
     m_menu = new PlayerMenu(m_mpv, this);
     m_titleBar->setTitle(QApplication::applicationDisplayName());
 
@@ -160,6 +164,10 @@ MainWindow::MainWindow(QWidget *parent)
             resizeToVideo(size, 1.0);
     });
     connect(m_audio, &AudioController::message, m_osd,
+            [this](const QString &label, const QString &value) { m_osd->showValue(label, value); });
+    connect(m_lyrics, &LyricsController::message, m_osd,
+            [this](const QString &label, const QString &value) { m_osd->showValue(label, value); });
+    connect(m_resume, &ResumeManager::message, m_osd,
             [this](const QString &label, const QString &value) { m_osd->showValue(label, value); });
     connect(m_menu, &PlayerMenu::osdRequested, m_osd,
             [this](const QString &label, const QString &value) { m_osd->showValue(label, value); });
@@ -422,6 +430,19 @@ void MainWindow::openUrls(const QList<QUrl> &urls)
     // Subtitle files are added to the playing video, or to a video dropped with them.
     QStringList media;
     QStringList subtitles;
+    // An image dropped on a playing song becomes its cover.
+    if (urls.size() == 1 && urls.first().isLocalFile() && m_audio->isActive()
+        && AudioArtwork::isImageFile(urls.first().toLocalFile())) {
+        if (!m_audio->setCustomArtwork(urls.first().toLocalFile()))
+            m_osd->showValue(tr("Not an image"), QFileInfo(urls.first().toLocalFile()).fileName());
+        return;
+    }
+    // A lyrics file dropped on a song is loaded as its lyrics.
+    if (urls.size() == 1 && urls.first().isLocalFile() && !m_mpv->isIdle()
+        && urls.first().toLocalFile().endsWith(QLatin1String(".lrc"), Qt::CaseInsensitive)) {
+        m_lyrics->loadFile(urls.first().toLocalFile());
+        return;
+    }
     for (const QUrl &url : urls) {
         if (!url.isLocalFile()) {
             media.append(url.toString());
@@ -753,6 +774,7 @@ void MainWindow::changeEvent(QEvent *event)
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     m_playlist->saveSession();
+    m_resume->saveNow();
     QMainWindow::closeEvent(event);
 }
 

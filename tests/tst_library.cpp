@@ -3,6 +3,7 @@
 // mpv's playlist. Needs a display (run under xvfb-run) and ffmpeg, which
 // generates the test clips.
 
+#include "ResumeManager.h"
 #include "LibraryPanel.h"
 #include "MainWindow.h"
 #include "MediaFiles.h"
@@ -450,6 +451,8 @@ int main(int argc, char *argv[])
     QTemporaryDir config;
     qputenv("XDG_CONFIG_HOME", config.path().toLocal8Bit());
     QApplication app(argc, argv);
+    // Reopened files play from the start instead of asking to resume (tst_resume covers that).
+    ResumeManager::setMode(ResumeManager::Mode::Never);
     // libmpv requires the C numeric locale; QApplication may have changed it.
     std::setlocale(LC_NUMERIC, "C");
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);

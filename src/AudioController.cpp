@@ -58,6 +58,7 @@ void AudioController::onFileLoaded()
     m_artwork = {};
     m_source = ArtworkSource::None;
     m_extracting = false;
+    m_customWins = false;
     if (!m_active) {
         apply();
         return;
@@ -75,6 +76,7 @@ void AudioController::onFileLoaded()
     if (const QImage image = custom.isEmpty() ? QImage() : readImage(custom); !image.isNull()) {
         m_artwork = image;
         m_source = ArtworkSource::Custom;
+        m_customWins = true;
     } else if (!local.isEmpty()) {
         m_extracting = true;
         m_extractor->request(m_path);
@@ -125,7 +127,12 @@ void AudioController::apply()
             break;
         }
     }
+    // The user's own cover for this track beats the visualization setting:
+    // otherwise setting one while a visualizer runs would seem to do nothing.
+    if (m_active && m_customWins && m_source == ArtworkSource::Custom && !m_artwork.isNull())
+        display = Display::Artwork;
     m_display = display;
+    Q_EMIT artworkChanged(m_artwork);
 
     QString filter;
     if (display == Display::Waveform)
@@ -180,6 +187,7 @@ void AudioController::setGraph(const QString &filter)
 void AudioController::setVisualization(AudioArtwork::Visualization mode)
 {
     m_visualization = mode;
+    m_customWins = false;
     AudioArtwork::setVisualization(mode);
     apply();
 }
@@ -234,6 +242,7 @@ bool AudioController::setCustomArtwork(const QString &imagePath)
     m_artwork = image;
     m_source = ArtworkSource::Custom;
     m_extracting = false;
+    m_customWins = true;
     apply();
     Q_EMIT message(tr("Artwork Set"), QFileInfo(imagePath).fileName());
     return true;

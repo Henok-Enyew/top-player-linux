@@ -2,6 +2,7 @@
 // local mock of podnapisi.net and the OpenSubtitles REST API.
 // Needs a display (run under xvfb-run) and ffmpeg, which generates the test clip.
 
+#include "ResumeManager.h"
 #include "MainWindow.h"
 #include "MpvWidget.h"
 #include "OpenSubtitlesClient.h"
@@ -831,6 +832,8 @@ int main(int argc, char *argv[])
     qputenv("XDG_CONFIG_HOME", (config.path() + QStringLiteral("/config")).toLocal8Bit());
     qputenv("XDG_CACHE_HOME", (config.path() + QStringLiteral("/cache")).toLocal8Bit());
     QApplication app(argc, argv);
+    // Reopened files play from the start instead of asking to resume (tst_resume covers that).
+    ResumeManager::setMode(ResumeManager::Mode::Never);
     // libmpv requires the C numeric locale; QApplication may have changed it.
     std::setlocale(LC_NUMERIC, "C");
     SubtitleTest test;
