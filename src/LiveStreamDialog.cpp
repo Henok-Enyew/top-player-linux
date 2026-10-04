@@ -533,9 +533,11 @@ void LiveStreamDialog::startLogoDownloads()
             reply->deleteLater();
             --m_logoDownloads;
             m_logoRequests.remove(url);
-            const QByteArray data = reply->readAll();
+            // A failed reply is closed; reading it only logs warnings.
+            const bool ok = reply->error() == QNetworkReply::NoError;
+            const QByteArray data = ok ? reply->readAll() : QByteArray();
             const QImage image = QImage::fromData(data);
-            if (reply->error() != QNetworkReply::NoError || image.isNull()) {
+            if (!ok || image.isNull()) {
                 m_failedLogos.insert(url); // keeps the placeholder
             } else {
                 QDir().mkpath(StreamCatalog::cacheDir() + QStringLiteral("/logos"));
