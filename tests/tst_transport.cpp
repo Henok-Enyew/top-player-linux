@@ -6,6 +6,7 @@
 #include "Icons.h"
 #include "MainWindow.h"
 #include "PlaylistDrawer.h"
+#include "ResumeManager.h"
 #include "MpvWidget.h"
 #ifdef TOPPLAYER_HAVE_DBUS
 #include "MprisService.h"
@@ -702,8 +703,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.2"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.2")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.3"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.0.3")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -754,7 +755,13 @@ void TransportTest::thumbnailsOnlyOnHover()
 
 int main(int argc, char *argv[])
 {
+    // Keep the settings away from the user's own.
+    QTemporaryDir config;
+    qputenv("XDG_CONFIG_HOME", config.path().toLocal8Bit());
     QApplication app(argc, argv);
+    // The same clip is reopened after seeking: play it from the start each
+    // time instead of asking to resume (tst_resume covers that).
+    ResumeManager::setMode(ResumeManager::Mode::Never);
     // libmpv requires the C numeric locale; QApplication may have changed it.
     std::setlocale(LC_NUMERIC, "C");
     TransportTest test;

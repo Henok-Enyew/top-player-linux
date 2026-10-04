@@ -4,6 +4,7 @@
 // Drives the real window and checks the result on mpv's properties. Needs a
 // display (run under xvfb-run) and ffmpeg, which generates the test media.
 
+#include "ResumeManager.h"
 #include "AudioController.h"
 #include "AudioView.h"
 #include "MainWindow.h"
@@ -121,6 +122,8 @@ private Q_SLOTS:
     void folderCover();
     void fallsBackToSpectrum();
     void customArtwork();
+    void customArtworkOverVisualization();
+    void dropImageSetsArtwork();
     void visualizationMenu();
     void seekAndVolumeWithVisualization();
     void audioTrackSwitching();
@@ -386,6 +389,45 @@ void AudioTest::customArtwork()
     QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::None);
 }
 
+void AudioTest::customArtworkOverVisualization()
+{
+    // Setting a cover while a visualizer runs used to change nothing on screen.
+    m_audio->setVisualization(AudioArtwork::Visualization::Waveform);
+    open(m_mp3);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->display(), AudioController::Display::Waveform, 10000);
+    QVERIFY(m_audio->setCustomArtwork(m_customImage));
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Artwork);
+    QTRY_COMPARE(propString("lavfi-complex"), QString());
+    // It is on screen.
+    const QImage shot = m_audio->view()->grab().toImage();
+    QVERIFY(near(shot.pixelColor(m_audio->view()->artworkRect().center()), Qt::magenta));
+
+    // Reopened, the track shows its cover again.
+    open(m_long);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->display(), AudioController::Display::Waveform, 10000);
+    open(m_mp3);
+    QTRY_COMPARE(m_audio->display(), AudioController::Display::Artwork);
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Custom);
+
+    // Picking a visualization again shows it.
+    setVisualization(QStringLiteral("Frequency Spectrum"));
+    QCOMPARE(m_audio->display(), AudioController::Display::Spectrum);
+    m_audio->clearCustomArtwork();
+}
+
+void AudioTest::dropImageSetsArtwork()
+{
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->display(), AudioController::Display::Spectrum, 10000);
+    m_window->openUrls({QUrl::fromLocalFile(m_customImage)});
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Custom);
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    // The song keeps playing; the image did not replace it.
+    QCOMPARE(propString("path"), m_plain);
+    m_audio->clearCustomArtwork();
+}
+
 void AudioTest::visualizationMenu()
 {
     open(m_mp3);
@@ -501,6 +543,8 @@ int main(int argc, char *argv[])
     QTemporaryDir config;
     qputenv("XDG_CONFIG_HOME", config.path().toLocal8Bit());
     QApplication app(argc, argv);
+    // Reopened files play from the start instead of asking to resume (tst_resume covers that).
+    ResumeManager::setMode(ResumeManager::Mode::Never);
     // libmpv requires the C numeric locale; QApplication may have changed it.
     std::setlocale(LC_NUMERIC, "C");
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);

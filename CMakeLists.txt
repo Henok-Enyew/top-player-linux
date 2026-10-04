@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(top-player
-    VERSION 1.0.2
+    VERSION 1.0.3
     DESCRIPTION "Top Player: a lightweight Qt6 + libmpv media player for Linux"
     LANGUAGES CXX)
 
@@ -63,6 +63,16 @@ add_library(top-player-core OBJECT
     src/LibraryPanel.h
     src/LiveStreamDialog.cpp
     src/LiveStreamDialog.h
+    src/Lyrics.cpp
+    src/Lyrics.h
+    src/LyricsClient.cpp
+    src/LyricsClient.h
+    src/LyricsController.cpp
+    src/LyricsController.h
+    src/LyricsDialogs.cpp
+    src/LyricsDialogs.h
+    src/LyricsView.cpp
+    src/LyricsView.h
     src/MainWindow.cpp
     src/MainWindow.h
     src/MediaCutter.cpp
@@ -98,6 +108,10 @@ add_library(top-player-core OBJECT
     src/PlaylistOps.h
     src/PlaylistSession.cpp
     src/PlaylistSession.h
+    src/ResumeManager.cpp
+    src/ResumeManager.h
+    src/ResumePrompt.cpp
+    src/ResumePrompt.h
     src/SeekBar.cpp
     src/SeekBar.h
     src/StreamCatalog.cpp
@@ -110,6 +124,8 @@ add_library(top-player-core OBJECT
     src/SubtitleHasher.h
     src/SubtitleSearch.cpp
     src/SubtitleSearch.h
+    src/SyncEditorDialog.cpp
+    src/SyncEditorDialog.h
     src/Theme.cpp
     src/Theme.h
     src/ThumbnailGenerator.cpp

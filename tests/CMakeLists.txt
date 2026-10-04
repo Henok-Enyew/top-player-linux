@@ -35,3 +35,11 @@ add_test(NAME tst_equalizer COMMAND tst_equalizer)
 add_executable(tst_tools tst_tools.cpp)
 target_link_libraries(tst_tools PRIVATE top-player-core Qt6::Test)
 add_test(NAME tst_tools COMMAND tst_tools)
+
+add_executable(tst_lyrics tst_lyrics.cpp)
+target_link_libraries(tst_lyrics PRIVATE top-player-core Qt6::Test)
+add_test(NAME tst_lyrics COMMAND tst_lyrics)
+
+add_executable(tst_resume tst_resume.cpp)
+target_link_libraries(tst_resume PRIVATE top-player-core Qt6::Test)
+add_test(NAME tst_resume COMMAND tst_resume)

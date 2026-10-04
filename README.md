@@ -9,7 +9,7 @@
 **A fast, lightweight native media player for Linux, built on Qt 6 and libmpv.**
 
 Video, music, live TV and online radio in one dark, focused player, with subtitle downloads,
-a 10-band equalizer, a playlist manager and a media library.
+synced lyrics, a 10-band equalizer, a playlist manager and a media library.
 
 [![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=00D2FF)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
 [![CI](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml/badge.svg)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
@@ -59,7 +59,9 @@ a 10-band equalizer, a playlist manager and a media library.
 | --- | --- |
 | 🎬 **Plays everything mpv plays** | Every common video and audio format, streams and playlists, with hardware decoding. |
 | 📺 **Live TV & Radio** | Free channels and stations from every country, with categories, search and automatic fallback streams. |
-| 💬 **Subtitles without an account** | Exact-match and by-name search, one-click download, dual subtitles. |
+| 💬 **Subtitles without an account** | Exact-match and by-name search, one-click download, dual subtitles, tap-to-sync editor. |
+| 🎤 **Synced lyrics** | Free LRC downloads, a karaoke-style view, a tap-to-sync editor, and a ready-made AI prompt for songs no site has. |
+| ⏯️ **Pick up where you left off** | Reopen any file and choose **Resume** or **Start Over**. |
 | 🎚️ **Studio-style sound** | Preamp, bass, treble, a 10-band equalizer with presets, and night mode. |
 | 📂 **Playlist & Library** | Sorting, search, shuffle and repeat, M3U save/open, and saved folders and playlists. |
 | ✂️ **Built-in tools** | Lossless cutting, audio extraction, and downloads from YouTube and 1000+ sites. |
@@ -75,6 +77,7 @@ a 10-band equalizer, a playlist manager and a media library.
 - [Playback](#playback)
 - [Interface](#interface)
 - [Audio view](#audio-view)
+- [Lyrics](#lyrics)
 - [Audio Control & Equalizer](#audio-control--equalizer)
 - [Playlist](#playlist)
 - [Library](#library)
@@ -113,6 +116,11 @@ a 10-band equalizer, a playlist manager and a media library.
   width spans 3 minutes, or the whole file if shorter); the OSD shows the jump
   and the target time, `Esc` cancels. Sideways touchpad or tilt-wheel
   scrolling seeks 5 s per step.
+- **Resume or start over**: every file remembers where it was left. Opening
+  it again shows a small card, *Continue watching?* (or *listening?*), with
+  **Resume from 12:34** and **Start Over** (`Enter` / `Esc`); it resumes by
+  itself after 10 seconds. **Playback → When Reopening a File** switches
+  between asking, **Always Resume** and **Always Start Over**.
 - **Opened media plays right away**, even if the last file was paused or
   ran to its end. Opening a folder or playlist **replaces** the playlist;
   a slower scan that finishes after a newer open is dropped.
@@ -157,13 +165,47 @@ black screen; seeking, volume and track switching work as for video.
 
 - The **cover** is shown with a soft drop shadow above the **title, artist and
   album**. It comes from, in order: an image you assign (**Audio → Set Custom
-  Audio Artwork...**, undone with **Clear Custom Audio Artwork**), art embedded
+  Audio Artwork...**, or **drop an image** on the window while the song
+  plays; undone with **Clear Custom Audio Artwork**), art embedded
   in the file (ID3 `APIC`, FLAC / Vorbis `METADATA_BLOCK_PICTURE`, MP4 cover
   atoms), or a `cover` / `folder` / `front` / `album` image next to the track.
 - **Audio → Visualizations**: **Album Art Mode** (falls back to the spectrum
   without a cover), **Waveform Visualizer**, **Frequency Spectrum** (mpv's
   `showwaves` / `showfreqs` through `lavfi-complex`), or **Off**, a minimal
-  canvas with the track's metadata.
+  canvas with the track's metadata. A custom cover you set for a track is
+  shown even while a visualizer is selected, until you pick a visualization
+  again.
+
+### Lyrics
+
+Right-click → **Lyrics**. Lyrics show over the song karaoke style: the line
+being sung sits in the middle, large and bold, the lines around it fade with
+their distance, and the view scrolls smoothly from line to line over a
+blurred tint of the cover. Plain (unsynced) lyrics scroll along with the song.
+
+- **Found automatically**: a `.lrc` (or `.txt`) next to the track with the
+  same name, or lyrics downloaded, loaded or synced for it before. They show
+  by themselves for songs (**Show Lyrics Automatically for Songs**); `Y`
+  shows or hides them, also over videos.
+- **Download Lyrics...** (`Alt+Y`) searches [LRCLIB](https://lrclib.net), a
+  free, open database of time-synced lyrics that needs no account or key,
+  with [lyrics.ovh](https://lyrics.ovh) as a fallback for plain lyrics. The
+  title and artist come from the tags, or from an "Artist - Title" file name;
+  synced results and the closest length come first, with a preview.
+- **Generate Lyrics with AI (Copy Prompt)...**: for songs no site has, a
+  structured prompt with the title, artist, album and exact length that asks
+  any chat AI (ChatGPT, Claude, Gemini, ...) for a ready `.lrc` file. Load the
+  file it gives you, or copy its whole answer and press **Paste AI Answer**.
+- **Load Lyrics File...**, or drop a `.lrc` on the window (`.lrc`, `.txt`,
+  `.srt`, `.vtt`; UTF-8, UTF-16 or Latin-1).
+- **Lyrics Sync Editor...** (`Ctrl+Y`): paste the words (**Edit Text...**),
+  play the song and press `Space` as each line starts. `Backspace` undoes,
+  `←` / `→` seek 3 s, `[` / `]` nudge a line by 0.1 s (optionally with every
+  line after it), `P` plays or pauses, playback can slow to 0.5x, and the
+  lyrics view follows every change live. **Save Lyrics** keeps them for the
+  track; **Export As...** writes `.lrc` or `.srt`.
+- **Lyrics Earlier / Later** (`Alt+[` / `Alt+]`) shift synced lyrics by 0.1 s
+  and save the offset.
 
 ### Audio Control & Equalizer
 
@@ -278,6 +320,12 @@ Countries** and **every other country** alphabetically. Then:
     **Release match**.
   - **Download & Play** saves to `~/.cache/top-player/subtitles/` (or next to
     the video) and shows it right away. `Esc` cancels a search.
+- **Subtitle Sync Editor...** (`Ctrl+Shift+Y`) fixes out-of-sync `.srt` /
+  `.vtt` subtitles by ear: select a line, play, and press `Space` when it is
+  spoken. Every following line moves with it and keeps its length, so one
+  tap often fixes a whole file; single lines can be tapped or nudged too.
+  **Save & Load Subtitles** writes `<name>.synced.srt` next to the original
+  (or to the cache) and switches to it.
 
 ### Tools
 
@@ -307,6 +355,8 @@ Countries** and **every other country** alphabetically. Then:
 | Audio effects | `~/.config/top-player/audio_settings.json` |
 | Live TV & Radio lists and logos | `~/.cache/top-player/streams/` |
 | Downloaded subtitles | `~/.cache/top-player/subtitles/` |
+| Lyrics (downloaded, synced, assigned) | `~/.config/top-player/lyrics/` |
+| Resume positions | `~/.config/top-player/resume.ini` |
 
 Settings from versions before 1.0 are copied over from
 `~/.config/potplayer-linux` on the first start.
@@ -344,7 +394,7 @@ URL (`sudo dnf install yt-dlp`, `sudo apt install yt-dlp` or
 ## Keyboard and mouse
 
 Right-click anywhere for the full menu: **Playback**, **Video**, **Audio**,
-**Subtitles**, **Tools**, **Window** and **Help**. Every item is bound to an
+**Subtitles**, **Lyrics**, **Tools**, **Window** and **Help**. Every item is bound to an
 mpv property or command, and check marks reflect mpv's live state.
 
 <table>
@@ -399,6 +449,17 @@ mpv property or command, and check marks reflect mpv's live state.
 | `Alt+Shift+H` | Show / hide secondary |
 | `Alt+Up` / `Alt+Down` | Move up / down |
 | `Alt+PgUp` / `Alt+PgDn` | Larger / smaller |
+| `Ctrl+Shift+Y` | Subtitle sync editor |
+
+**Lyrics**
+
+| Input | Action |
+| --- | --- |
+| `Y` | Show / hide lyrics |
+| `Alt+Y` | Download lyrics |
+| `Ctrl+Y` | Lyrics sync editor |
+| `Alt+[` / `Alt+]` | Lyrics earlier / later 0.1 s |
+| `Enter` / `Esc` | Resume / start over (resume card) |
 
 **Tools and dialogs**
 
@@ -457,7 +518,7 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.2 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.3 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
 | RPM | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | see the comment at the top of the spec |
 
@@ -486,7 +547,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.2**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.2) | 2026-10-03 | Media keys over MPRIS, swipe / sideways-scroll seeking, autoplay on open, opening a folder replaces the playlist, clickable library sections, new window buttons and a PotPlayer-style playlist bar, lighter playback |
+| [**1.0.3**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
+| [1.0.2](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.2) | 2026-10-03 | Media keys over MPRIS, swipe / sideways-scroll seeking, autoplay on open, opening a folder replaces the playlist, clickable library sections, new window buttons and a PotPlayer-style playlist bar, lighter playback |
 | [1.0.1](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.1) | 2026-10-03 | Live TV fix (referrer / user agent, fallback streams), every country with categories and Hide geo-blocked, playlist in fullscreen, shuffle / repeat / aspect buttons, better Open Playlist |
 | [**1.0.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.0) | 2026-10-03 | Renamed to Top Player with a new icon and cyan skin, About dialog, click to pause, double-click for fullscreen, fast folder loading, 10-band equalizer |
 | [0.2.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v0.2.0) | 2026-10-03 | Subtitle download, audio view with cover art and visualizations, playlist manager with sorting, M3U and session restore |
@@ -504,9 +566,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.2 && git push origin v1.0.2`
+2. `git tag v1.0.3 && git push origin v1.0.3`
 
-A tag with a suffix such as `v1.0.2-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.3-rc1` is published as a pre-release.
 
 </details>
 

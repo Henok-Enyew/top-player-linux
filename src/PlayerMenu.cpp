@@ -1,7 +1,9 @@
 #include "PlayerMenu.h"
 #include "AudioController.h"
+#include "LyricsController.h"
 #include "MainWindow.h"
 #include "MpvWidget.h"
+#include "ResumeManager.h"
 
 #include <QActionGroup>
 #include <QFileDialog>
@@ -51,6 +53,7 @@ PlayerMenu::PlayerMenu(MpvWidget *mpv, MainWindow *window)
     buildVideoMenu();
     buildAudioMenu();
     buildSubtitleMenu();
+    buildLyricsMenu();
     buildToolsMenu();
     addSeparator();
     buildWindowMenu();
@@ -176,6 +179,8 @@ void PlayerMenu::buildSubtitleMenu()
     addItem(subs, tr("Download Subtitles..."), [this] { m_window->openSubtitleDownloadDialog(); },
             QKeySequence(Qt::Key_D));
     addItem(subs, tr("Subtitle Download Settings..."), [this] { m_window->openSubtitleSettingsDialog(); });
+    addItem(subs, tr("Subtitle Sync Editor..."), [this] { m_window->lyrics()->openSyncEditor(true); },
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Y));
 
     // Delay and position changes are observed by MainWindow, which shows the OSD.
     subs->addSeparator();
@@ -203,6 +208,39 @@ void PlayerMenu::buildSubtitleMenu()
                QKeySequence(Qt::ALT | Qt::Key_PageUp));
     addCommand(subs, tr("Smaller"), {QStringLiteral("add"), QStringLiteral("sub-scale"), QStringLiteral("-0.1")},
                QKeySequence(Qt::ALT | Qt::Key_PageDown));
+}
+
+void PlayerMenu::buildLyricsMenu()
+{
+    LyricsController *lyrics = m_window->lyrics();
+    QMenu *menu = addMenu(tr("Lyrics"));
+    menu->setObjectName(QStringLiteral("LyricsMenu"));
+    QAction *show = addItem(menu, tr("Show Lyrics"), [lyrics] { lyrics->toggle(); }, QKeySequence(Qt::Key_Y));
+    show->setCheckable(true);
+    QAction *autoShow = menu->addAction(tr("Show Lyrics Automatically for Songs"));
+    autoShow->setCheckable(true);
+    connect(autoShow, &QAction::triggered, this, &LyricsController::setAutoShow);
+    menu->addSeparator();
+    addItem(menu, tr("Download Lyrics..."), [lyrics] { lyrics->openDownloadDialog(); },
+            QKeySequence(Qt::ALT | Qt::Key_Y));
+    addItem(menu, tr("Generate Lyrics with AI (Copy Prompt)..."), [lyrics] { lyrics->openAiPromptDialog(); });
+    addItem(menu, tr("Load Lyrics File..."), [lyrics] { lyrics->loadFileDialog(); });
+    addItem(menu, tr("Lyrics Sync Editor..."), [lyrics] { lyrics->openSyncEditor(false); },
+            QKeySequence(Qt::CTRL | Qt::Key_Y));
+    menu->addSeparator();
+    QAction *earlier = addItem(menu, tr("Lyrics Earlier (-0.1s)"), [lyrics] { lyrics->adjustOffset(-0.1); },
+                               QKeySequence(Qt::ALT | Qt::Key_BracketLeft));
+    QAction *later = addItem(menu, tr("Lyrics Later (+0.1s)"), [lyrics] { lyrics->adjustOffset(0.1); },
+                             QKeySequence(Qt::ALT | Qt::Key_BracketRight));
+    QAction *remove = addItem(menu, tr("Remove Lyrics for This Track"), [lyrics] { lyrics->removeLyrics(); });
+    connect(menu, &QMenu::aboutToShow, this, [lyrics, show, autoShow, earlier, later, remove] {
+        show->setChecked(lyrics->isShown());
+        autoShow->setChecked(LyricsController::autoShow());
+        const bool synced = lyrics->document().isSynced();
+        earlier->setEnabled(synced);
+        later->setEnabled(synced);
+        remove->setEnabled(!lyrics->document().isEmpty());
+    });
 }
 
 void PlayerMenu::buildPlaybackMenu()
@@ -278,6 +316,26 @@ void PlayerMenu::buildPlaybackMenu()
                QKeySequence(Qt::Key_Z));
     addToggle(playback, tr("Loop File"), QStringLiteral("loop-file"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), true,
               QStringLiteral("inf"), QStringLiteral("no"));
+
+    // What to do when a file that was left halfway is opened again.
+    QMenu *resume = playback->addMenu(tr("When Reopening a File"));
+    resume->setObjectName(QStringLiteral("ResumeMenu"));
+    auto *group = new QActionGroup(resume);
+    const QList<QPair<QString, ResumeManager::Mode>> modes{
+        {tr("Ask to Resume or Start Over"), ResumeManager::Mode::Ask},
+        {tr("Always Resume"), ResumeManager::Mode::Always},
+        {tr("Always Start Over"), ResumeManager::Mode::Never},
+    };
+    for (const auto &[text, mode] : modes) {
+        QAction *action = resume->addAction(text);
+        action->setCheckable(true);
+        group->addAction(action);
+        connect(action, &QAction::triggered, this, [this, text, mode] {
+            ResumeManager::setMode(mode);
+            Q_EMIT osdRequested(tr("When Reopening"), text);
+        });
+        connect(resume, &QMenu::aboutToShow, action, [action, mode] { action->setChecked(ResumeManager::mode() == mode); });
+    }
 }
 
 void PlayerMenu::buildToolsMenu()

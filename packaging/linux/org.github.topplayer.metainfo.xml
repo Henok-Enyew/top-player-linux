@@ -33,6 +33,17 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.3" date="2026-10-04">
+      <description>
+        <ul>
+          <li>Reopening a file left halfway asks whether to resume or start over (or always does one, as set)</li>
+          <li>Synced lyrics: downloads from LRCLIB (lyrics.ovh as fallback), a karaoke-style view that centers and highlights the sung line, lyrics files next to the song or loaded by hand</li>
+          <li>A ready-made AI prompt (title, artist, length) for songs no lyrics site has, with Paste AI Answer</li>
+          <li>Tap-to-sync editor for lyrics and subtitles, with undo, nudging, slow playback and LRC / SRT export</li>
+          <li>Custom audio artwork now shows even while a visualizer is selected, and an image dropped on a playing song becomes its cover</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-10-03">
       <description>
         <ul>
