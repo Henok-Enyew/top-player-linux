@@ -342,7 +342,7 @@ Countries** and **every other country** alphabetically. Then:
 
 > [!NOTE]
 > The tools use the system's `ffmpeg` and `yt-dlp`, so they are available in
-> the AppImage, RPM and source builds, not in the Flatpak.
+> the AppImage, the distro packages and source builds, not in the Flatpak.
 
 ### Settings and files
 
@@ -370,22 +370,36 @@ Settings from versions before 1.0 are copied over from
 Download the package for your system from the
 **[latest release](https://github.com/Henok-Enyew/top-player-linux/releases/latest)**:
 
-| Package | Install |
-| --- | --- |
-| **AppImage** (any distro) | `chmod +x Top_Player-*.AppImage && ./Top_Player-*.AppImage` |
-| **Flatpak** | `flatpak install --user Top_Player-*.flatpak` (needs the Flathub remote for the KDE runtime) |
-| **Fedora RPM** | `sudo dnf install ./top-player-*.x86_64.rpm` |
+| Distro | Download | Install |
+| --- | --- | --- |
+| **Ubuntu 22.04 / 24.04 / 26.04** | `top-player_*+ubuntu<version>_amd64.deb` | `sudo apt install ./top-player_*.deb` |
+| **Debian 13** | `top-player_*+debian13_amd64.deb` | `sudo apt install ./top-player_*.deb` |
+| **Fedora** | `top-player-*.fc<version>.x86_64.rpm` | `sudo dnf install ./top-player-*.rpm` |
+| **openSUSE Tumbleweed** | `top-player-*.tw.x86_64.rpm` | `sudo zypper install ./top-player-*.rpm` |
+| **openSUSE Leap 16.0** | `top-player-*.lp160.x86_64.rpm` | `sudo zypper install ./top-player-*.rpm` |
+| **Arch Linux** (and Manjaro, EndeavourOS) | `top-player-*-x86_64.pkg.tar.zst` | `sudo pacman -U ./top-player-*.pkg.tar.zst` |
+| **Any distro** | `Top_Player-*-x86_64.AppImage` | `chmod +x Top_Player-*.AppImage && ./Top_Player-*.AppImage` |
+| **Any distro** | `Top_Player-*-x86_64.flatpak` | `flatpak install --user Top_Player-*.flatpak` (needs the Flathub remote for the KDE runtime) |
+
+Pick the `.deb` built for your exact release: each one links against that
+release's Qt and libmpv. Linux Mint 21 / 22 and Pop!_OS use the Ubuntu 22.04 /
+24.04 package. The package manager pulls in Qt and libmpv.
 
 Each release also includes a `SHA256SUMS` file to verify the downloads.
 
 > [!TIP]
 > The AppImage is built on Ubuntu 24.04 and needs glibc 2.39 or newer
-> (Ubuntu 24.04+, Fedora 40+, Debian 13+). On older systems, use the Flatpak.
+> (Ubuntu 24.04+, Fedora 40+, Debian 13+). On older systems, use your
+> distro's package or the Flatpak.
+>
+> On Ubuntu 22.04, FFmpeg 4.4 has no Spectrum visualization; the other
+> visualizations work.
 
 **Optional tools:** `ffmpeg` for Cut / Extract Media (`sudo dnf install ffmpeg`
-from RPM Fusion, or `sudo apt install ffmpeg`) and `yt-dlp` for Download from
-URL (`sudo dnf install yt-dlp`, `sudo apt install yt-dlp` or
-`pip install --user yt-dlp`).
+from RPM Fusion, `sudo apt install ffmpeg`, `sudo zypper install ffmpeg` or
+`sudo pacman -S ffmpeg`) and `yt-dlp` for Download from URL
+(`sudo dnf install yt-dlp`, `sudo apt install yt-dlp`, `sudo pacman -S yt-dlp`
+or `pip install --user yt-dlp`). The `.deb` and Arch packages suggest both.
 
 <p align="right"><a href="#top">↑ Back to top</a></p>
 
@@ -488,8 +502,10 @@ mpv property or command, and check marks reflect mpv's live state.
 
 | Distro | Packages |
 | --- | --- |
-| Ubuntu / Debian | `build-essential cmake ninja-build pkg-config qt6-base-dev libgl-dev libmpv-dev zlib1g-dev` |
+| Ubuntu / Debian | `build-essential cmake ninja-build pkg-config qt6-base-dev libqt6opengl6-dev libgl-dev libmpv-dev zlib1g-dev` |
 | Fedora | `gcc-c++ cmake ninja-build pkgconf-pkg-config qt6-qtbase-devel mesa-libGL-devel mpv-devel zlib-devel` |
+| openSUSE | `gcc-c++ cmake ninja pkgconf qt6-base-devel Mesa-libGL-devel mpv-devel zlib-devel` |
+| Arch Linux | `base-devel cmake ninja qt6-base mpv zlib` |
 
 ### Compile and run
 
@@ -520,7 +536,9 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 | --- | --- | --- |
 | AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.3 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| RPM | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | see the comment at the top of the spec |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.3 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.3 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.3 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -529,7 +547,7 @@ Packages land in `dist/`.
 
 To build in a default key for exact (hash) subtitle matches, add it as the
 repository secret `OPENSUBTITLES_API_KEY`; the release workflow passes it to
-all three builds. Locally, set `$OPENSUBTITLES_API_KEY` or put the key in an
+every build. Locally, set `$OPENSUBTITLES_API_KEY` or put the key in an
 untracked `opensubtitles-api-key.txt` before running CMake. Without one,
 search by name still works through podnapisi.net, and users can enter a key
 of their own.
@@ -558,7 +576,9 @@ of their own.
 <summary><b>Publishing a release</b> (maintainers)</summary>
 
 The [Release workflow](.github/workflows/release.yml) builds the AppImage,
-Flatpak and RPM. It runs on pull requests that touch packaging and can be
+Flatpak, the `.deb` packages (Ubuntu 22.04, 24.04, 26.04, Debian 13), the
+RPMs (Fedora, openSUSE Tumbleweed, Leap 16.0) and the Arch package, and checks
+that each one installs and starts. It runs on pull requests that touch packaging and can be
 started from the Actions tab; both only build. Pushing a `v*` tag also
 publishes a GitHub Release with the packages and `SHA256SUMS`:
 

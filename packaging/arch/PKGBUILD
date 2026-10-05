@@ -1,0 +1,38 @@
+# Maintainer: Henok Enyew Andargie
+#
+# Built in CI by .github/workflows/release.yml (packaging/arch/build-arch.sh),
+# which sets pkgver and puts the source tarball next to this file. Local build
+# from a checkout:
+#
+#   packaging/arch/build-arch.sh
+pkgname=top-player
+pkgver=1.0.3
+pkgrel=1
+pkgdesc='High-performance, lightweight native media player powered by Qt6 and libmpv'
+arch=('x86_64' 'aarch64')
+url='https://github.com/Henok-Enyew/top-player-linux'
+license=('MIT')
+depends=('qt6-base' 'mpv' 'zlib' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja' 'desktop-file-utils' 'appstream')
+optdepends=('qt6-wayland: native Wayland support'
+            'ffmpeg: Cut / Extract Media'
+            'yt-dlp: Download from URL')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  desktop-file-validate packaging/linux/org.github.topplayer.desktop
+  appstreamcli validate --no-net packaging/linux/org.github.topplayer.metainfo.xml
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

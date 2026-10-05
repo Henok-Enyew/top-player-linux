@@ -450,7 +450,7 @@ QMenu *PlayerMenu::addTrackMenu(QMenu *menu, const QString &title, const QString
 {
     QMenu *submenu = menu->addMenu(title);
     connect(submenu, &QMenu::aboutToShow, this, [this, submenu, title, type, property] {
-        qDeleteAll(submenu->findChildren<QActionGroup *>(Qt::FindDirectChildrenOnly));
+        qDeleteAll(submenu->findChildren<QActionGroup *>(QString(), Qt::FindDirectChildrenOnly));
         submenu->clear();
         auto *group = new QActionGroup(submenu);
         // Compare against the property itself: a track's "selected" flag is also set
