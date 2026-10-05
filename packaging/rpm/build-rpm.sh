@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Top Player RPM on Fedora or openSUSE. Run from the repository root:
 #
-#   VERSION=1.0.3 packaging/rpm/build-rpm.sh
+#   VERSION=1.0.4 packaging/rpm/build-rpm.sh
 #
 # As root (as in CI) this installs the build dependencies first; otherwise
 # install the BuildRequires from packaging/rpm/top-player.spec yourself.

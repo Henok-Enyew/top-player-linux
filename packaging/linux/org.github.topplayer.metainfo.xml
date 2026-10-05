@@ -33,6 +33,14 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.4" date="2026-10-05">
+      <description>
+        <ul>
+          <li>Packages for Ubuntu 22.04, 24.04 and 26.04, Debian 13, openSUSE Tumbleweed and Leap 16.0, and Arch Linux, next to the AppImage, Flatpak and Fedora RPM</li>
+          <li>Builds with Qt 6.2</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-10-04">
       <description>
         <ul>

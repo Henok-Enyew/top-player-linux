@@ -534,11 +534,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.3 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.4 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.3 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.3 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.3 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.4 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.4 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.4 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -565,7 +565,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.3**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
+| [**1.0.4**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
+| [1.0.3](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
 | [1.0.2](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.2) | 2026-10-03 | Media keys over MPRIS, swipe / sideways-scroll seeking, autoplay on open, opening a folder replaces the playlist, clickable library sections, new window buttons and a PotPlayer-style playlist bar, lighter playback |
 | [1.0.1](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.1) | 2026-10-03 | Live TV fix (referrer / user agent, fallback streams), every country with categories and Hide geo-blocked, playlist in fullscreen, shuffle / repeat / aspect buttons, better Open Playlist |
 | [**1.0.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.0) | 2026-10-03 | Renamed to Top Player with a new icon and cyan skin, About dialog, click to pause, double-click for fullscreen, fast folder loading, 10-band equalizer |
@@ -586,9 +587,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.3 && git push origin v1.0.3`
+2. `git tag v1.0.4 && git push origin v1.0.4`
 
-A tag with a suffix such as `v1.0.3-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.4-rc1` is published as a pre-release.
 
 </details>
 

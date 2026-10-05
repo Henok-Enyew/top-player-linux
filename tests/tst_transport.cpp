@@ -703,8 +703,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.3"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.3")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.4"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.0.4")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
