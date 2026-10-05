@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.0.3 packaging/rpm/build-rpm.sh
+#   VERSION=1.0.4 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.0.3
+Version:        1.0.4
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -76,6 +76,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Mon Oct 05 2026 Henok Enyew Andargie - 1.0.4-1
+- Packages for Debian, Ubuntu, openSUSE and Arch Linux
+- Builds with Qt 6.2
+
 * Sun Oct 04 2026 Henok Enyew Andargie - 1.0.3-1
 - Ask to resume or start over when reopening a file
 - Synced lyrics: LRCLIB download, karaoke-style view, load from file

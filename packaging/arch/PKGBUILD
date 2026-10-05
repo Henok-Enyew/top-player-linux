@@ -6,7 +6,7 @@
 #
 #   packaging/arch/build-arch.sh
 pkgname=top-player
-pkgver=1.0.3
+pkgver=1.0.4
 pkgrel=1
 pkgdesc='High-performance, lightweight native media player powered by Qt6 and libmpv'
 arch=('x86_64' 'aarch64')
