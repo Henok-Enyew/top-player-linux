@@ -1,0 +1,32 @@
+Source: top-player
+Section: video
+Priority: optional
+Maintainer: Henok Enyew Andargie <noreply@github.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.16),
+               ninja-build,
+               pkgconf,
+               qt6-base-dev (>= 6.2),
+               libqt6opengl6-dev,
+               libgl-dev,
+               libmpv-dev,
+               zlib1g-dev,
+               desktop-file-utils,
+               appstream
+Standards-Version: 4.7.0
+Homepage: https://github.com/Henok-Enyew/top-player-linux
+Rules-Requires-Root: no
+
+Package: top-player
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         qt6-qpa-plugins,
+         hicolor-icon-theme
+Recommends: qt6-wayland, ffmpeg, yt-dlp
+Description: High-performance, lightweight native media player
+ Top Player is a high-performance, lightweight native media player for Linux
+ powered by Qt6 and libmpv: a borderless cyan-on-obsidian skin with an
+ on-screen display, a seekbar with preview thumbnails, a playlist manager, an
+ audio view with cover art and visualizations, synced lyrics, dual subtitles,
+ a 10-band equalizer and subtitle downloads.

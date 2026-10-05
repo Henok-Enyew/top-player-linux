@@ -1,20 +1,29 @@
-# Built in CI by .github/workflows/release.yml, which replaces Version with
-# the release tag. Local build from a checkout:
+# Builds on Fedora and openSUSE (Tumbleweed and Leap). Built in CI by
+# .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
+# replaces Version with the release tag. Local build from a checkout:
 #
-#   git archive --prefix=top-player-1.0.3/ -o ~/rpmbuild/SOURCES/top-player-1.0.3.tar.gz HEAD
-#   rpmbuild -ba packaging/rpm/top-player.spec
+#   VERSION=1.0.3 packaging/rpm/build-rpm.sh
 Name:           top-player
 Version:        1.0.3
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
 License:        MIT
-URL:            https://github.com/henok-enyew/pot-player-linux
+URL:            https://github.com/Henok-Enyew/top-player-linux
 Source0:        %{name}-%{version}.tar.gz
+
+%if 0%{?suse_version}
+# openSUSE's %%cmake, %%cmake_build and %%cmake_install use this generator.
+%global __builder ninja
+%endif
 
 BuildRequires:  cmake >= 3.16
 BuildRequires:  gcc-c++
+%if 0%{?suse_version}
+BuildRequires:  ninja
+%else
 BuildRequires:  ninja-build
+%endif
 BuildRequires:  pkgconfig(mpv)
 BuildRequires:  cmake(Qt6Core)
 # MPRIS: the media keys and the desktop's media controls.
@@ -42,7 +51,11 @@ subtitles, a 10-band equalizer and subtitle downloads from OpenSubtitles.com.
 %autosetup -n %{name}-%{version}
 
 %build
+%if 0%{?suse_version}
+%cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
+%else
 %cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+%endif
 %cmake_build
 
 %install
@@ -52,14 +65,14 @@ rm -rf %{buildroot}%{_datadir}/licenses/%{name}
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.github.topplayer.desktop
-appstreamcli validate --no-net %{buildroot}%{_metainfodir}/org.github.topplayer.metainfo.xml
+appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.topplayer.metainfo.xml
 
 %files
 %license LICENSE
 %doc README.md
 %{_bindir}/top-player
 %{_datadir}/applications/org.github.topplayer.desktop
-%{_metainfodir}/org.github.topplayer.metainfo.xml
+%{_datadir}/metainfo/org.github.topplayer.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog

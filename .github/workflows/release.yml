@@ -71,14 +71,80 @@ jobs:
           path: dist/*.AppImage
           if-no-files-found: error
 
-  rpm:
-    name: Fedora RPM
+  deb:
+    name: ${{ matrix.name }} .deb
     needs: version
     runs-on: ubuntu-24.04
-    container: fedora:latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Ubuntu 22.04, image: 'ubuntu:22.04', key: ubuntu-22.04 }
+          - { name: Ubuntu 24.04, image: 'ubuntu:24.04', key: ubuntu-24.04 }
+          - { name: Ubuntu 26.04, image: 'ubuntu:26.04', key: ubuntu-26.04 }
+          - { name: Debian 13, image: 'debian:13', key: debian-13 }
     steps:
       - name: Install packaging tools
-        run: dnf install -y git rpm-build rpmdevtools 'dnf-command(builddep)'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates devscripts equivs
+
+      - uses: actions/checkout@v4
+
+      - name: Build .deb
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+          DEBIAN_FRONTEND: noninteractive
+        run: packaging/debian/build-deb.sh
+
+      - name: Install and start
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          apt-get install -y ./dist/*.deb
+          top-player --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.key }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    name: ${{ matrix.name }} RPM
+    needs: version
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Fedora
+            image: 'fedora:latest'
+            key: fedora
+            setup: dnf install -y git rpm-build rpmdevtools 'dnf-command(builddep)'
+            install: dnf install -y ./dist/top-player-*.x86_64.rpm
+            srpm: 1
+          - name: openSUSE Tumbleweed
+            image: 'opensuse/tumbleweed:latest'
+            key: opensuse-tumbleweed
+            setup: zypper --non-interactive install --no-recommends git rpm-build tar gzip
+            install: zypper --non-interactive --no-gpg-checks install ./dist/top-player-*.x86_64.rpm
+            srpm: 0
+          - name: openSUSE Leap 16.0
+            image: 'opensuse/leap:16.0'
+            key: opensuse-leap-16.0
+            setup: zypper --non-interactive install --no-recommends git rpm-build tar gzip
+            install: zypper --non-interactive --no-gpg-checks install ./dist/top-player-*.x86_64.rpm
+            srpm: 0
+    steps:
+      - name: Install packaging tools
+        run: ${{ matrix.setup }}
 
       - uses: actions/checkout@v4
 
@@ -86,25 +152,50 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
           OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+          INCLUDE_SRPM: ${{ matrix.srpm }}
+        run: packaging/rpm/build-rpm.sh
+
+      - name: Install and start
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          # RPM versions cannot contain '-'.
-          rpm_version="${VERSION//-/\~}"
-          topdir="$PWD/rpmbuild"
-          mkdir -p "$topdir/SOURCES"
-          sed -i "s/^Version:.*/Version:        ${rpm_version}/" packaging/rpm/top-player.spec
-          git archive --format=tar.gz --prefix="top-player-${rpm_version}/" \
-            -o "$topdir/SOURCES/top-player-${rpm_version}.tar.gz" HEAD
-          dnf builddep -y packaging/rpm/top-player.spec
-          rpmbuild -ba --define "_topdir $topdir" packaging/rpm/top-player.spec
-          mkdir -p dist
-          cp "$topdir"/RPMS/*/top-player-[0-9]*.rpm "$topdir"/SRPMS/*.src.rpm dist/
-          ls -l dist
+          ${{ matrix.install }}
+          top-player --version
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rpm
+          name: rpm-${{ matrix.key }}
           path: dist/*.rpm
+          if-no-files-found: error
+
+  arch:
+    name: Arch Linux package
+    needs: version
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - name: Install packaging tools
+        run: pacman -Syu --noconfirm --needed git base-devel sudo
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: packaging/arch/build-arch.sh
+
+      - name: Install and start
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pacman -U --noconfirm dist/*.pkg.tar.zst
+          top-player --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist/*.pkg.tar.zst
           if-no-files-found: error
 
   flatpak:
@@ -142,7 +233,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [version, appimage, rpm, flatpak]
+    needs: [version, appimage, deb, rpm, arch, flatpak]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
