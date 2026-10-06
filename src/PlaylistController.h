@@ -65,10 +65,12 @@ public:
     void removeDuplicates();
 
     // Starts saving the queue (when enabled) and, if `restore`, reopens the
-    // saved one. Returns true if a queue was restored.
-    bool startSession(bool restore);
-    // Saves the queue now, if enabled and the session has started.
-    void saveSession();
+    // saved one. Returns true if a queue was restored. A `handoff` (the player
+    // restarting itself) restores the queue and position whatever the settings.
+    bool startSession(bool restore, bool handoff = false);
+    // Saves the queue now, if enabled and the session has started. A
+    // `handoff` saves it in any case, with the position even for a song.
+    void saveSession(bool handoff = false);
 
     // mpv's current playlist, with durations (where known) and file sizes.
     QList<PlaylistOps::Entry> entries();

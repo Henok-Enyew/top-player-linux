@@ -13,7 +13,7 @@ enum class Visualization {
     AlbumArt, // the cover; a spectrum when there is none
     Waveform,
     Spectrum,
-    Off,      // a dark canvas with the track's metadata
+    Off,      // no visualizer: the cover, or a dark canvas with the metadata
 };
 
 Visualization visualization();
@@ -28,6 +28,13 @@ QString folderCover(const QString &trackPath);
 QString customArtwork(const QString &trackPath);
 void setCustomArtwork(const QString &trackPath, const QString &imagePath);
 void clearCustomArtwork(const QString &trackPath);
+// The image shown for songs that have no cover of their own (none assigned,
+// embedded or in the folder), or an empty string. Kept as a copy in
+// ~/.config/top-player, so it stays when the original is moved.
+QString defaultArtwork();
+// Copies `imagePath` as the default artwork. Returns false if it can't be read.
+bool setDefaultArtwork(const QString &imagePath);
+void clearDefaultArtwork();
 // True for a file Qt can read as an image (by its suffix).
 bool isImageFile(const QString &path);
 // QFileDialog name filter for images Qt can read.

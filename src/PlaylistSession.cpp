@@ -157,4 +157,14 @@ void setDrawerWidth(int width)
     QSettings(settingsFile(), QSettings::IniFormat).setValue(QStringLiteral("playlist/width"), width);
 }
 
+bool x11Mode()
+{
+    return boolSetting(QStringLiteral("window/x11Mode"), false);
+}
+
+void setX11Mode(bool enabled)
+{
+    setBoolSetting(QStringLiteral("window/x11Mode"), enabled);
+}
+
 } // namespace PlaylistSession

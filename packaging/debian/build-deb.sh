@@ -3,7 +3,7 @@
 # release it runs on. Run from the repository root:
 #
 #   sudo apt-get install -y git devscripts equivs
-#   VERSION=1.0.5 packaging/debian/build-deb.sh
+#   VERSION=1.0.6 packaging/debian/build-deb.sh
 #
 # Installs the build dependencies with mk-build-deps when run as root
 # (as in CI); otherwise install them first, see packaging/debian/control.

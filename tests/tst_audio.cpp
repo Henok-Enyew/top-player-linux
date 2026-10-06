@@ -125,6 +125,7 @@ private Q_SLOTS:
     void customArtworkOverVisualization();
     void dropImageSetsArtwork();
     void visualizationMenu();
+    void defaultArtwork();
     void seekAndVolumeWithVisualization();
     void audioTrackSwitching();
     void videoAfterAudio();
@@ -442,18 +443,66 @@ void AudioTest::visualizationMenu()
     QCOMPARE(m_audio->display(), AudioController::Display::Spectrum);
     QTRY_VERIFY(propString("lavfi-complex").contains(QLatin1String("showfreqs")));
 
-    setVisualization(QStringLiteral("Off (Minimal Canvas)"));
-    QCOMPARE(m_audio->display(), AudioController::Display::Canvas);
-    QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Canvas);
+    // Off: no visualizer, but the song's own cover still shows.
+    setVisualization(QStringLiteral("Off (Cover Only)"));
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Artwork);
+    QVERIFY(!m_audio->view()->artwork().isNull());
     QTRY_COMPARE(propString("lavfi-complex"), QString());
     QTRY_COMPARE(propString("current-tracks/audio/id"), QStringLiteral("1"));
+    // A song without one gets the minimal canvas.
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->display(), AudioController::Display::Canvas, 10000);
+    QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Canvas);
 
+    open(m_mp3);
     setVisualization(QStringLiteral("Album Art Mode"));
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Embedded, 10000);
     QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
 
     // The choice is saved for the next start.
     setVisualization(QStringLiteral("Waveform Visualizer"));
     QCOMPARE(AudioArtwork::visualization(), AudioArtwork::Visualization::Waveform);
+}
+
+void AudioTest::defaultArtwork()
+{
+    QVERIFY(AudioArtwork::defaultArtwork().isEmpty());
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->display(), AudioController::Display::Spectrum, 10000);
+
+    // Set while a song without a cover plays: it shows at once, as a copy kept in the config folder.
+    QVERIFY(m_audio->setDefaultArtwork(m_customImage));
+    const QString copy = AudioArtwork::defaultArtwork();
+    QVERIFY(!copy.isEmpty());
+    QVERIFY(copy != m_customImage);
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Default);
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    QVERIFY(!m_audio->view()->artwork().isNull());
+    QVERIFY(!m_audio->hasCustomArtwork());
+
+    // The next song without a cover gets it too, also with the visualizer off...
+    setVisualization(QStringLiteral("Off (Cover Only)"));
+    open(m_long);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Default, 10000);
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    // ...but a song with its own cover keeps it.
+    open(m_mp3);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Embedded, 10000);
+    setVisualization(QStringLiteral("Album Art Mode"));
+
+    // Not an image: refused, the old one stays.
+    QVERIFY(!m_audio->setDefaultArtwork(m_plain));
+    QCOMPARE(AudioArtwork::defaultArtwork(), copy);
+
+    // Cleared: back to the spectrum, and the copy is gone.
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Default, 10000);
+    m_audio->clearDefaultArtwork();
+    QVERIFY(AudioArtwork::defaultArtwork().isEmpty());
+    QVERIFY(!QFileInfo::exists(copy));
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::None);
+    QCOMPARE(m_audio->display(), AudioController::Display::Spectrum);
 }
 
 void AudioTest::seekAndVolumeWithVisualization()
@@ -513,7 +562,7 @@ void AudioTest::audioTrackSwitching()
     QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Visualizer);
 
     // Without a visualization, tracks switch through mpv's aid as for video.
-    setVisualization(QStringLiteral("Off (Minimal Canvas)"));
+    setVisualization(QStringLiteral("Off (Cover Only)"));
     QTRY_COMPARE(propString("lavfi-complex"), QString());
     audioTrackAction(QStringLiteral("#2"))->trigger();
     QTRY_COMPARE(propString("current-tracks/audio/id"), QStringLiteral("2"));

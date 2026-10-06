@@ -59,7 +59,7 @@ public:
     void queueStream(const StreamCatalog::Station &station);
     // Starts saving the queue for the next run and, if `restore`, reopens the
     // last one (as configured). Returns true if a queue was restored.
-    bool startSession(bool restore);
+    bool startSession(bool restore, bool handoff = false);
     PlaylistController *playlist() const { return m_playlist; }
     AudioController *audio() const { return m_audio; }
     LyricsController *lyrics() const { return m_lyrics; }
@@ -101,10 +101,26 @@ public:
     void setMiniPlayer(bool on);
     void toggleMiniPlayer() { setMiniPlayer(!m_mini); }
     bool isMiniPlayer() const { return m_mini; }
+    // Wayland lets no app keep itself above others or on every workspace;
+    // under XWayland (X11 mode) the mini player can. True in a Wayland
+    // session where XWayland is available.
+    static bool canUseX11Mode();
+    // True while running through XWayland in a Wayland session.
+    static bool isX11Mode();
+    // Restarts the player in X11 mode (or back to native Wayland), keeping
+    // the queue, the position, playback and the mini player.
+    void restartInX11Mode(bool x11);
     // Resizes the mini player to `width`, keeping the video's shape.
     void setMiniPlayerWidth(int width);
     // True while the control bar floats over the video (fullscreen, mini player).
     bool areControlsOverlaid() const { return m_controlsOverlaid; }
+    // Resizes the window from `edges` as the pointer moves from `globalPos`:
+    // through the window manager, or by itself where that isn't available.
+    // Returns false if the window can't be resized now (fullscreen, maximized).
+    bool beginResize(Qt::Edges edges, const QPoint &globalPos);
+    bool isResizing() const { return m_manualResize.has_value(); }
+    // The window edges within reach of `pos` (window coordinates), if it can be resized.
+    Qt::Edges edgesAt(const QPoint &pos) const;
     // Resizes the window so the video shows at `scale` times its display size.
     void scaleToVideo(qreal scale);
 
@@ -153,7 +169,6 @@ private:
     // In fullscreen, reveals the control bar near the bottom edge and hides
     // it and the cursor again after a moment without mouse movement.
     void onMouseActivity(const QPoint &globalPos);
-    Qt::Edges edgesAt(const QPoint &pos) const;
     bool isOverVideo(const QPoint &globalPos) const;
     // Swipe seeking: starts a drag at `globalPos`, follows it, and ends it
     // (seeking there, or back to where it started if `cancel`).
@@ -207,11 +222,31 @@ private:
     bool m_wasImmersive = false;
     // The mini player, and the window it was opened from.
     bool m_mini = false;
+    // Closing to restart in another display mode: the session is handed over.
+    bool m_restarting = false;
+    bool m_askedAboutX11 = false;
+    void offerX11Mode();
     QRect m_geometryBeforeMini;
     bool m_maximizedBeforeMini = false;
     bool m_onTopBeforeMini = false;
     bool m_drawerBeforeMini = false;
     QToolButton *m_miniRestoreButton = nullptr;
+    // The mini player's resize handle, in the corner facing the middle of the screen.
+    QWidget *m_resizeGrip = nullptr;
+    // A resize the window does itself (when the window manager can't): the
+    // edges dragged, where the drag started and the geometry then.
+    struct ManualResize {
+        Qt::Edges edges;
+        QPoint origin;
+        QRect geometry;
+    };
+    std::optional<ManualResize> m_manualResize;
+    // The resize cursor shown while the pointer is over an edge.
+    std::optional<Qt::CursorShape> m_edgeCursor;
+    void updateEdgeCursor(const QPoint &globalPos);
+    void clearEdgeCursor();
+    void updateManualResize(const QPoint &globalPos);
+    void endManualResize();
     QRect m_geometryBeforeFullScreen;
     bool m_maximizedBeforeFullScreen = false;
     int m_hoverSecond = -1;

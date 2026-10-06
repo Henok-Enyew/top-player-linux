@@ -2,37 +2,123 @@
 
 <div align="center">
 
-<img src="packaging/linux/org.github.topplayer.svg" alt="Top Player logo" width="112">
+<img src="packaging/linux/org.github.topplayer.svg" alt="Top Player logo" width="128">
 
 # Top Player
 
-**A fast, lightweight native media player for Linux, built on Qt 6 and libmpv.**
+### Your music, videos, lyrics and live TV, in one fast native Linux player.
 
-Video, music, live TV and online radio in one dark, focused player, with subtitle downloads,
-synced lyrics, a 10-band equalizer, a playlist manager and a media library.
+Built on **Qt 6** and **libmpv**: plays everything mpv plays, looks sharp in an electric-cyan-on-obsidian skin,
+and stays light even on folders with thousands of files.
 
-[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=00D2FF)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
-[![CI](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml/badge.svg)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
-[![Release build](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/release.yml/badge.svg)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-121316)](LICENSE)
-![Platform: Linux](https://img.shields.io/badge/platform-Linux-1A1C22)
-![Qt 6](https://img.shields.io/badge/Qt-6-1A1C22)
-![libmpv](https://img.shields.io/badge/powered%20by-libmpv-1A1C22)
+[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/Henok-Enyew/top-player-linux/ci.yml?label=CI&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1A1C22?style=for-the-badge)](LICENSE)
 
-**[⬇ Download](https://github.com/Henok-Enyew/top-player-linux/releases/latest)** ·
-[Features](#features) ·
-[Screenshots](#screenshots) ·
-[Install](#install) ·
-[Shortcuts](#keyboard-and-mouse) ·
-[Build](#building-from-source) ·
-[Releases](#releases) ·
-[License](#license)
+![Linux](https://img.shields.io/badge/Linux-121316?style=flat-square&logo=linux&logoColor=00D2FF)
+![Qt 6](https://img.shields.io/badge/Qt%206-121316?style=flat-square&logo=qt&logoColor=00D2FF)
+![libmpv](https://img.shields.io/badge/libmpv-121316?style=flat-square&logo=mpv&logoColor=00D2FF)
+![C++17](https://img.shields.io/badge/C%2B%2B17-121316?style=flat-square&logo=cplusplus&logoColor=00D2FF)
+![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-121316?style=flat-square&logo=wayland&logoColor=00D2FF)
+
+<h3>
+  <a href="https://github.com/Henok-Enyew/top-player-linux/releases/latest">⬇ Download</a>
+  &nbsp;·&nbsp; <a href="#features">Features</a>
+  &nbsp;·&nbsp; <a href="#install">Install</a>
+  &nbsp;·&nbsp; <a href="#keyboard-and-mouse">Shortcuts</a>
+  &nbsp;·&nbsp; <a href="#building-from-source">Build</a>
+</h3>
+
+<img src="docs/screenshots/lyrics.png" alt="Synced lyrics: the sung line in the middle, hover a line to see its time and click to play from there" width="860">
 
 </div>
 
+> [!TIP]
+> **New in 1.0.6** · 🪟 a **mini player that floats above every app** and on every workspace (with one-click
+> X11 mode on Wayland) · ↔️ **resize from any edge or corner**, with a grip on the mini player · 🖼️ **song
+> covers with the visualizer off** and a **default artwork** for songs without one · ⏭️ **Next / Previous play
+> straight from pause** · ⌨️ playlist on **`Ctrl+B`**
+
 ---
 
-## Screenshots
+<a id="why-top-player"></a>
+
+## ✨ Why Top Player
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🎬 Plays everything
+Every common video and audio format, network streams and playlists, with hardware decoding,
+thumbnail previews on the seekbar and swipe-to-seek.
+
+</td>
+<td width="33%" valign="top">
+
+### 🎤 Lyrics, done right
+Free synced lyrics from LRCLIB, a karaoke-style view, **click any line to jump there**, a
+tap-to-sync editor, your own fonts and colors, and an AI prompt for songs no site has.
+
+</td>
+<td width="33%" valign="top">
+
+### 🪟 Mini player
+A small pop-out that **stays above every app and on every workspace**, with floating
+controls and lyrics that shrink to fit. Drag it anywhere, resize it any way.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### ⬇️ Downloads
+YouTube, TikTok, Instagram, X and 1000+ sites through yt-dlp, and **Spotify songs, albums
+and playlists** saved as tagged MP3s. Or just stream them.
+
+</td>
+<td valign="top">
+
+### 📺 Live TV & Radio
+Free channels and stations from every country, with categories, search, logos and automatic
+fallback streams.
+
+</td>
+<td valign="top">
+
+### 💬 Subtitles, no account
+Exact-match and by-name search, one-click download, dual subtitles and a tap-to-sync editor.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🎚️ Studio-style sound
+Preamp, bass, treble, a 10-band equalizer with presets, and night mode.
+
+</td>
+<td valign="top">
+
+### 📂 Playlist & Library
+Natural sorting, search, shuffle and repeat, M3U save and open, saved folders and playlists.
+Volume, shuffle and repeat are remembered.
+
+</td>
+<td valign="top">
+
+### ⚡ Fast and light
+Native C++, background folder scanning, no freezes on huge folders, and videos pick up where
+you left off.
+
+</td>
+</tr>
+</table>
+
+<a id="screenshots"></a>
+
+## 📸 Screenshots
 
 <table>
   <tr>
@@ -40,56 +126,37 @@ synced lyrics, a 10-band equalizer, a playlist manager and a media library.
     <td width="50%"><img src="docs/screenshots/audio-playlist.png" alt="Audio view with album art and the playlist drawer"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Start screen</sub></td>
-    <td align="center"><sub>Audio view with album art, and the playlist drawer</sub></td>
+    <td align="center"><sub><b>Start screen</b></sub></td>
+    <td align="center"><sub><b>Audio view</b> with album art, and the playlist drawer</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/mini-player.png" alt="Mini player with floating controls and lyrics" width="400"></td>
+    <td width="50%" align="center"><img src="docs/screenshots/lyrics-appearance.png" alt="Lyrics Appearance settings" width="380"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Mini player</b>, above every app, with its resize grip</sub></td>
+    <td align="center"><sub><b>Lyrics Appearance</b>: font, size, spacing, colors</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/live-tv.png" alt="Live TV & Radio browser"></td>
     <td width="50%" align="center"><img src="docs/screenshots/equalizer.png" alt="Audio Control & Equalizer" width="300"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Live TV &amp; Radio browser</sub></td>
-    <td align="center"><sub>Audio Control &amp; 10-band equalizer</sub></td>
+    <td align="center"><sub><b>Live TV &amp; Radio</b> browser</sub></td>
+    <td align="center"><sub><b>Audio Control</b> &amp; 10-band equalizer</sub></td>
   </tr>
 </table>
 
-## Highlights
-
-|  |  |
-| --- | --- |
-| 🎬 **Plays everything mpv plays** | Every common video and audio format, streams and playlists, with hardware decoding. |
-| 📺 **Live TV & Radio** | Free channels and stations from every country, with categories, search and automatic fallback streams. |
-| 💬 **Subtitles without an account** | Exact-match and by-name search, one-click download, dual subtitles, tap-to-sync editor. |
-| 🎤 **Synced lyrics** | Free LRC downloads, a karaoke-style view, a tap-to-sync editor, and a ready-made AI prompt for songs no site has. |
-| ⏯️ **Pick up where you left off** | Reopen a video and choose **Resume** or **Start Over**; volume, shuffle and repeat are kept between runs. |
-| 🪟 **Mini player** | A small always-on-top window on every workspace, with floating controls and lyrics that fit. |
-| 🎚️ **Studio-style sound** | Preamp, bass, treble, a 10-band equalizer with presets, and night mode. |
-| 📂 **Playlist & Library** | Sorting, search, shuffle and repeat, M3U save/open, and saved folders and playlists. |
-| ✂️ **Built-in tools** | Lossless cutting, audio extraction, and downloads from YouTube, Spotify and 1000+ sites. |
-| ⚡ **Fast and light** | Native Qt 6 and libmpv, background scanning, no freezes on huge folders. |
-
 ---
 
-## Features
+<a id="features"></a>
 
-<details open>
-<summary><b>Contents</b></summary>
+## 🧭 Features
 
-- [Playback](#playback)
-- [Interface](#interface)
-- [Audio view](#audio-view)
-- [Lyrics](#lyrics)
-- [Audio Control & Equalizer](#audio-control--equalizer)
-- [Playlist](#playlist)
-- [Library](#library)
-- [Live TV & Radio](#live-tv--radio)
-- [Subtitles](#subtitles)
-- [Tools](#tools)
-- [Settings and files](#settings-and-files)
+Every feature in detail. Click a section to open it.
 
-</details>
-
-### Playback
+<details>
+<summary><b>▶️ Playback</b></summary>
 
 - Opens **files, folders, URLs and streams** (http, https, rtsp, rtmp, ...) and
   playlists (`.m3u`, `.m3u8`, `.pls`): from the start screen, the right-click
@@ -125,11 +192,16 @@ synced lyrics, a 10-band equalizer, a playlist manager and a media library.
   audio files always play from the start.
 - **The control bar remembers**: volume, mute, shuffle and repeat are as you
   left them when the player starts again.
+- **Next / Previous play right away**: skipping from a paused song (the
+  buttons, `PgUp` / `PgDn` or the media keys) starts the new one playing.
 - **Opened media plays right away**, even if the last file was paused or
   ran to its end. Opening a folder or playlist **replaces** the playlist;
   a slower scan that finishes after a newer open is dropped.
 
-### Interface
+</details>
+
+<details>
+<summary><b>🎨 Interface</b></summary>
 
 A flat **electric cyan on obsidian** skin (accent `#00D2FF`, surface `#121316`,
 panels `#1A1C22`) defined in [`resources/skin/top-player.qss`](resources/skin/top-player.qss)
@@ -156,26 +228,33 @@ on top of Qt's Fusion style; self-painted widgets share the palette in
 - **Fullscreen** hides the title and control bars; the control bar comes back
   **over** the video when the pointer nears the bottom edge (the picture
   doesn't move), and controls and cursor hide again after two seconds. The playlist drawer stays as you left it and opens and
-  closes with `F6` in fullscreen too.
+  closes with `Ctrl+B` in fullscreen too.
 - **Window size** follows the video (100%, shrunk to fit the screen), or pick
   50% / 100% / 150% / 200% (`Alt+1`..`Alt+4`); **Always on Top** (`Ctrl+T`).
 - **Mini Player** (`Ctrl+M`, the picture-in-picture button in the title bar,
   or **Window → Mini Player**): the window pops out into a small borderless
   player in the corner of the screen that stays **on top** and, on X11, on
   **every workspace**. The controls float over it while the pointer is there;
-  drag it anywhere, resize it from its edges or pick **Window → Mini Player
-  Size** (Small to Extra Large). Lyrics shrink to fit: in a small mini player
+  drag it anywhere, resize it from any edge or corner or with the **resize
+  grip** (in the corner facing the middle of the screen), or pick **Window →
+  Mini Player Size** (Small to Extra Large). Lyrics shrink to fit: in a small mini player
   only the lines around the sung one show. Its size and place are kept. `Esc`,
   a double click or the corner button bring the full window back.
 
-  > On Wayland, apps can't pin themselves to every workspace: use your
-  > desktop's window menu (`Alt+Space` → *Always on Visible Workspace* on
-  > GNOME, *On All Desktops* on KDE), or run the player under XWayland with
-  > `QT_QPA_PLATFORM=xcb top-player`.
+  > [!NOTE]
+  > **Wayland** doesn't let apps keep a window above others or on every
+  > workspace. The first time you open the mini player there, Top Player offers
+  > to **restart in X11 mode** (through XWayland), where it floats above every
+  > app and follows you to every workspace; the song keeps playing from where it
+  > was. Switch it on or off any time under **Window → Keep Mini Player Above
+  > Other Apps (X11 Mode)**, or start once natively with `top-player --native-wayland`.
 - **About Top Player** (`F1`): version, credits, links, license, and the Qt,
   libmpv and video acceleration details.
 
-### Audio view
+</details>
+
+<details>
+<summary><b>🎵 Audio view</b></summary>
 
 Audio files (no video, or only cover art) get their own view instead of a
 black screen; seeking, volume and track switching work as for video.
@@ -185,15 +264,22 @@ black screen; seeking, volume and track switching work as for video.
   Audio Artwork...**, or **drop an image** on the window while the song
   plays; undone with **Clear Custom Audio Artwork**), art embedded
   in the file (ID3 `APIC`, FLAC / Vorbis `METADATA_BLOCK_PICTURE`, MP4 cover
-  atoms), or a `cover` / `folder` / `front` / `album` image next to the track.
+  atoms), a `cover` / `folder` / `front` / `album` image next to the track, or
+  the **default artwork** (**Audio → Set Default Artwork for Songs Without
+  One...**), an image of your choice for every song that has none of its own,
+  streams and radio included.
 - **Audio → Visualizations**: **Album Art Mode** (falls back to the spectrum
   without a cover), **Waveform Visualizer**, **Frequency Spectrum** (mpv's
-  `showwaves` / `showfreqs` through `lavfi-complex`), or **Off**, a minimal
-  canvas with the track's metadata. A custom cover you set for a track is
+  `showwaves` / `showfreqs` through `lavfi-complex`), or **Off (Cover Only)**:
+  no visualizer, just the cover (or a minimal canvas with the track's metadata
+  when there is no image at all). A custom cover you set for a track is
   shown even while a visualizer is selected, until you pick a visualization
   again.
 
-### Lyrics
+</details>
+
+<details>
+<summary><b>🎤 Lyrics</b></summary>
 
 Right-click → **Lyrics**. Lyrics show over the song karaoke style: the line
 being sung sits in the middle, large and bold, the lines around it fade with
@@ -233,7 +319,10 @@ blurred tint of the cover. Plain (unsynced) lyrics scroll along with the song.
   darkened behind the lyrics, previewed live. `Ctrl` + wheel over the lyrics
   changes their size.
 
-### Audio Control & Equalizer
+</details>
+
+<details>
+<summary><b>🎚️ Audio Control & Equalizer</b></summary>
 
 **Audio → Audio Control & Equalizer...** (`F7`) changes the sound live:
 
@@ -247,9 +336,12 @@ The effects are one FFmpeg filter graph in mpv's `af` property (`volume`,
 `bass`, `treble`, `equalizer`, `dynaudnorm`), so they apply to video and audio
 alike, and they are restored on the next start.
 
-### Playlist
+</details>
 
-The drawer (`F6` or the playlist button) slides in from the right and mirrors
+<details>
+<summary><b>📂 Playlist</b></summary>
+
+The drawer (`Ctrl+B`, `F6` or the playlist button) slides in from the right and mirrors
 mpv's playlist. Each entry shows its duration, read in the background.
 
 - A PotPlayer-style **bar along the bottom**: move the selected entries to
@@ -280,7 +372,10 @@ mpv's playlist. Each entry shows its duration, read in the background.
 - While the list has the keyboard, `Up` / `Down`, `Home` / `End` and `Enter`
   move through and play entries; click the video to give the keys back.
 
-### Library
+</details>
+
+<details>
+<summary><b>📚 Library</b></summary>
 
 The drawer's second tab keeps folders and playlists inside the player. The
 **Folders** and **Playlists** sections fold and unfold with a click, and so
@@ -297,7 +392,10 @@ do the folders and playlists in them; an empty section offers to add one.
   playlists saved in the library, after confirming). Items can be dragged
   onto the video or the playlist.
 
-### Live TV & Radio
+</details>
+
+<details>
+<summary><b>📺 Live TV & Radio</b></summary>
 
 **Live TV & Radio...** (`Ctrl+L`) browses free live streams in two tabs:
 
@@ -326,7 +424,10 @@ Countries** and **every other country** alphabetically. Then:
 - Lists and logos are **cached for 24 hours**, and the cached copy is used
   offline. **Refresh** reloads from the server.
 
-### Subtitles
+</details>
+
+<details>
+<summary><b>💬 Subtitles</b></summary>
 
 - Subtitles next to the video, or in a `sub` / `subs` / `subtitles` folder,
   **load automatically** when their names match.
@@ -353,7 +454,10 @@ Countries** and **every other country** alphabetically. Then:
   **Save & Load Subtitles** writes `<name>.synced.srt` next to the original
   (or to the cache) and switches to it.
 
-### Tools
+</details>
+
+<details>
+<summary><b>🛠️ Tools</b></summary>
 
 - **Cut / Extract Media** (`Ctrl+X`): mark the range while playing with
   `Ctrl+[` (A) and `Ctrl+]` (B); cyan brackets show it on the seekbar. Save it
@@ -378,7 +482,10 @@ Countries** and **every other country** alphabetically. Then:
 > The tools use the system's `ffmpeg` and `yt-dlp`, so they are available in
 > the AppImage, the distro packages and source builds, not in the Flatpak.
 
-### Settings and files
+</details>
+
+<details>
+<summary><b>🗂️ Settings and files</b></summary>
 
 | What | Where |
 | --- | --- |
@@ -395,13 +502,24 @@ Countries** and **every other country** alphabetically. Then:
 Settings from versions before 1.0 are copied over from
 `~/.config/potplayer-linux` on the first start.
 
+</details>
+
 <p align="right"><a href="#top">↑ Back to top</a></p>
 
 ---
 
-## Install
+<a id="install"></a>
 
-Download the package for your system from the
+## 📦 Install
+
+**Quick start** (any distro, no install):
+
+```sh
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.6/Top_Player-1.0.6-x86_64.AppImage
+chmod +x Top_Player-1.0.6-x86_64.AppImage && ./Top_Player-1.0.6-x86_64.AppImage
+```
+
+Or download the package for your system from the
 **[latest release](https://github.com/Henok-Enyew/top-player-linux/releases/latest)**:
 
 | Distro | Download | Install |
@@ -439,7 +557,9 @@ or `pip install --user yt-dlp`). The `.deb` and Arch packages suggest both.
 
 ---
 
-## Keyboard and mouse
+<a id="keyboard-and-mouse"></a>
+
+## ⌨️ Keyboard and mouse
 
 Right-click anywhere for the full menu: **Playback**, **Video**, **Audio**,
 **Subtitles**, **Lyrics**, **Tools**, **Window** and **Help**. Every item is bound to an
@@ -473,12 +593,12 @@ mpv property or command, and check marks reflect mpv's live state.
 | --- | --- |
 | Double-click video, `Enter` | Toggle fullscreen |
 | `Esc` | Leave fullscreen or the mini player |
-| `F6` | Show / hide the playlist |
+| `Ctrl+B` (or `F6`) | Show / hide the playlist |
 | `Ctrl+T` | Always on top |
 | `Ctrl+M` | Mini player |
 | `Alt+1`..`Alt+4` | Window size 50–200% |
 | Drag video or title bar | Move window |
-| Drag window edge | Resize window |
+| Drag window edge or corner | Resize window (the mini player also has a grip) |
 | Right-click | Context menu |
 | `F1` | About Top Player |
 | `Q` | Quit |
@@ -534,7 +654,9 @@ mpv property or command, and check marks reflect mpv's live state.
 
 ---
 
-## Building from source
+<a id="building-from-source"></a>
+
+## 🏗️ Building from source
 
 ### Dependencies
 
@@ -574,11 +696,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.5 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.6 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.5 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.5 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.5 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.6 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.6 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.6 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -598,14 +720,17 @@ of their own.
 
 ---
 
-## Releases
+<a id="releases"></a>
+
+## 🚀 Releases
 
 **[⬇ Latest release](https://github.com/Henok-Enyew/top-player-linux/releases/latest)** ·
 [All releases](https://github.com/Henok-Enyew/top-player-linux/releases)
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.5**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
+| [**1.0.6**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
+| [1.0.5](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
 | [1.0.4](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
 | [1.0.3](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
 | [1.0.2](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.2) | 2026-10-03 | Media keys over MPRIS, swipe / sideways-scroll seeking, autoplay on open, opening a folder replaces the playlist, clickable library sections, new window buttons and a PotPlayer-style playlist bar, lighter playback |
@@ -628,9 +753,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.5 && git push origin v1.0.5`
+2. `git tag v1.0.6 && git push origin v1.0.6`
 
-A tag with a suffix such as `v1.0.5-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.6-rc1` is published as a pre-release.
 
 </details>
 
@@ -638,7 +763,9 @@ A tag with a suffix such as `v1.0.5-rc1` is published as a pre-release.
 
 ---
 
-## License
+<a id="license"></a>
+
+## 📄 License
 
 Released under the [MIT License](LICENSE).
 Copyright © 2026 Henok Enyew Andargie and Top Player contributors.

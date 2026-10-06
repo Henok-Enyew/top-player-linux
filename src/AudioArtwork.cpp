@@ -2,7 +2,9 @@
 #include "PlaylistSession.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QImageReader>
@@ -109,6 +111,40 @@ void setCustomArtwork(const QString &trackPath, const QString &imagePath)
 void clearCustomArtwork(const QString &trackPath)
 {
     QSettings(artworkFile(), QSettings::IniFormat).remove(trackKey(trackPath));
+}
+
+QString defaultArtwork()
+{
+    const QString image = QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("audio/defaultArtwork")).toString();
+    return !image.isEmpty() && QFileInfo(image).isFile() ? image : QString();
+}
+
+bool setDefaultArtwork(const QString &imagePath)
+{
+    QImageReader reader(imagePath);
+    if (!reader.canRead())
+        return false;
+    const QString previous = defaultArtwork();
+    QDir().mkpath(PlaylistSession::configDir());
+    // A new name each time, so a cached copy of the old one is never shown.
+    const QString suffix = QFileInfo(imagePath).suffix().toLower();
+    const QString copy = PlaylistSession::configDir() + QStringLiteral("/default-artwork-%1.%2")
+                                                            .arg(QDateTime::currentMSecsSinceEpoch())
+                                                            .arg(suffix.isEmpty() ? QStringLiteral("img") : suffix);
+    if (!QFile::copy(imagePath, copy))
+        return false;
+    QSettings(settingsFile(), QSettings::IniFormat).setValue(QStringLiteral("audio/defaultArtwork"), copy);
+    if (!previous.isEmpty() && previous.startsWith(PlaylistSession::configDir()))
+        QFile::remove(previous);
+    return true;
+}
+
+void clearDefaultArtwork()
+{
+    const QString previous = defaultArtwork();
+    QSettings(settingsFile(), QSettings::IniFormat).remove(QStringLiteral("audio/defaultArtwork"));
+    if (!previous.isEmpty() && previous.startsWith(PlaylistSession::configDir()))
+        QFile::remove(previous);
 }
 
 bool isImageFile(const QString &path)

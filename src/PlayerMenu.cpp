@@ -129,7 +129,7 @@ void PlayerMenu::buildVisualizationMenu(QMenu *audio)
         {tr("Album Art Mode"), Visualization::AlbumArt},
         {tr("Waveform Visualizer"), Visualization::Waveform},
         {tr("Frequency Spectrum"), Visualization::Spectrum},
-        {tr("Off (Minimal Canvas)"), Visualization::Off},
+        {tr("Off (Cover Only)"), Visualization::Off},
     };
     for (const auto &[text, mode] : modes) {
         QAction *action = visualizations->addAction(text);
@@ -147,9 +147,15 @@ void PlayerMenu::buildVisualizationMenu(QMenu *audio)
     connect(setArtwork, &QAction::triggered, controller, &AudioController::setCustomArtworkDialog);
     QAction *clearArtwork = audio->addAction(tr("Clear Custom Audio Artwork"));
     connect(clearArtwork, &QAction::triggered, controller, &AudioController::clearCustomArtwork);
-    connect(audio, &QMenu::aboutToShow, this, [controller, setArtwork, clearArtwork] {
+    QAction *setDefault = audio->addAction(tr("Set Default Artwork for Songs Without One..."));
+    setDefault->setObjectName(QStringLiteral("SetDefaultArtworkAction"));
+    connect(setDefault, &QAction::triggered, controller, &AudioController::setDefaultArtworkDialog);
+    QAction *clearDefault = audio->addAction(tr("Clear Default Artwork"));
+    connect(clearDefault, &QAction::triggered, controller, &AudioController::clearDefaultArtwork);
+    connect(audio, &QMenu::aboutToShow, this, [controller, setArtwork, clearArtwork, clearDefault] {
         setArtwork->setEnabled(controller->isActive());
         clearArtwork->setEnabled(controller->hasCustomArtwork());
+        clearDefault->setEnabled(!AudioArtwork::defaultArtwork().isEmpty());
     });
 }
 
@@ -367,12 +373,26 @@ void PlayerMenu::buildWindowMenu()
     m_onTopAction->setCheckable(true);
     m_playlistAction = addItem(window, tr("Playlist"), [this] {
         m_window->setPlaylistVisible(!m_window->isPlaylistVisible());
-    }, QKeySequence(Qt::Key_F6));
+    }, QKeySequence(Qt::CTRL | Qt::Key_B));
+    // F6, the shortcut before 1.0.6, still works.
+    auto *legacyPlaylistKey = new QAction(m_window);
+    legacyPlaylistKey->setShortcut(QKeySequence(Qt::Key_F6));
+    connect(legacyPlaylistKey, &QAction::triggered, m_playlistAction, &QAction::trigger);
+    m_window->addAction(legacyPlaylistKey);
     m_playlistAction->setCheckable(true);
 
     m_miniPlayerAction = addItem(window, tr("Mini Player"), [this] { m_window->toggleMiniPlayer(); },
                                  QKeySequence(Qt::CTRL | Qt::Key_M));
     m_miniPlayerAction->setCheckable(true);
+    // Wayland: the mini player can only stay on top through XWayland.
+    if (MainWindow::canUseX11Mode()) {
+        QAction *x11 = window->addAction(tr("Keep Mini Player Above Other Apps (X11 Mode)"));
+        x11->setObjectName(QStringLiteral("X11ModeAction"));
+        x11->setCheckable(true);
+        x11->setToolTip(tr("Restarts Top Player through XWayland, where it can stay on top and on every workspace"));
+        connect(window, &QMenu::aboutToShow, x11, [x11] { x11->setChecked(MainWindow::isX11Mode()); });
+        connect(x11, &QAction::triggered, this, [this](bool on) { m_window->restartInX11Mode(on); });
+    }
     QMenu *miniSize = window->addMenu(tr("Mini Player Size"));
     const QList<QPair<QString, int>> miniWidths{
         {tr("Small"), 300}, {tr("Medium"), 420}, {tr("Large"), 560}, {tr("Extra Large"), 720},
