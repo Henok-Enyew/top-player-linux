@@ -13,8 +13,10 @@ sdk: org.kde.Sdk
 command: top-player
 finish-args:
   - --share=ipc
-  - --socket=fallback-x11
   - --socket=wayland
+  # X11 too (not only as a fallback), for X11 mode: the mini player can stay
+  # above other apps only through XWayland.
+  - --socket=x11
   - --socket=pulseaudio
   - --device=dri
   # Network streams (http, rtsp, ...).

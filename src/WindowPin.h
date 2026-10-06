@@ -13,5 +13,8 @@ bool isSupported();
 // Shows `window` on every workspace, or only on the current one again.
 // Call once the window is shown. Returns false if unsupported.
 bool setOnAllWorkspaces(QWindow *window, bool on);
+// Asks the window manager to keep `window` above other windows (or not),
+// in addition to Qt's WindowStaysOnTopHint, which some forget after a remap.
+bool setKeepAbove(QWindow *window, bool on);
 
 } // namespace WindowPin

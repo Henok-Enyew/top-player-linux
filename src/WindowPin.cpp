@@ -94,6 +94,20 @@ bool setOnAllWorkspaces(QWindow *window, bool on)
     return true;
 }
 
+bool setKeepAbove(QWindow *window, bool on)
+{
+    xcb_connection_t *c = connection();
+    if (!c || !window)
+        return false;
+    const auto id = static_cast<xcb_window_t>(window->winId());
+    const xcb_window_t root = rootOf(c, id);
+    if (root == XCB_WINDOW_NONE)
+        return false;
+    sendToWindowManager(c, root, id, atom(c, "_NET_WM_STATE"), on ? 1u : 0u, atom(c, "_NET_WM_STATE_ABOVE"));
+    xcb_flush(c);
+    return true;
+}
+
 #else
 
 bool isSupported()
@@ -102,6 +116,11 @@ bool isSupported()
 }
 
 bool setOnAllWorkspaces(QWindow *, bool)
+{
+    return false;
+}
+
+bool setKeepAbove(QWindow *, bool)
 {
     return false;
 }

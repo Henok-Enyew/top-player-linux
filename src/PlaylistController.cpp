@@ -93,7 +93,7 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
 
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(kSaveDelayMs);
-    connect(&m_saveTimer, &QTimer::timeout, this, &PlaylistController::saveSession);
+    connect(&m_saveTimer, &QTimer::timeout, this, [this] { saveSession(); });
     m_positionTimer.setInterval(kPositionSaveMs);
     connect(&m_positionTimer, &QTimer::timeout, this, [this] {
         if (!m_mpv->isIdle())
@@ -439,11 +439,11 @@ void PlaylistController::removeDuplicates()
     Q_EMIT message(tr("Removed Duplicates"), QString::number(rows.size()));
 }
 
-bool PlaylistController::startSession(bool restore)
+bool PlaylistController::startSession(bool restore, bool handoff)
 {
     m_sessionStarted = true;
     m_positionTimer.start();
-    if (!restore || !PlaylistSession::rememberPlaylist())
+    if (!restore || (!handoff && !PlaylistSession::rememberPlaylist()))
         return false;
     const std::optional<PlaylistSession::State> state = PlaylistSession::load();
     if (!state || state->entries.isEmpty())
@@ -454,17 +454,17 @@ bool PlaylistController::startSession(bool restore)
         files.append(entry.filename);
         m_prober->setDuration(entry.filename, entry.duration);
     }
-    if (PlaylistSession::resumePlayback())
+    if (handoff || PlaylistSession::resumePlayback())
         m_mpv->restorePlaylist(files, state->current, state->position);
     else
         m_mpv->restorePlaylist(files, state->current);
     return true;
 }
 
-void PlaylistController::saveSession()
+void PlaylistController::saveSession(bool handoff)
 {
     m_saveTimer.stop();
-    if (!m_sessionStarted || !PlaylistSession::rememberPlaylist())
+    if (!handoff && (!m_sessionStarted || !PlaylistSession::rememberPlaylist()))
         return;
 
     // Read live: the last report may lag behind commands just sent.
@@ -482,7 +482,7 @@ void PlaylistController::saveSession()
     if (state.current >= state.entries.size())
         state.current = -1;
     // Songs start over next time; only a video picks up where it was left.
-    if (!idle && !m_mpv->isAudioOnly() && !m_mpv->mpvProperty(QStringLiteral("eof-reached")).toBool())
+    if (!idle && (handoff || !m_mpv->isAudioOnly()) && !m_mpv->mpvProperty(QStringLiteral("eof-reached")).toBool())
         state.position = std::max(0.0, m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble());
     PlaylistSession::save(state);
 }

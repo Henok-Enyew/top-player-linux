@@ -9,6 +9,7 @@
 #include "PlaylistSession.h"
 #include "ResumeManager.h"
 #include "MpvWidget.h"
+#include "PlaylistController.h"
 #ifdef TOPPLAYER_HAVE_DBUS
 #include "MprisService.h"
 #include <QDBusAbstractAdaptor>
@@ -85,6 +86,9 @@ private Q_SLOTS:
     void miniPlayer();
     void resizeFromEdges();
     void miniPlayerResizes();
+    void nextAndPreviousPlayFromPause();
+    void playlistShortcut();
+    void restartHandsOverSession();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -989,6 +993,94 @@ void TransportTest::miniPlayerResizes()
     m_window->setMiniPlayer(false);
     m_window->setMiniPlayer(true);
     QTRY_COMPARE(m_window->size(), mini);
+}
+
+void TransportTest::nextAndPreviousPlayFromPause()
+{
+    QSignalSpy loaded(m_mpv, &MpvWidget::fileLoaded);
+    // Seeks sent while the next file still loads would be dropped.
+    auto settle = [&loaded] {
+        QTRY_VERIFY_WITH_TIMEOUT(!loaded.isEmpty(), 10000);
+        loaded.clear();
+        QTest::qWait(300);
+    };
+
+    // Paused, Next plays the next file: the button, PgDn and the media key.
+    pauseAt(10);
+    click("NextButton");
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    QTRY_VERIFY(!prop("pause").toBool());
+    settle();
+
+    pauseAt(10);
+    press(Qt::Key_PageDown);
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 2);
+    QTRY_VERIFY(!prop("pause").toBool());
+    settle();
+
+    pauseAt(10);
+    pressMediaKey(Qt::Key_MediaPrevious);
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    QTRY_VERIFY(!prop("pause").toBool());
+    settle();
+
+    // At the end of the playlist there is nothing to skip to: it stays paused.
+    m_mpv->command({QStringLiteral("playlist-play-index"), QStringLiteral("2")});
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 2);
+    settle();
+    pauseAt(10);
+    click("NextButton");
+    QTest::qWait(500);
+    QCOMPARE(prop("playlist-pos").toInt(), 2);
+    QVERIFY(prop("pause").toBool());
+    // Unless the playlist repeats.
+    set("loop-playlist", QStringLiteral("inf"));
+    QTRY_COMPARE(m_mpv->mpvPropertyString(QStringLiteral("loop-playlist")), QStringLiteral("inf"));
+    click("NextButton");
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 0);
+    QTRY_VERIFY(!prop("pause").toBool());
+    set("loop-playlist", QStringLiteral("no"));
+}
+
+void TransportTest::playlistShortcut()
+{
+    auto *drawer = m_window->findChild<PlaylistDrawer *>();
+    QVERIFY(!drawer->isExpanded());
+    press(Qt::Key_B, Qt::ControlModifier);
+    QVERIFY(drawer->isExpanded());
+    QVERIFY(m_window->findChild<QToolButton *>(QStringLiteral("PlaylistButton"))->toolTip().contains(QLatin1String("Ctrl+B")));
+    press(Qt::Key_B, Qt::ControlModifier);
+    QVERIFY(!drawer->isExpanded());
+    // F6 still works.
+    press(Qt::Key_F6);
+    QVERIFY(drawer->isExpanded());
+    press(Qt::Key_F6);
+    QVERIFY(!drawer->isExpanded());
+}
+
+void TransportTest::restartHandsOverSession()
+{
+    // What restarting in X11 mode hands to the next instance: the queue, the
+    // entry and the position, even with remembering turned off.
+    PlaylistSession::setRememberPlaylist(false);
+    m_mpv->command({QStringLiteral("playlist-play-index"), QStringLiteral("1")});
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    pauseAt(100);
+    m_window->playlist()->saveSession(true);
+    delete m_window;
+
+    m_window = new MainWindow;
+    m_window->resize(800, 450);
+    m_window->show();
+    m_mpv = m_window->findChild<MpvWidget *>();
+    QVERIFY(m_window->startSession(true, true));
+    set("pause", QStringLiteral("no"));
+    QTRY_COMPARE_WITH_TIMEOUT(prop("playlist-count").toInt(), kEntries, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(prop("playlist-pos").toInt(), 1, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(prop("time-pos").toDouble() - 100) < 2, 10000);
+    QTRY_VERIFY(!prop("pause").toBool());
+    // A normal start doesn't restore what remembering is off for.
+    PlaylistSession::setRememberPlaylist(true);
 }
 
 int main(int argc, char *argv[])

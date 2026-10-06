@@ -36,6 +36,7 @@
 #include <QCloseEvent>
 #include <QContextMenuEvent>
 #include <QDesktopServices>
+#include <QCheckBox>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPointer>
@@ -532,9 +533,9 @@ void MainWindow::onFileFailed(const QString &path, const QString & /*error*/)
                      tr("%1 (offline, or not available in your region)").arg(name));
 }
 
-bool MainWindow::startSession(bool restore)
+bool MainWindow::startSession(bool restore, bool handoff)
 {
-    return m_playlist->startSession(restore);
+    return m_playlist->startSession(restore, handoff);
 }
 
 void MainWindow::openUrls(const QList<QUrl> &urls)
@@ -905,7 +906,7 @@ void MainWindow::changeEvent(QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    m_playlist->saveSession();
+    m_playlist->saveSession(m_restarting);
     m_resume->saveNow();
     m_controlBar->saveState();
     if (m_mini)
@@ -1117,15 +1118,22 @@ void MainWindow::setMiniPlayer(bool on)
         updateChrome();
         QPointer<MainWindow> self = this;
         QTimer::singleShot(kPinDelayMs, this, [self] {
-            if (self && self->m_mini)
+            if (self && self->m_mini) {
+                WindowPin::setKeepAbove(self->windowHandle(), true);
                 WindowPin::setOnAllWorkspaces(self->windowHandle(), true);
+            }
         });
         m_osd->showValue(tr("Mini Player"), WindowPin::isSupported() ? tr("On top, on every workspace") : tr("On top"));
+        // Wayland ignores both: offer the mode where they work.
+        if (canUseX11Mode() && !isX11Mode())
+            QTimer::singleShot(kPinDelayMs * 2, this, &MainWindow::offerX11Mode);
         return;
     }
 
     saveMiniPlayerGeometry();
     WindowPin::setOnAllWorkspaces(windowHandle(), false);
+    if (!m_onTopBeforeMini)
+        WindowPin::setKeepAbove(windowHandle(), false);
     m_mini = false;
     setMinimumSize(kMinimumSize);
     setAlwaysOnTop(m_onTopBeforeMini);
@@ -1137,6 +1145,79 @@ void MainWindow::setMiniPlayer(bool on)
     }
     if (m_drawerBeforeMini)
         setPlaylistVisible(true);
+}
+
+bool MainWindow::canUseX11Mode()
+{
+    // A Wayland session with XWayland running ($DISPLAY set).
+    return !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY") && !qEnvironmentVariableIsEmpty("DISPLAY");
+}
+
+bool MainWindow::isX11Mode()
+{
+    return QGuiApplication::platformName() == QLatin1String("xcb") && !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY");
+}
+
+void MainWindow::offerX11Mode()
+{
+    if (!m_mini || m_askedAboutX11 || isX11Mode()
+        || QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("window/askX11Mode"), true).toBool() == false)
+        return;
+    m_askedAboutX11 = true;
+    auto *box = new QMessageBox(QMessageBox::Question, tr("Keep the Mini Player on Top?"),
+                                tr("Your desktop runs on Wayland, which doesn't let apps keep a window above "
+                                   "other apps or on every workspace, so the mini player can end up behind them."),
+                                QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("X11ModeQuestion"));
+    box->setInformativeText(tr("Top Player can restart in X11 mode (through XWayland), where the mini player stays "
+                               "on top of everything and on every workspace. The song keeps playing from where it is.\n\n"
+                               "You can switch back any time: Window \u203a Keep Mini Player Above Other Apps."));
+    QPushButton *restart = box->addButton(tr("Restart in X11 Mode"), QMessageBox::AcceptRole);
+    box->addButton(tr("Not Now"), QMessageBox::RejectRole);
+    auto *dontAsk = new QCheckBox(tr("Don't ask again"), box);
+    box->setCheckBox(dontAsk);
+    box->setDefaultButton(restart);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, box, restart, dontAsk](QAbstractButton *button) {
+        if (dontAsk->isChecked())
+            QSettings(settingsFile(), QSettings::IniFormat).setValue(QStringLiteral("window/askX11Mode"), false);
+        if (button == restart)
+            QTimer::singleShot(0, this, [this] { restartInX11Mode(true); });
+        Q_UNUSED(box);
+    });
+    box->open();
+}
+
+void MainWindow::restartInX11Mode(bool x11)
+{
+    PlaylistSession::setX11Mode(x11);
+    const bool playing = !m_mpv->isIdle() && !m_mpv->mpvProperty(QStringLiteral("pause")).toBool();
+    const bool mini = m_mini;
+    QStringList args{QStringLiteral("--handoff")};
+    if (playing)
+        args << QStringLiteral("--play");
+    if (mini)
+        args << QStringLiteral("--mini");
+    // An AppImage runs from a mount that goes away with this process.
+    const QString appImage = qEnvironmentVariable("APPIMAGE");
+    QProcess process;
+    process.setProgram(appImage.isEmpty() ? QCoreApplication::applicationFilePath() : appImage);
+    process.setArguments(args);
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    // Falls back to Wayland if the X11 platform plugin is missing.
+    env.insert(QStringLiteral("QT_QPA_PLATFORM"), x11 ? QStringLiteral("xcb;wayland") : QStringLiteral("wayland;xcb"));
+    process.setProcessEnvironment(env);
+
+    // Hand the queue and position over, then make way for the new instance.
+    m_restarting = true;
+    close();
+    if (!process.startDetached()) {
+        m_restarting = false;
+        show();
+        m_osd->showValue(tr("Could not restart Top Player"));
+        return;
+    }
+    QCoreApplication::quit();
 }
 
 void MainWindow::setMiniPlayerWidth(int width)

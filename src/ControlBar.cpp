@@ -100,7 +100,7 @@ ControlBar::ControlBar(MpvWidget *mpv, QWidget *parent)
     m_volumeSlider->setFixedWidth(90);
     m_volumeSlider->setFocusPolicy(Qt::NoFocus);
     m_volumeSlider->setToolTip(tr("Volume"));
-    m_playlistButton = addButton(QStringLiteral("PlaylistButton"), tr("Playlist (F6)"), IconType::Playlist);
+    m_playlistButton = addButton(QStringLiteral("PlaylistButton"), tr("Playlist (Ctrl+B)"), IconType::Playlist);
     m_playlistButton->setCheckable(true);
     m_aspectButton = addButton(QStringLiteral("AspectButton"), QString(), IconType::AspectFit);
     QToolButton *fullScreen = addButton(QStringLiteral("FullScreenButton"), tr("Fullscreen (Enter)"), IconType::Fullscreen);

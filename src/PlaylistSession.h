@@ -34,5 +34,9 @@ void setResumePlayback(bool enabled);
 // Width of the playlist drawer as the user last sized it, or `defaultWidth`.
 int drawerWidth(int defaultWidth);
 void setDrawerWidth(int width);
+// Run through XWayland (Qt's xcb platform) in a Wayland session, so the mini
+// player can stay above other apps and on every workspace (default off).
+bool x11Mode();
+void setX11Mode(bool enabled);
 
 } // namespace PlaylistSession

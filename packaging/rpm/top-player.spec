@@ -83,6 +83,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 - The mini player has a resize grip and remembers its new size
 - Songs show their cover with the visualizer off
 - Default artwork for songs without a cover of their own
+- Mini player above every app; X11 mode on Wayland
+- Next / Previous play from pause; Ctrl+B toggles the playlist
 
 * Tue Oct 06 2026 Henok Enyew Andargie - 1.0.5-1
 - Volume, mute, shuffle and repeat are kept between runs

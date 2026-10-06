@@ -41,6 +41,9 @@
           <li>Resizing works under window managers that can't resize borderless windows themselves</li>
           <li>Songs show their own cover with the visualizer off, instead of a blank canvas</li>
           <li>Default artwork: an image of your choice for songs (and radio) without a cover of their own</li>
+          <li>The mini player stays above every app and on every workspace; on Wayland, one click restarts the player in X11 mode where that works, without stopping the song</li>
+          <li>Next and Previous start playing even when the current song is paused</li>
+          <li>The playlist opens and closes with Ctrl+B (F6 still works)</li>
         </ul>
       </description>
     </release>

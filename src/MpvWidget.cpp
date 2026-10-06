@@ -425,18 +425,40 @@ void MpvWidget::stop()
 void MpvWidget::playlistNext()
 {
     // mpv has no current entry to step from once stopped.
-    if (isIdle())
+    if (isIdle()) {
         playIndex(m_lastPlaylistPos + 1);
-    else
-        command({QStringLiteral("playlist-next")});
+        return;
+    }
+    // Skipping to another song means wanting to hear it, even from pause
+    // (unless there is nothing to skip to).
+    bool resume = false;
+    if (mpvProperty(QStringLiteral("pause")).toBool()) {
+        const int pos = mpvProperty(QStringLiteral("playlist-pos")).toInt();
+        const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
+        const QString loop = mpvPropertyString(QStringLiteral("loop-playlist"));
+        resume = pos + 1 < count || (count > 1 && !loop.isEmpty() && loop != QLatin1String("no"));
+    }
+    command({QStringLiteral("playlist-next")});
+    if (resume)
+        setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
 }
 
 void MpvWidget::playlistPrev()
 {
-    if (isIdle())
+    if (isIdle()) {
         playIndex(std::max(m_lastPlaylistPos - 1, 0));
-    else
-        command({QStringLiteral("playlist-prev")});
+        return;
+    }
+    bool resume = false;
+    if (mpvProperty(QStringLiteral("pause")).toBool()) {
+        const int pos = mpvProperty(QStringLiteral("playlist-pos")).toInt();
+        const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
+        const QString loop = mpvPropertyString(QStringLiteral("loop-playlist"));
+        resume = pos > 0 || (count > 1 && !loop.isEmpty() && loop != QLatin1String("no"));
+    }
+    command({QStringLiteral("playlist-prev")});
+    if (resume)
+        setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
 }
 
 bool MpvWidget::playIndex(int index)
