@@ -38,12 +38,18 @@ cleanup:
 
 modules:
   # libmpv and the libraries it needs that the KDE runtime does not ship.
-  # FFmpeg comes from the runtime.
+  # FFmpeg comes from the runtime. Sources hosted on freedesktop.org list
+  # mirrors: its servers sometimes turn CI runners away (HTTP 418). Every
+  # download is checked against the sha256, whichever server it came from.
   - name: libXpresent
     buildsystem: autotools
     sources:
       - type: archive
         url: https://xorg.freedesktop.org/archive/individual/lib/libXpresent-1.0.2.tar.xz
+        mirror-urls:
+          - https://www.x.org/releases/individual/lib/libXpresent-1.0.2.tar.xz
+          - https://ftp.funet.fi/pub/X11/X.org/individual/lib/libXpresent-1.0.2.tar.xz
+          - https://mirrors.kernel.org/slackware/slackware64-current/source/x/x11/src/lib/libXpresent-1.0.2.tar.xz
         sha256: 4e5b21b4812206a4b223013606ae31170502c1043038777a1ef8f70c09d37602
 
   - name: libass
@@ -65,6 +71,10 @@ modules:
     sources:
       - type: archive
         url: https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz
+        mirror-urls:
+          - https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz
+          - https://mirrors.kernel.org/slackware/slackware64-current/source/l/uchardet/uchardet-0.0.8.tar.xz
+          - https://distfiles.alpinelinux.org/distfiles/edge/uchardet-0.0.8.tar.xz
         sha256: e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0
 
   - name: libplacebo
