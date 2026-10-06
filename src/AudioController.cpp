@@ -7,6 +7,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QStandardPaths>
 
 #include <utility>
 
@@ -80,8 +81,20 @@ void AudioController::onFileLoaded()
     } else if (!local.isEmpty()) {
         m_extracting = true;
         m_extractor->request(m_path);
+    } else {
+        // Streams and radio have no cover to look for.
+        useDefaultArtwork();
     }
     apply();
+}
+
+void AudioController::useDefaultArtwork()
+{
+    if (!m_artwork.isNull())
+        return;
+    const QString image = AudioArtwork::defaultArtwork();
+    m_artwork = image.isEmpty() ? QImage() : readImage(image);
+    m_source = m_artwork.isNull() ? ArtworkSource::None : ArtworkSource::Default;
 }
 
 void AudioController::onArtworkReady(const QString &path, const QImage &image)
@@ -96,6 +109,7 @@ void AudioController::onArtworkReady(const QString &path, const QImage &image)
         m_artwork = readImage(cover);
         m_source = m_artwork.isNull() ? ArtworkSource::None : ArtworkSource::Folder;
     }
+    useDefaultArtwork();
     apply();
 }
 
@@ -123,7 +137,8 @@ void AudioController::apply()
             display = Display::Spectrum;
             break;
         case Visualization::Off:
-            display = Display::Canvas;
+            // No visualizer: the song's own cover if it has one.
+            display = !m_artwork.isNull() || m_extracting ? Display::Artwork : Display::Canvas;
             break;
         }
     }
@@ -246,6 +261,42 @@ bool AudioController::setCustomArtwork(const QString &imagePath)
     apply();
     Q_EMIT message(tr("Artwork Set"), QFileInfo(imagePath).fileName());
     return true;
+}
+
+void AudioController::setDefaultArtworkDialog()
+{
+    const QString start = AudioArtwork::defaultArtwork().isEmpty()
+                              ? QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)
+                              : QString();
+    const QString file = QFileDialog::getOpenFileName(m_dialogParent, tr("Default Artwork for Songs Without a Cover"),
+                                                      start, AudioArtwork::imageFileFilter());
+    if (!file.isEmpty() && !setDefaultArtwork(file))
+        Q_EMIT message(tr("Not an image"), QFileInfo(file).fileName());
+}
+
+bool AudioController::setDefaultArtwork(const QString &imagePath)
+{
+    if (readImage(imagePath).isNull() || !AudioArtwork::setDefaultArtwork(imagePath))
+        return false;
+    // The playing song shows it at once if it has no cover of its own.
+    if (m_active && !m_extracting && (m_source == ArtworkSource::None || m_source == ArtworkSource::Default)) {
+        m_artwork = {};
+        useDefaultArtwork();
+        apply();
+    }
+    Q_EMIT message(tr("Default Artwork Set"), QFileInfo(imagePath).fileName());
+    return true;
+}
+
+void AudioController::clearDefaultArtwork()
+{
+    AudioArtwork::clearDefaultArtwork();
+    if (m_active && m_source == ArtworkSource::Default) {
+        m_artwork = {};
+        m_source = ArtworkSource::None;
+        apply();
+    }
+    Q_EMIT message(tr("Default Artwork Cleared"));
 }
 
 void AudioController::clearCustomArtwork()

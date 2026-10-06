@@ -129,7 +129,7 @@ void PlayerMenu::buildVisualizationMenu(QMenu *audio)
         {tr("Album Art Mode"), Visualization::AlbumArt},
         {tr("Waveform Visualizer"), Visualization::Waveform},
         {tr("Frequency Spectrum"), Visualization::Spectrum},
-        {tr("Off (Minimal Canvas)"), Visualization::Off},
+        {tr("Off (Cover Only)"), Visualization::Off},
     };
     for (const auto &[text, mode] : modes) {
         QAction *action = visualizations->addAction(text);
@@ -147,9 +147,15 @@ void PlayerMenu::buildVisualizationMenu(QMenu *audio)
     connect(setArtwork, &QAction::triggered, controller, &AudioController::setCustomArtworkDialog);
     QAction *clearArtwork = audio->addAction(tr("Clear Custom Audio Artwork"));
     connect(clearArtwork, &QAction::triggered, controller, &AudioController::clearCustomArtwork);
-    connect(audio, &QMenu::aboutToShow, this, [controller, setArtwork, clearArtwork] {
+    QAction *setDefault = audio->addAction(tr("Set Default Artwork for Songs Without One..."));
+    setDefault->setObjectName(QStringLiteral("SetDefaultArtworkAction"));
+    connect(setDefault, &QAction::triggered, controller, &AudioController::setDefaultArtworkDialog);
+    QAction *clearDefault = audio->addAction(tr("Clear Default Artwork"));
+    connect(clearDefault, &QAction::triggered, controller, &AudioController::clearDefaultArtwork);
+    connect(audio, &QMenu::aboutToShow, this, [controller, setArtwork, clearArtwork, clearDefault] {
         setArtwork->setEnabled(controller->isActive());
         clearArtwork->setEnabled(controller->hasCustomArtwork());
+        clearDefault->setEnabled(!AudioArtwork::defaultArtwork().isEmpty());
     });
 }
 

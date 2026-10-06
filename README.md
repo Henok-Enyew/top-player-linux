@@ -186,11 +186,15 @@ black screen; seeking, volume and track switching work as for video.
   Audio Artwork...**, or **drop an image** on the window while the song
   plays; undone with **Clear Custom Audio Artwork**), art embedded
   in the file (ID3 `APIC`, FLAC / Vorbis `METADATA_BLOCK_PICTURE`, MP4 cover
-  atoms), or a `cover` / `folder` / `front` / `album` image next to the track.
+  atoms), a `cover` / `folder` / `front` / `album` image next to the track, or
+  the **default artwork** (**Audio → Set Default Artwork for Songs Without
+  One...**), an image of your choice for every song that has none of its own,
+  streams and radio included.
 - **Audio → Visualizations**: **Album Art Mode** (falls back to the spectrum
   without a cover), **Waveform Visualizer**, **Frequency Spectrum** (mpv's
-  `showwaves` / `showfreqs` through `lavfi-complex`), or **Off**, a minimal
-  canvas with the track's metadata. A custom cover you set for a track is
+  `showwaves` / `showfreqs` through `lavfi-complex`), or **Off (Cover Only)**:
+  no visualizer, just the cover (or a minimal canvas with the track's metadata
+  when there is no image at all). A custom cover you set for a track is
   shown even while a visualizer is selected, until you pick a visualization
   again.
 
@@ -606,7 +610,7 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.6**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support) |
+| [**1.0.6**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one |
 | [1.0.5](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
 | [1.0.4](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
 | [1.0.3](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |

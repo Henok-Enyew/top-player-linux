@@ -81,6 +81,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 - The window and the mini player resize from every edge and corner,
   with resize cursors, even over the controls and the lyrics
 - The mini player has a resize grip and remembers its new size
+- Songs show their cover with the visualizer off
+- Default artwork for songs without a cover of their own
 
 * Tue Oct 06 2026 Henok Enyew Andargie - 1.0.5-1
 - Volume, mute, shuffle and repeat are kept between runs

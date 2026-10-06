@@ -39,6 +39,8 @@
           <li>The window and the mini player resize from every edge and corner, with resize cursors, also over the floating controls, the lyrics and the playlist</li>
           <li>The mini player has a resize grip in the corner facing the middle of the screen, and keeps the size it was given</li>
           <li>Resizing works under window managers that can't resize borderless windows themselves</li>
+          <li>Songs show their own cover with the visualizer off, instead of a blank canvas</li>
+          <li>Default artwork: an image of your choice for songs (and radio) without a cover of their own</li>
         </ul>
       </description>
     </release>
