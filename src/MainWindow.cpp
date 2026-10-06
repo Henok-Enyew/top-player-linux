@@ -24,6 +24,7 @@
 #include "ThumbnailGenerator.h"
 #include "ThumbnailPopup.h"
 #include "TitleBar.h"
+#include "Theme.h"
 #include "WindowPin.h"
 #include "Icons.h"
 #include "PlaylistSession.h"
@@ -31,10 +32,12 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QCloseEvent>
 #include <QContextMenuEvent>
 #include <QDesktopServices>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPointer>
 #include <QPushButton>
 #include <QProcess>
@@ -65,7 +68,10 @@
 namespace {
 
 constexpr double kVolumeStep = 5.0;
-constexpr int kResizeMargin = 6;
+// How close to the edge a press resizes the window; wider in the mini player.
+constexpr int kResizeMargin = 8;
+constexpr int kMiniResizeMargin = 12;
+constexpr int kGripSize = 22;
 // Largest share of the screen's available area an automatic resize may use.
 constexpr qreal kMaxScreenFraction = 0.9;
 // Fullscreen controls and cursor hide after this long without mouse movement.
@@ -91,6 +97,76 @@ QString settingsFile()
 {
     return PlaylistSession::configDir() + QStringLiteral("/settings.ini");
 }
+
+Qt::CursorShape cursorFor(Qt::Edges edges)
+{
+    const bool horizontal = edges & (Qt::LeftEdge | Qt::RightEdge);
+    const bool vertical = edges & (Qt::TopEdge | Qt::BottomEdge);
+    if (horizontal && vertical) {
+        // Top-left and bottom-right share one diagonal arrow; the other corners the other.
+        const bool falling = bool(edges & Qt::LeftEdge) == bool(edges & Qt::TopEdge);
+        return falling ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor;
+    }
+    return horizontal ? Qt::SizeHorCursor : Qt::SizeVerCursor;
+}
+
+// The mini player's resize handle: three diagonal lines in a corner. A press
+// on it resizes the window from that corner.
+class ResizeGrip : public QWidget
+{
+public:
+    ResizeGrip(QWidget *parent, std::function<void(Qt::Edges, const QPoint &)> onPress)
+        : QWidget(parent)
+        , m_onPress(std::move(onPress))
+    {
+        setObjectName(QStringLiteral("MiniResizeGrip"));
+        setFixedSize(kGripSize, kGripSize);
+        setToolTip(QObject::tr("Drag to resize"));
+        setCorner(Qt::LeftEdge | Qt::TopEdge);
+    }
+
+    Qt::Edges corner() const { return m_corner; }
+    void setCorner(Qt::Edges corner)
+    {
+        m_corner = corner;
+        setCursor(cursorFor(corner));
+        update();
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() != Qt::LeftButton) {
+            event->ignore();
+            return;
+        }
+        m_onPress(m_corner, event->globalPosition().toPoint());
+        event->accept();
+    }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(18, 19, 22, 200));
+        p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 5, 5);
+        // Lines across the corner the grip sits in.
+        const bool left = m_corner & Qt::LeftEdge;
+        const bool top = m_corner & Qt::TopEdge;
+        p.setPen(QPen(Theme::Accent, 1.6, Qt::SolidLine, Qt::RoundCap));
+        const qreal s = width();
+        for (const qreal d : {5.0, 9.5, 14.0}) {
+            const QPointF a(left ? 4 : s - 4, top ? 4 + d : s - 4 - d);
+            const QPointF b(left ? 4 + d : s - 4 - d, top ? 4 : s - 4);
+            p.drawLine(a, b);
+        }
+    }
+
+private:
+    std::function<void(Qt::Edges, const QPoint &)> m_onPress;
+    Qt::Edges m_corner;
+};
 
 // Keys that a focused list keeps for its own navigation instead of letting the
 // player's shortcuts (volume, fullscreen) take them. A tree also keeps Left and
@@ -240,6 +316,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_miniRestoreButton->setFocusPolicy(Qt::NoFocus);
     m_miniRestoreButton->hide();
     connect(m_miniRestoreButton, &QToolButton::clicked, this, [this] { setMiniPlayer(false); });
+    m_resizeGrip = new ResizeGrip(m_root, [this](Qt::Edges edges, const QPoint &globalPos) { beginResize(edges, globalPos); });
+    m_resizeGrip->hide();
     connect(m_titleBar, &TitleBar::miniPlayerRequested, this, [this] { setMiniPlayer(true); });
 
     m_idleTimer.setSingleShot(true);
@@ -247,14 +325,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&m_idleTimer, &QTimer::timeout, this, [this] {
         if (!m_controlsOverlaid)
             return;
-        if (!m_controlBar->underMouse() && !m_miniRestoreButton->underMouse())
+        if (!m_controlBar->underMouse() && !m_miniRestoreButton->underMouse() && !m_resizeGrip->underMouse()
+            && !m_manualResize)
             setOverlayControlsVisible(false);
         // The mini player keeps the pointer: it is a window among others.
         if (isFullScreen())
             m_mpv->setCursor(Qt::BlankCursor);
     });
     // Mouse moves over child widgets (the video, the bars) drive the fullscreen chrome.
-    for (QWidget *widget : {static_cast<QWidget *>(m_mpv), m_root, static_cast<QWidget *>(m_controlBar)})
+    // The title bar and the drawer too, for the resize cursor along the edges.
+    for (QWidget *widget : {static_cast<QWidget *>(m_mpv), m_root, static_cast<QWidget *>(m_controlBar),
+                            static_cast<QWidget *>(m_titleBar), static_cast<QWidget *>(m_drawer)})
         widget->setMouseTracking(true);
     qApp->installEventFilter(this);
 }
@@ -816,8 +897,10 @@ void MainWindow::showSeekOsd()
 void MainWindow::changeEvent(QEvent *event)
 {
     QMainWindow::changeEvent(event);
-    if (event->type() == QEvent::WindowStateChange)
+    if (event->type() == QEvent::WindowStateChange) {
+        clearEdgeCursor();
         updateChrome();
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -869,6 +952,7 @@ void MainWindow::setControlsOverlaid(bool overlaid)
         placeOverlays();
     } else {
         m_miniRestoreButton->hide();
+        m_resizeGrip->hide();
         m_controlBar->show();
     }
 }
@@ -884,10 +968,13 @@ void MainWindow::setOverlayControlsVisible(bool visible)
         if (m_mini) {
             m_miniRestoreButton->show();
             m_miniRestoreButton->raise();
+            m_resizeGrip->show();
+            m_resizeGrip->raise();
         }
     } else {
         m_controlBar->hide();
         m_miniRestoreButton->hide();
+        m_resizeGrip->hide();
     }
 }
 
@@ -899,8 +986,86 @@ void MainWindow::placeOverlays()
     const QRect video = m_mpv->geometry();
     const int height = m_controlBar->sizeHint().height();
     m_controlBar->setGeometry(video.left(), video.bottom() + 1 - height, video.width(), height);
+    // The resize grip takes the corner facing the middle of the screen, so
+    // the mini player grows into the screen rather than off it; the way back
+    // to the full window takes a top corner the grip leaves free.
+    QScreen *screen = this->screen();
+    const QPoint middle = screen ? screen->availableGeometry().center() : geometry().center();
+    const bool gripLeft = geometry().center().x() > middle.x();
+    const bool gripTop = geometry().center().y() > middle.y();
+    auto *grip = static_cast<ResizeGrip *>(m_resizeGrip);
+    grip->setCorner((gripLeft ? Qt::LeftEdge : Qt::RightEdge) | (gripTop ? Qt::TopEdge : Qt::BottomEdge));
+    const int gripY = gripTop ? video.top() + 4 : video.bottom() - height - kGripSize - 4;
+    grip->move(gripLeft ? video.left() + 4 : video.right() - kGripSize - 3, gripY);
     const QSize button = m_miniRestoreButton->sizeHint();
-    m_miniRestoreButton->setGeometry(video.right() - button.width() - 6, video.top() + 6, button.width(), button.height());
+    const bool buttonLeft = gripTop && !gripLeft;
+    m_miniRestoreButton->setGeometry(buttonLeft ? video.left() + 6 : video.right() - button.width() - 6, video.top() + 6,
+                                     button.width(), button.height());
+}
+
+bool MainWindow::beginResize(Qt::Edges edges, const QPoint &globalPos)
+{
+    if (!edges || isFullScreen() || isMaximized() || !windowHandle())
+        return false;
+    m_videoPress.reset();
+    m_clickTimer.stop();
+    // The window manager resizes best (snapping, size hints); where it can't,
+    // follow the pointer ourselves.
+    if (windowHandle()->startSystemResize(edges))
+        return true;
+    m_manualResize = ManualResize{edges, globalPos, geometry()};
+    grabMouse(cursorFor(edges));
+    return true;
+}
+
+void MainWindow::updateManualResize(const QPoint &globalPos)
+{
+    const ManualResize &resize = *m_manualResize;
+    const QPoint delta = globalPos - resize.origin;
+    const QSize min = minimumSize().expandedTo(minimumSizeHint().boundedTo(minimumSize()));
+    const QSize max = maximumSize();
+    QRect g = resize.geometry;
+    if (resize.edges & Qt::LeftEdge)
+        g.setLeft(std::clamp(g.left() + delta.x(), g.right() + 1 - max.width(), g.right() + 1 - min.width()));
+    if (resize.edges & Qt::RightEdge)
+        g.setRight(std::clamp(g.right() + delta.x(), g.left() - 1 + min.width(), g.left() - 1 + max.width()));
+    if (resize.edges & Qt::TopEdge)
+        g.setTop(std::clamp(g.top() + delta.y(), g.bottom() + 1 - max.height(), g.bottom() + 1 - min.height()));
+    if (resize.edges & Qt::BottomEdge)
+        g.setBottom(std::clamp(g.bottom() + delta.y(), g.top() - 1 + min.height(), g.top() - 1 + max.height()));
+    if (g != geometry())
+        setGeometry(g);
+}
+
+void MainWindow::endManualResize()
+{
+    if (!std::exchange(m_manualResize, std::nullopt))
+        return;
+    releaseMouse();
+    saveMiniPlayerGeometry();
+}
+
+void MainWindow::updateEdgeCursor(const QPoint &globalPos)
+{
+    const Qt::Edges edges = edgesAt(mapFromGlobal(globalPos));
+    if (!edges) {
+        clearEdgeCursor();
+        return;
+    }
+    const Qt::CursorShape shape = cursorFor(edges);
+    if (m_edgeCursor == shape)
+        return;
+    if (m_edgeCursor)
+        QGuiApplication::changeOverrideCursor(shape);
+    else
+        QGuiApplication::setOverrideCursor(shape);
+    m_edgeCursor = shape;
+}
+
+void MainWindow::clearEdgeCursor()
+{
+    if (std::exchange(m_edgeCursor, std::nullopt))
+        QGuiApplication::restoreOverrideCursor();
 }
 
 QRect MainWindow::miniPlayerGeometry() const
@@ -1004,6 +1169,34 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         placeOverlays();
         return QMainWindow::eventFilter(watched, event);
     }
+    // Resizing from the edges, whatever widget is under the pointer there
+    // (the floating controls, the lyrics, the playlist...).
+    if ((type == QEvent::MouseButtonPress || type == QEvent::MouseButtonDblClick || type == QEvent::MouseButtonRelease
+         || type == QEvent::MouseMove)
+        && watched->isWidgetType() && static_cast<QWidget *>(watched)->window() == this) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        const QPoint globalPos = mouse->globalPosition().toPoint();
+        if (m_manualResize) {
+            if (type == QEvent::MouseMove)
+                updateManualResize(globalPos);
+            else if (type == QEvent::MouseButtonRelease && mouse->button() == Qt::LeftButton)
+                endManualResize();
+            return true;
+        }
+        if (type == QEvent::MouseButtonPress && mouse->button() == Qt::LeftButton) {
+            if (beginResize(edgesAt(mapFromGlobal(globalPos)), globalPos))
+                return true;
+        } else if (type == QEvent::MouseButtonDblClick && edgesAt(mapFromGlobal(globalPos))) {
+            // The second click of a double click on an edge is not fullscreen.
+            return true;
+        } else if (type == QEvent::MouseMove && mouse->buttons() == Qt::NoButton) {
+            updateEdgeCursor(globalPos);
+        }
+    }
+    if (type == QEvent::Leave && watched == this)
+        clearEdgeCursor();
+    else if (type == QEvent::Enter && watched->isWidgetType() && static_cast<QWidget *>(watched)->window() == this)
+        updateEdgeCursor(QCursor::pos());
     if (type != QEvent::ShortcutOverride && type != QEvent::KeyPress && type != QEvent::MouseMove)
         return QMainWindow::eventFilter(watched, event);
     // A shortcut fires unless the focused widget claims the key first. Let a
@@ -1123,11 +1316,9 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     const QPoint globalPos = event->globalPosition().toPoint();
     const bool canMove = !isFullScreen() && windowHandle();
 
-    // Without a frame, let the compositor move or resize the window for us.
-    const Qt::Edges edges = !canMove || isMaximized() ? Qt::Edges() : edgesAt(mapFromGlobal(globalPos));
-    if (edges) {
-        windowHandle()->startSystemResize(edges);
-    } else if (isOverVideo(globalPos)) {
+    // Without a frame, let the compositor move the window for us; the
+    // edges are handled in eventFilter(), before any child sees the press.
+    if (isOverVideo(globalPos)) {
         // Wait for the release (a click: pause) or for the pointer to move (a drag: move the window).
         m_videoPress = globalPos;
     } else if (canMove) {
@@ -1269,13 +1460,22 @@ void MainWindow::dropEvent(QDropEvent *event)
 Qt::Edges MainWindow::edgesAt(const QPoint &pos) const
 {
     Qt::Edges edges;
-    if (pos.x() <= kResizeMargin)
+    if (isFullScreen() || isMaximized() || !rect().contains(pos))
+        return edges;
+    const int margin = m_mini ? kMiniResizeMargin : kResizeMargin;
+    // Corners are easier to catch than the edges between them.
+    const int corner = margin * 2;
+    const bool nearLeft = pos.x() < margin, nearRight = pos.x() >= width() - margin;
+    const bool nearTop = pos.y() < margin, nearBottom = pos.y() >= height() - margin;
+    const bool cornerX = pos.x() < corner || pos.x() >= width() - corner;
+    const bool cornerY = pos.y() < corner || pos.y() >= height() - corner;
+    if (nearLeft || (cornerX && pos.x() < corner && (nearTop || nearBottom)))
         edges |= Qt::LeftEdge;
-    if (pos.x() >= width() - kResizeMargin)
+    if (nearRight || (cornerX && pos.x() >= width() - corner && (nearTop || nearBottom)))
         edges |= Qt::RightEdge;
-    if (pos.y() <= kResizeMargin)
+    if (nearTop || (cornerY && pos.y() < corner && (nearLeft || nearRight)))
         edges |= Qt::TopEdge;
-    if (pos.y() >= height() - kResizeMargin)
+    if (nearBottom || (cornerY && pos.y() >= height() - corner && (nearLeft || nearRight)))
         edges |= Qt::BottomEdge;
     return edges;
 }

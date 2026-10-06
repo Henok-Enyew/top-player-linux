@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.0.5 packaging/rpm/build-rpm.sh
+#   VERSION=1.0.6 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.0.5
+Version:        1.0.6
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -77,6 +77,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Tue Oct 06 2026 Henok Enyew Andargie - 1.0.6-1
+- The window and the mini player resize from every edge and corner,
+  with resize cursors, even over the controls and the lyrics
+- The mini player has a resize grip and remembers its new size
+
 * Tue Oct 06 2026 Henok Enyew Andargie - 1.0.5-1
 - Volume, mute, shuffle and repeat are kept between runs
 - Spotify links (songs, albums, playlists) download as tagged MP3s

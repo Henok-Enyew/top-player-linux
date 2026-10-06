@@ -35,6 +35,7 @@
 
 #include <clocale>
 #include <cmath>
+#include <optional>
 
 namespace {
 
@@ -82,6 +83,8 @@ private Q_SLOTS:
     void controlsRememberState();
     void fullScreenControlsFloat();
     void miniPlayer();
+    void resizeFromEdges();
+    void miniPlayerResizes();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -713,8 +716,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.5"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.5")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.6"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.0.6")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -877,6 +880,115 @@ void TransportTest::miniPlayer()
     QTRY_VERIFY(!m_window->isMiniPlayer());
     QVERIFY(!m_window->isFullScreen());
     QTRY_COMPARE(m_window->size(), normal);
+}
+
+namespace {
+
+// Sends a mouse event at `windowPos` (relative to where the window was when
+// `origin` was taken: a real pointer doesn't move with the window) to the
+// widget under it, or to whatever grabbed the mouse.
+void sendMouse(QWidget *window, QEvent::Type type, const QPoint &windowPos, Qt::MouseButtons buttons,
+               Qt::MouseButton button = Qt::NoButton, std::optional<QPoint> origin = std::nullopt)
+{
+    const QPoint global = origin.value_or(window->mapToGlobal(QPoint())) + windowPos;
+    QWidget *target = QWidget::mouseGrabber();
+    if (!target) {
+        QWidget *child = window->childAt(window->mapFromGlobal(global));
+        target = child ? child : window;
+    }
+    QMouseEvent event(type, target->mapFromGlobal(QPointF(global)), QPointF(global), button, buttons, Qt::NoModifier);
+    QApplication::sendEvent(target, &event);
+}
+
+void drag(QWidget *window, const QPoint &from, const QPoint &to)
+{
+    const QPoint origin = window->mapToGlobal(QPoint());
+    sendMouse(window, QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton, origin);
+    for (int step = 1; step <= 5; ++step)
+        sendMouse(window, QEvent::MouseMove, from + (to - from) * step / 5, Qt::LeftButton, Qt::NoButton, origin);
+    sendMouse(window, QEvent::MouseButtonRelease, to, Qt::NoButton, Qt::LeftButton, origin);
+}
+
+} // namespace
+
+void TransportTest::resizeFromEdges()
+{
+    // No window manager under Xvfb: the window resizes itself.
+    const QRect before = m_window->geometry();
+    QCOMPARE(m_window->edgesAt(QPoint(before.width() - 2, before.height() / 2)), Qt::Edges(Qt::RightEdge));
+    QCOMPARE(m_window->edgesAt(QPoint(before.width() / 2, before.height() / 2)), Qt::Edges());
+    QCOMPARE(m_window->edgesAt(QPoint(3, before.height() - 3)), Qt::Edges(Qt::LeftEdge | Qt::BottomEdge));
+
+    // The right edge, over the video.
+    const QPoint right(before.width() - 3, before.height() / 2);
+    sendMouse(m_window, QEvent::MouseButtonPress, right, Qt::LeftButton, Qt::LeftButton);
+    QVERIFY(m_window->isResizing());
+    sendMouse(m_window, QEvent::MouseMove, right + QPoint(80, 0), Qt::LeftButton);
+    QTRY_COMPARE(m_window->width(), before.width() + 80);
+    sendMouse(m_window, QEvent::MouseButtonRelease, right + QPoint(80, 0), Qt::NoButton, Qt::LeftButton);
+    QVERIFY(!m_window->isResizing());
+    QCOMPARE(m_window->geometry().left(), before.left());
+    // A press on an edge is not a click on the video.
+    QTest::qWait(QApplication::doubleClickInterval() + 200);
+    QVERIFY(!prop("pause").toBool());
+
+    // The bottom-left corner, over the control bar's buttons: grows left and down.
+    const QRect wider = m_window->geometry();
+    drag(m_window, QPoint(2, wider.height() - 2), QPoint(-40, wider.height() + 30));
+    QTRY_COMPARE(m_window->geometry().left(), wider.left() - 42);
+    QCOMPARE(m_window->geometry().right(), wider.right());
+    QCOMPARE(m_window->height(), wider.height() + 32);
+
+    // Never smaller than the window can be.
+    drag(m_window, QPoint(m_window->width() - 2, m_window->height() - 2), QPoint(-2000, -2000));
+    QTRY_COMPARE(m_window->size(), m_window->minimumSize());
+
+    // Fullscreen has no edges to drag.
+    m_window->toggleFullScreen();
+    QTRY_VERIFY(m_window->isFullScreen());
+    QCOMPARE(m_window->edgesAt(QPoint(1, 1)), Qt::Edges());
+    QVERIFY(!m_window->beginResize(Qt::RightEdge, QPoint()));
+    m_window->toggleFullScreen();
+    QTRY_VERIFY(!m_window->isFullScreen());
+}
+
+void TransportTest::miniPlayerResizes()
+{
+    m_window->setMiniPlayer(true);
+    QTRY_COMPARE(m_window->width(), 400);
+    const QRect before = m_window->geometry();
+    auto *grip = m_window->findChild<QWidget *>(QStringLiteral("MiniResizeGrip"));
+    QVERIFY(grip);
+    QVERIFY(!grip->isVisible());
+
+    // With the pointer over it, the grip shows in the corner facing the
+    // middle of the screen (it opens in the bottom right: the top left).
+    QMouseEvent hover(QEvent::MouseMove, QPointF(60, 60), m_mpv->mapToGlobal(QPointF(60, 60)), Qt::NoButton,
+                      Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(m_mpv, &hover);
+    QTRY_VERIFY(grip->isVisible());
+    QVERIFY(grip->geometry().left() < 20 && grip->geometry().top() < 20);
+    auto *restore = m_window->findChild<QToolButton *>(QStringLiteral("MiniRestoreButton"));
+    QVERIFY(!restore->geometry().intersects(grip->geometry()));
+
+    // Dragging the grip resizes from that corner.
+    const QPoint gripCenter = grip->mapTo(m_window, grip->rect().center());
+    drag(m_window, gripCenter, gripCenter - QPoint(100, 50));
+    QTRY_COMPARE(m_window->width(), before.width() + 100);
+    QCOMPARE(m_window->height(), before.height() + 50);
+    QCOMPARE(m_window->geometry().bottomRight(), before.bottomRight());
+
+    // So do the edges, even under the floating controls.
+    const QRect grown = m_window->geometry();
+    drag(m_window, QPoint(grown.width() / 2, grown.height() - 3), QPoint(grown.width() / 2, grown.height() - 43));
+    QTRY_COMPARE(m_window->height(), grown.height() - 40);
+    QVERIFY(m_window->isMiniPlayer());
+
+    // The new size is kept for next time.
+    const QSize mini = m_window->size();
+    m_window->setMiniPlayer(false);
+    m_window->setMiniPlayer(true);
+    QTRY_COMPARE(m_window->size(), mini);
 }
 
 int main(int argc, char *argv[])

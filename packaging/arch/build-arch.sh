@@ -2,7 +2,7 @@
 # Builds top-player-<version>-<rel>-<arch>.pkg.tar.zst on Arch Linux.
 # Run from the repository root:
 #
-#   VERSION=1.0.5 packaging/arch/build-arch.sh
+#   VERSION=1.0.6 packaging/arch/build-arch.sh
 #
 # makepkg refuses to run as root. As root (as in CI) this script installs the
 # build dependencies and runs makepkg as an unprivileged "builder" user.
