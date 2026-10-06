@@ -308,9 +308,13 @@ void TransportTest::mpris()
     QTRY_VERIFY(!prop("pause").toBool());
     call("Next");
     QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    QSignalSpy loaded(m_mpv, &MpvWidget::fileLoaded);
     call("Previous");
     QTRY_COMPARE(prop("playlist-pos").toInt(), 0);
+    // A seek sent while the file still loads is dropped.
+    QTRY_VERIFY_WITH_TIMEOUT(!loaded.isEmpty(), 10000);
     QTRY_VERIFY(prop("seekable").toBool());
+    QTRY_VERIFY(prop("time-pos").isValid());
     QVERIFY(QMetaObject::invokeMethod(player, "Seek", Q_ARG(qlonglong, 30 * 1000000LL)));
     QTRY_VERIFY(prop("time-pos").toDouble() >= 29);
     call("Pause");
@@ -566,7 +570,7 @@ void TransportTest::playlistInFullScreen()
     press(Qt::Key_F6);
     QVERIFY(drawer->isExpanded());
     QTRY_VERIFY(drawer->isVisible() && drawer->width() > 100);
-    QVERIFY(m_window->rect().contains(drawer->mapTo(m_window, drawer->rect().center())));
+    QTRY_VERIFY(m_window->rect().contains(drawer->mapTo(m_window, drawer->rect().center())));
     QVERIFY(button->isChecked());
     // And closes it again, with the button in step.
     press(Qt::Key_F6);
@@ -851,7 +855,7 @@ void TransportTest::miniPlayer()
     QTRY_VERIFY(!titleBar->isVisible());
     QVERIFY(m_window->areControlsOverlaid());
     QTRY_COMPARE(m_window->width(), 400);
-    QVERIFY(m_window->height() < normal.height());
+    QTRY_VERIFY(m_window->height() < normal.height());
 
     // The pointer over it brings the controls and the way back; few buttons fit.
     QMouseEvent move(QEvent::MouseMove, QPointF(20, 20), m_mpv->mapToGlobal(QPointF(20, 20)), Qt::NoButton,
@@ -931,7 +935,7 @@ void TransportTest::resizeFromEdges()
     QTRY_COMPARE(m_window->width(), before.width() + 80);
     sendMouse(m_window, QEvent::MouseButtonRelease, right + QPoint(80, 0), Qt::NoButton, Qt::LeftButton);
     QVERIFY(!m_window->isResizing());
-    QCOMPARE(m_window->geometry().left(), before.left());
+    QTRY_COMPARE(m_window->geometry().left(), before.left());
     // A press on an edge is not a click on the video.
     QTest::qWait(QApplication::doubleClickInterval() + 200);
     QVERIFY(!prop("pause").toBool());
@@ -940,8 +944,8 @@ void TransportTest::resizeFromEdges()
     const QRect wider = m_window->geometry();
     drag(m_window, QPoint(2, wider.height() - 2), QPoint(-40, wider.height() + 30));
     QTRY_COMPARE(m_window->geometry().left(), wider.left() - 42);
-    QCOMPARE(m_window->geometry().right(), wider.right());
-    QCOMPARE(m_window->height(), wider.height() + 32);
+    QTRY_COMPARE(m_window->geometry().right(), wider.right());
+    QTRY_COMPARE(m_window->height(), wider.height() + 32);
 
     // Never smaller than the window can be.
     drag(m_window, QPoint(m_window->width() - 2, m_window->height() - 2), QPoint(-2000, -2000));
@@ -979,8 +983,8 @@ void TransportTest::miniPlayerResizes()
     const QPoint gripCenter = grip->mapTo(m_window, grip->rect().center());
     drag(m_window, gripCenter, gripCenter - QPoint(100, 50));
     QTRY_COMPARE(m_window->width(), before.width() + 100);
-    QCOMPARE(m_window->height(), before.height() + 50);
-    QCOMPARE(m_window->geometry().bottomRight(), before.bottomRight());
+    QTRY_COMPARE(m_window->height(), before.height() + 50);
+    QTRY_COMPARE(m_window->geometry().bottomRight(), before.bottomRight());
 
     // So do the edges, even under the floating controls.
     const QRect grown = m_window->geometry();
