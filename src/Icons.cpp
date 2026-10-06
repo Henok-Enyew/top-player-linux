@@ -125,6 +125,16 @@ void drawIcon(QPainter &p, IconType type)
         p.drawPath(polygon({{11, 3.5}, {16.5, 9}, {14.5, 9.8}, {12, 12.3}, {11.6, 15}, {5, 8.4}, {7.7, 8}, {10.2, 5.5}}));
         p.drawLine(QPointF(8.3, 11.7), QPointF(4, 16));
         break;
+    case IconType::MiniPlayer:
+        // Picture in picture: a screen with a small window in its corner.
+        p.setPen(QPen(color, 1.3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawRoundedRect(QRectF(3, 4.5, 14, 11), 2, 2);
+        p.fillPath([] {
+            QPainterPath path;
+            path.addRoundedRect(QRectF(9.5, 9.5, 5.5, 4), 1, 1);
+            return path;
+        }(), color);
+        break;
     case IconType::MoveTop:
         p.drawLine(QPointF(4.5, 4), QPointF(15.5, 4));
         p.drawPolyline(QPolygonF({{5.5, 12}, {10, 7.5}, {14.5, 12}}));

@@ -2,16 +2,24 @@
 #include "Theme.h"
 
 #include <QApplication>
+#include <QButtonGroup>
+#include <QCheckBox>
+#include <QColorDialog>
 #include <QClipboard>
 #include <QDialogButtonBox>
+#include <QFontComboBox>
 #include <QFontDatabase>
+#include <QGroupBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSlider>
+#include <QToolButton>
 #include <QSplitter>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -26,6 +34,42 @@ QString duration(double seconds)
         return QStringLiteral("-");
     const long long s = std::llround(seconds);
     return QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
+}
+
+// Highlight colors offered as swatches; anything else is "Custom...".
+struct Swatch {
+    const char *name;
+    QRgb color;
+};
+const Swatch kSwatches[] = {
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "White"), 0xFFFFFF},
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "Cyan"), 0x00D2FF},
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "Gold"), 0xFFD166},
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "Rose"), 0xFF7AA8},
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "Lime"), 0x9BE564},
+    {QT_TRANSLATE_NOOP("LyricsStyleDialog", "Violet"), 0xB69CFF},
+};
+
+QIcon swatchIcon(const QColor &color, int size = 18)
+{
+    QPixmap pixmap(size * 2, size * 2);
+    pixmap.setDevicePixelRatio(2);
+    pixmap.fill(Qt::transparent);
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor(255, 255, 255, 70), 1));
+    p.setBrush(color);
+    p.drawEllipse(QRectF(1.5, 1.5, size - 3, size - 3));
+    return QIcon(pixmap);
+}
+
+QLabel *valueLabel(QWidget *parent)
+{
+    auto *label = new QLabel(parent);
+    label->setMinimumWidth(44);
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    label->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent)));
+    return label;
 }
 
 } // namespace
@@ -239,4 +283,209 @@ void AiLyricsPromptDialog::showError(const QString &message)
 {
     m_status->setStyleSheet(QStringLiteral("color: #FF6B6B;"));
     m_status->setText(message);
+}
+
+LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
+    : QDialog(parent)
+    , m_style(style)
+    , m_original(style)
+    , m_defaultFont(new QCheckBox(tr("Player font"), this))
+    , m_font(new QFontComboBox(this))
+    , m_size(new QSlider(Qt::Horizontal, this))
+    , m_sizeLabel(valueLabel(this))
+    , m_spacing(new QSlider(Qt::Horizontal, this))
+    , m_spacingLabel(valueLabel(this))
+    , m_align(new QButtonGroup(this))
+    , m_colors(new QButtonGroup(this))
+    , m_customColor(new QPushButton(tr("Custom..."), this))
+    , m_bold(new QCheckBox(tr("Bold current line"), this))
+    , m_glow(new QCheckBox(tr("Glow behind current line"), this))
+    , m_dim(new QSlider(Qt::Horizontal, this))
+    , m_dimLabel(valueLabel(this))
+{
+    setObjectName(QStringLiteral("LyricsStyleDialog"));
+    setWindowTitle(tr("Lyrics Appearance"));
+    setMinimumWidth(460);
+
+    // Text
+    auto *text = new QGroupBox(tr("Text"), this);
+    auto *textForm = new QFormLayout(text);
+    m_font->setObjectName(QStringLiteral("LyricsFontCombo"));
+    m_defaultFont->setObjectName(QStringLiteral("LyricsDefaultFont"));
+    auto *fontRow = new QHBoxLayout;
+    fontRow->addWidget(m_font, 1);
+    fontRow->addWidget(m_defaultFont);
+    textForm->addRow(tr("Font:"), fontRow);
+
+    m_size->setObjectName(QStringLiteral("LyricsSizeSlider"));
+    m_size->setRange(qRound(LyricsStyle::kMinScale * 100), qRound(LyricsStyle::kMaxScale * 100));
+    m_size->setSingleStep(5);
+    m_size->setPageStep(10);
+    auto *sizeRow = new QHBoxLayout;
+    sizeRow->addWidget(m_size, 1);
+    sizeRow->addWidget(m_sizeLabel);
+    textForm->addRow(tr("Size:"), sizeRow);
+
+    m_spacing->setObjectName(QStringLiteral("LyricsSpacingSlider"));
+    m_spacing->setRange(10, 200);
+    m_spacing->setSingleStep(5);
+    auto *spacingRow = new QHBoxLayout;
+    spacingRow->addWidget(m_spacing, 1);
+    spacingRow->addWidget(m_spacingLabel);
+    textForm->addRow(tr("Line spacing:"), spacingRow);
+
+    auto *alignRow = new QHBoxLayout;
+    alignRow->setSpacing(4);
+    const QList<QPair<QString, Qt::Alignment>> alignments{
+        {tr("Left"), Qt::AlignLeft}, {tr("Center"), Qt::AlignHCenter}, {tr("Right"), Qt::AlignRight}};
+    for (const auto &[label, align] : alignments) {
+        auto *button = new QToolButton(this);
+        button->setText(label);
+        button->setCheckable(true);
+        button->setMinimumWidth(64);
+        button->setObjectName(QStringLiteral("LyricsAlign") + label);
+        m_align->addButton(button, int(align));
+        alignRow->addWidget(button);
+    }
+    alignRow->addStretch();
+    textForm->addRow(tr("Alignment:"), alignRow);
+
+    // Current line
+    auto *highlight = new QGroupBox(tr("Current line"), this);
+    auto *highlightLayout = new QVBoxLayout(highlight);
+    auto *swatches = new QHBoxLayout;
+    swatches->setSpacing(4);
+    // Unchecked by hand when the color is a custom one.
+    m_colors->setExclusive(false);
+    int id = 0;
+    for (const Swatch &swatch : kSwatches) {
+        auto *button = new QToolButton(this);
+        button->setIcon(swatchIcon(QColor(swatch.color)));
+        button->setIconSize(QSize(18, 18));
+        button->setCheckable(true);
+        button->setToolTip(tr(swatch.name));
+        m_colors->addButton(button, id++);
+        swatches->addWidget(button);
+    }
+    m_customColor->setObjectName(QStringLiteral("LyricsCustomColor"));
+    m_customColor->setAutoDefault(false);
+    swatches->addSpacing(6);
+    swatches->addWidget(m_customColor);
+    swatches->addStretch();
+    highlightLayout->addLayout(swatches);
+    auto *toggles = new QHBoxLayout;
+    toggles->addWidget(m_bold);
+    toggles->addWidget(m_glow);
+    toggles->addStretch();
+    highlightLayout->addLayout(toggles);
+
+    // Over videos
+    auto *video = new QGroupBox(tr("Over videos"), this);
+    auto *videoForm = new QFormLayout(video);
+    m_dim->setObjectName(QStringLiteral("LyricsDimSlider"));
+    m_dim->setRange(0, 100);
+    m_dim->setSingleStep(5);
+    auto *dimRow = new QHBoxLayout;
+    dimRow->addWidget(m_dim, 1);
+    dimRow->addWidget(m_dimLabel);
+    videoForm->addRow(tr("Darken video:"), dimRow);
+
+    auto *hint = new QLabel(tr("Tip: drag or scroll the lyrics to look ahead, click a timed line to play from it, "
+                               "and Ctrl+scroll over them to resize."), this);
+    hint->setWordWrap(true);
+    hint->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::TextSecondary)));
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
+    buttons->button(QDialogButtonBox::RestoreDefaults)->setObjectName(QStringLiteral("LyricsStyleReset"));
+
+    auto *layout = new QVBoxLayout(this);
+    layout->addWidget(text);
+    layout->addWidget(highlight);
+    layout->addWidget(video);
+    layout->addWidget(hint);
+    layout->addWidget(buttons);
+
+    connect(m_defaultFont, &QCheckBox::toggled, this, [this](bool useDefault) {
+        edit([this, useDefault](LyricsStyle &s) { s.family = useDefault ? QString() : m_font->currentFont().family(); });
+    });
+    connect(m_font, &QFontComboBox::currentFontChanged, this, [this](const QFont &font) {
+        edit([font](LyricsStyle &s) { s.family = font.family(); });
+    });
+    connect(m_size, &QSlider::valueChanged, this, [this](int value) {
+        edit([value](LyricsStyle &s) { s.scale = value / 100.0; });
+    });
+    connect(m_spacing, &QSlider::valueChanged, this, [this](int value) {
+        edit([value](LyricsStyle &s) { s.spacing = value / 100.0; });
+    });
+    connect(m_align, &QButtonGroup::idClicked, this, [this](int align) {
+        edit([align](LyricsStyle &s) { s.align = Qt::Alignment(align); });
+    });
+    connect(m_colors, &QButtonGroup::idClicked, this, [this](int index) {
+        edit([index](LyricsStyle &s) { s.highlight = QColor(kSwatches[index].color); });
+    });
+    connect(m_customColor, &QPushButton::clicked, this, [this] {
+        const QColor color = QColorDialog::getColor(m_style.highlight, this, tr("Current Line Color"));
+        if (color.isValid())
+            edit([color](LyricsStyle &s) { s.highlight = color; });
+    });
+    connect(m_bold, &QCheckBox::toggled, this, [this](bool on) { edit([on](LyricsStyle &s) { s.bold = on; }); });
+    connect(m_glow, &QCheckBox::toggled, this, [this](bool on) { edit([on](LyricsStyle &s) { s.glow = on; }); });
+    connect(m_dim, &QSlider::valueChanged, this, [this](int value) { edit([value](LyricsStyle &s) { s.dim = value; }); });
+    connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, this,
+            [this] { setLyricsStyle(LyricsStyle()); });
+    connect(buttons, &QDialogButtonBox::accepted, this, [this] {
+        m_style.save();
+        accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(this, &QDialog::rejected, this, [this] {
+        // Put the old look back.
+        m_style = m_original;
+        Q_EMIT styleChanged(m_style);
+    });
+
+    syncControls();
+}
+
+void LyricsStyleDialog::setLyricsStyle(const LyricsStyle &style)
+{
+    m_style = style;
+    syncControls();
+    Q_EMIT styleChanged(m_style);
+}
+
+void LyricsStyleDialog::edit(const std::function<void(LyricsStyle &)> &change)
+{
+    if (m_syncing)
+        return;
+    change(m_style);
+    syncControls();
+    Q_EMIT styleChanged(m_style);
+}
+
+void LyricsStyleDialog::syncControls()
+{
+    m_syncing = true;
+    m_defaultFont->setChecked(m_style.family.isEmpty());
+    m_font->setEnabled(!m_style.family.isEmpty());
+    // Unticking "Player font" starts from the font the lyrics have now.
+    m_font->setCurrentFont(m_style.family.isEmpty() ? QApplication::font() : QFont(m_style.family));
+    m_size->setValue(qRound(m_style.scale * 100));
+    m_sizeLabel->setText(QStringLiteral("%1%").arg(qRound(m_style.scale * 100)));
+    m_spacing->setValue(qRound(m_style.spacing * 100));
+    m_spacingLabel->setText(QStringLiteral("%1%").arg(qRound(m_style.spacing * 100)));
+    if (QAbstractButton *button = m_align->button(int(m_style.align)))
+        button->setChecked(true);
+    bool preset = false;
+    for (int i = 0; i < int(std::size(kSwatches)); ++i) {
+        const bool match = QColor(kSwatches[i].color) == m_style.highlight;
+        m_colors->button(i)->setChecked(match);
+        preset = preset || match;
+    }
+    m_customColor->setIcon(preset ? QIcon() : swatchIcon(m_style.highlight, 14));
+    m_bold->setChecked(m_style.bold);
+    m_glow->setChecked(m_style.glow);
+    m_dim->setValue(m_style.dim);
+    m_dimLabel->setText(QStringLiteral("%1%").arg(m_style.dim));
+    m_syncing = false;
 }

@@ -8,7 +8,7 @@ enum class IconType {
     Open, Play, Pause, Stop, Previous, Next, Playlist, Volume, Muted, Fullscreen,
     Minimize, Maximize, Restore, Close, Add, Remove, Clear, Folder, Url, Shuffle, Sort, More, Search,
     Expand, Collapse, Repeat, RepeatOne, AspectFit, AspectWide, AspectOriginal,
-    MoveTop, MoveUp, MoveDown, MoveBottom, Pin,
+    MoveTop, MoveUp, MoveDown, MoveBottom, Pin, MiniPlayer,
 };
 
 // Checkable buttons show the icon in the accent color while checked.

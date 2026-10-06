@@ -111,6 +111,7 @@ TitleBar::TitleBar(QWidget *window)
     auto *appName = new QLabel(QApplication::applicationDisplayName(), this);
     appName->setObjectName(QStringLiteral("AppNameLabel"));
 
+    auto *mini = new WindowButton(QStringLiteral("MiniPlayerButton"), IconType::MiniPlayer, tr("Mini Player (Ctrl+M)"), this);
     m_pinButton = new WindowButton(QStringLiteral("PinButton"), IconType::Pin, tr("Always on Top (Ctrl+T)"), this);
     m_pinButton->setCheckable(true);
     auto *minimize = new WindowButton(QStringLiteral("MinimizeButton"), IconType::Minimize, tr("Minimize"), this);
@@ -126,6 +127,7 @@ TitleBar::TitleBar(QWidget *window)
     layout->addWidget(appName);
     layout->addSpacing(10);
     layout->addWidget(m_title, 1);
+    layout->addWidget(mini);
     layout->addWidget(m_pinButton);
     layout->addSpacing(4);
     layout->addWidget(minimize);
@@ -133,6 +135,7 @@ TitleBar::TitleBar(QWidget *window)
     layout->addWidget(fullScreen);
     layout->addWidget(close);
 
+    connect(mini, &QToolButton::clicked, this, &TitleBar::miniPlayerRequested);
     connect(m_pinButton, &QToolButton::toggled, this, &TitleBar::pinToggled);
     connect(minimize, &QToolButton::clicked, m_window, &QWidget::showMinimized);
     connect(m_maximizeButton, &QToolButton::clicked, this,

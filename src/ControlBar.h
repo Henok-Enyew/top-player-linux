@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QFrame>
+#include <QTimer>
 
 enum class IconType;
 class MpvWidget;
@@ -21,6 +22,7 @@ public:
     enum class Aspect { Fit, Wide, Original };
 
     ControlBar(MpvWidget *mpv, QWidget *parent = nullptr);
+    ~ControlBar() override;
 
     SeekBar *seekBar() const { return m_seekBar; }
     void setPlaylistChecked(bool checked);
@@ -34,6 +36,10 @@ public:
     void setShuffle(bool on);
     void setRepeat(Repeat mode);
     void setAspect(Aspect mode);
+
+    // Volume, mute, shuffle and repeat are kept in settings.ini ([player])
+    // and set again on the next start. Saved shortly after each change.
+    void saveState();
 
 Q_SIGNALS:
     void openRequested();
@@ -51,9 +57,14 @@ private:
     void updatePlayButton();
     void updateTimeLabel();
     void updateModeButtons();
+    // Applies the volume, mute, shuffle and repeat saved last time.
+    void restoreState();
+    void scheduleSave();
 
     MpvWidget *m_mpv;
     SeekBar *m_seekBar;
+    QToolButton *m_openButton;
+    QToolButton *m_stopButton;
     QToolButton *m_playButton;
     QToolButton *m_muteButton;
     QToolButton *m_playlistButton;
@@ -73,4 +84,7 @@ private:
     double m_aspectOverride = -1;
     Repeat m_repeat = Repeat::Off;
     Aspect m_aspect = Aspect::Fit;
+    double m_volume = -1;
+    bool m_muted = false;
+    QTimer m_saveTimer;
 };

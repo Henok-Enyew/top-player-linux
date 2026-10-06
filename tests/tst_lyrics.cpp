@@ -15,6 +15,9 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDialogButtonBox>
+#include <QSlider>
+#include <QWheelEvent>
 #include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -145,6 +148,11 @@ private Q_SLOTS:
     void queryFromFileName();
     void aiPrompt();
     void aiPromptPasteAnswer();
+    void clickLineSeeks();
+    void browseAndReturn();
+    void plainLyricsOnlyScroll();
+    void appearance();
+    void smallWindowShowsFewerLines();
 
     // Sync editor.
     void syncLyricsByTapping();
@@ -668,6 +676,191 @@ void LyricsTest::syncSubtitles()
     // Loaded into the player and selected.
     QTRY_COMPARE_WITH_TIMEOUT(m_mpv->tracks(QStringLiteral("sub")).size(), 2, 5000);
     QTRY_COMPARE(m_mpv->mpvPropertyString(QStringLiteral("sid")), QStringLiteral("2"));
+}
+
+void LyricsTest::clickLineSeeks()
+{
+    open(m_song);
+    QTRY_VERIFY_WITH_TIMEOUT(m_lyrics->view()->isVisible(), 5000);
+    LyricsView *view = m_lyrics->view();
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("2"), QStringLiteral("absolute+exact")});
+    QTRY_COMPARE_WITH_TIMEOUT(view->activeLine(), 0, 5000);
+    QTest::qWait(700);
+    // Lines with a time can be played from; the empty pause line can't be hit.
+    QVERIFY(std::abs(view->seekTime(4) - 20) < 0.05);
+    QCOMPARE(view->lineAt(view->lineRect(4).center()), 4);
+    QCOMPARE(view->lineAt(QPoint(2, view->lineRect(4).center().y())), -1);
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->lineRect(4).center());
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble() - 20) < 1, 5000);
+    QTRY_COMPARE(view->activeLine(), 4);
+    // Picking a line plays it.
+    QTRY_VERIFY(!m_mpv->mpvProperty(QStringLiteral("pause")).toBool());
+    QVERIFY(!view->isBrowsing());
+
+    // The lyrics offset is taken into account.
+    m_lyrics->adjustOffset(0.5);
+    QVERIFY(std::abs(view->seekTime(4) - 20.5) < 0.05);
+    m_lyrics->adjustOffset(-0.5);
+}
+
+void LyricsTest::browseAndReturn()
+{
+    open(m_song);
+    QTRY_VERIFY_WITH_TIMEOUT(m_lyrics->view()->isVisible(), 5000);
+    LyricsView *view = m_lyrics->view();
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("6"), QStringLiteral("absolute+exact")});
+    QTRY_COMPARE_WITH_TIMEOUT(view->activeLine(), 1, 5000);
+    QTest::qWait(700);
+    const int centerY = view->lineRect(1).center().y();
+    const double volume = m_mpv->mpvProperty(QStringLiteral("volume")).toDouble();
+
+    // The wheel over the lyrics looks further down the song, not the volume.
+    const QPointF pos = view->lineRect(1).center();
+    QWheelEvent wheel(pos, view->mapToGlobal(pos), QPoint(), QPoint(0, -240), Qt::NoButton, Qt::NoModifier,
+                      Qt::NoScrollPhase, false);
+    QApplication::sendEvent(view, &wheel);
+    QVERIFY(view->isBrowsing());
+    QTRY_VERIFY(view->lineRect(1).center().y() < centerY - 40);
+    QCOMPARE(m_mpv->mpvProperty(QStringLiteral("volume")).toDouble(), volume);
+    // A few seconds later the lyrics glide back to the sung line.
+    QTRY_VERIFY_WITH_TIMEOUT(!view->isBrowsing(), LyricsView::kBrowseHoldMs + 2000);
+    QTRY_VERIFY(std::abs(view->lineRect(1).center().y() - centerY) <= 2);
+
+    // Dragging a line scrolls too, and isn't a click.
+    const QPoint start = view->lineRect(2).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start);
+    for (int step = 1; step <= 6; ++step) {
+        const QPointF at = start - QPoint(0, step * 15);
+        QMouseEvent move(QEvent::MouseMove, at, view->mapToGlobal(at), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view, &move);
+    }
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, start - QPoint(0, 90));
+    QVERIFY(view->isBrowsing());
+    QVERIFY(std::abs(view->lineRect(1).center().y() - (centerY - 90)) <= 2);
+    QCOMPARE(view->activeLine(), 1);
+    QVERIFY(m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble() < 9);
+    // "Back to current line".
+    view->followPlayback();
+    QVERIFY(!view->isBrowsing());
+    QTRY_VERIFY(std::abs(view->lineRect(1).center().y() - centerY) <= 2);
+}
+
+void LyricsTest::plainLyricsOnlyScroll()
+{
+    open(m_bareSong);
+    QVERIFY(m_lyrics->applyText(QStringLiteral("First plain line\nSecond plain line\nThird plain line\nFourth plain line\n"),
+                                QStringLiteral("test")));
+    LyricsView *view = m_lyrics->view();
+    QTRY_VERIFY(view->isVisible());
+    QVERIFY(!view->document().isSynced());
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("3"), QStringLiteral("absolute+exact")});
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble() - 3) < 0.5, 5000);
+    QTest::qWait(500);
+
+    // Lines without times only scroll: a click on one changes nothing.
+    QCOMPARE(view->seekTime(1), -1.0);
+    const int line = view->lineAt(view->lineRect(1).center());
+    QCOMPARE(line, 1);
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->lineRect(1).center());
+    QTest::qWait(QApplication::doubleClickInterval() + 300);
+    QVERIFY(std::abs(m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble() - 3) < 0.5);
+    QVERIFY(m_mpv->mpvProperty(QStringLiteral("pause")).toBool());
+
+    // They can be dragged around, and follow playback again afterwards.
+    const QPoint start = view->lineRect(1).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start);
+    for (int step = 1; step <= 4; ++step) {
+        const QPointF at = start - QPoint(0, step * 10);
+        QMouseEvent move(QEvent::MouseMove, at, view->mapToGlobal(at), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view, &move);
+    }
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, start - QPoint(0, 40));
+    QVERIFY(view->isBrowsing());
+    view->followPlayback();
+    QVERIFY(!view->isBrowsing());
+    m_lyrics->removeLyrics();
+}
+
+void LyricsTest::appearance()
+{
+    open(m_song);
+    QTRY_VERIFY_WITH_TIMEOUT(m_lyrics->view()->isVisible(), 5000);
+    LyricsView *view = m_lyrics->view();
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("21"), QStringLiteral("absolute+exact")});
+    QTRY_COMPARE_WITH_TIMEOUT(view->activeLine(), 4, 5000);
+    QTest::qWait(700);
+    const int height = view->lineRect(5).height();
+    QCOMPARE(view->lyricsStyle(), LyricsStyle());
+
+    // Changes show at once; Cancel puts the old look back.
+    m_lyrics->openStyleDialog();
+    auto *dialog = m_window->findChild<LyricsStyleDialog *>();
+    QVERIFY(dialog);
+    QTRY_VERIFY(dialog->isVisible());
+    LyricsStyle bigger;
+    bigger.scale = 1.6;
+    bigger.align = Qt::AlignLeft;
+    bigger.highlight = QColor(0xFF, 0xD1, 0x66);
+    dialog->setLyricsStyle(bigger);
+    QCOMPARE(view->lyricsStyle(), bigger);
+    QVERIFY(view->lineRect(5).height() > height);
+    dialog->reject();
+    QCOMPARE(view->lyricsStyle(), LyricsStyle());
+    QTRY_VERIFY(!m_window->findChild<LyricsStyleDialog *>());
+
+    // OK keeps (and saves) it.
+    m_lyrics->openStyleDialog();
+    dialog = m_window->findChild<LyricsStyleDialog *>();
+    QVERIFY(dialog);
+    dialog->findChild<QSlider *>(QStringLiteral("LyricsSizeSlider"))->setValue(150);
+    dialog->findChild<QSlider *>(QStringLiteral("LyricsDimSlider"))->setValue(40);
+    QCOMPARE(view->lyricsStyle().scale, 1.5);
+    dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+    QCOMPARE(view->lyricsStyle().scale, 1.5);
+    QCOMPARE(LyricsStyle::load().scale, 1.5);
+    QCOMPARE(LyricsStyle::load().dim, 40);
+
+    // Ctrl+wheel over the lyrics resizes them.
+    const QPointF pos = view->rect().center();
+    QWheelEvent wheel(pos, view->mapToGlobal(pos), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::ControlModifier,
+                      Qt::NoScrollPhase, false);
+    QApplication::sendEvent(view, &wheel);
+    QCOMPARE(view->lyricsStyle().scale, 1.6);
+    QCOMPARE(LyricsStyle::load().scale, 1.6);
+    // The new look is kept for the next window.
+    delete m_window;
+    m_window = new MainWindow;
+    m_lyrics = m_window->lyrics();
+    m_mpv = m_window->findChild<MpvWidget *>();
+    QCOMPARE(m_lyrics->view()->lyricsStyle().scale, 1.6);
+    LyricsStyle().save();
+}
+
+void LyricsTest::smallWindowShowsFewerLines()
+{
+    open(m_song);
+    QTRY_VERIFY_WITH_TIMEOUT(m_lyrics->view()->isVisible(), 5000);
+    LyricsView *view = m_lyrics->view();
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("21"), QStringLiteral("absolute+exact")});
+    QTRY_COMPARE_WITH_TIMEOUT(view->activeLine(), 4, 5000);
+    QVERIFY(!view->isCompact());
+    QCOMPARE(view->visibleRadius(), -1);
+
+    // The mini player at its smallest: the title strip goes, and only the
+    // lines around the sung one are drawn, all of it on screen.
+    m_window->setMiniPlayer(true);
+    m_window->setMiniPlayerWidth(220);
+    QTRY_VERIFY(view->height() < 140);
+    QVERIFY(view->isCompact());
+    QVERIFY(view->visibleRadius() >= 0);
+    QVERIFY(view->visibleRadius() <= 2);
+    QTest::qWait(700);
+    QVERIFY(view->rect().contains(view->lineRect(4)));
+    QVERIFY(!view->grab().isNull());
+    m_window->setMiniPlayer(false);
+    QTRY_VERIFY(!view->isCompact());
+    QCOMPARE(view->visibleRadius(), -1);
 }
 
 int main(int argc, char *argv[])

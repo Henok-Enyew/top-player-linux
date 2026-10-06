@@ -9,6 +9,7 @@
 #include "SyncEditorDialog.h"
 
 #include <QFileDialog>
+#include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QSettings>
@@ -40,6 +41,10 @@ LyricsController::LyricsController(MpvWidget *mpv, AudioController *audio, QWidg
     m_view->setPlaceholder(tr("No lyrics for this track yet.\n\nRight-click › Lyrics to download them, load a file,\n"
                               "or get a ready-made prompt for an AI to write the LRC file."));
     connect(m_mpv, &MpvWidget::fileLoaded, this, &LyricsController::onFileLoaded);
+    connect(m_view, &LyricsView::seekRequested, this, &LyricsController::seekTo);
+    connect(m_view, &LyricsView::message, this, [this](const QString &label, const QString &value) {
+        Q_EMIT message(label, value);
+    });
     connect(m_audio, &AudioController::artworkChanged, m_view, &LyricsView::setArtwork);
     connect(m_mpv, &MpvWidget::propertyUpdated, this, [this](const QString &name, const QVariant &value) {
         if (name == QLatin1String("time-pos")) {
@@ -280,6 +285,38 @@ void LyricsController::adjustOffset(double seconds)
     setDocument(m_doc, true);
     Q_EMIT message(tr("Lyrics Offset"), QStringLiteral("%1%2 ms").arg(-offset > 0 ? QStringLiteral("+") : QString())
                                             .arg(std::llround(-offset * 1000)));
+}
+
+void LyricsController::seekTo(double seconds)
+{
+    if (m_mpv->isIdle() || seconds < 0)
+        return;
+    if (m_duration > 0)
+        seconds = std::min(seconds, m_duration);
+    m_mpv->command({QStringLiteral("seek"), QString::number(seconds, 'f', 3), QStringLiteral("absolute+exact")});
+    // Picking a line means wanting to hear it.
+    if (m_mpv->mpvProperty(QStringLiteral("pause")).toBool())
+        m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
+}
+
+void LyricsController::openStyleDialog()
+{
+    if (m_styleDialog) {
+        m_styleDialog->raise();
+        m_styleDialog->activateWindow();
+        return;
+    }
+    auto *dialog = new LyricsStyleDialog(m_view->lyricsStyle(), m_dialogParent);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &LyricsStyleDialog::styleChanged, m_view, &LyricsView::setLyricsStyle);
+    m_styleDialog = dialog;
+    // Something to look at while choosing.
+    if (!m_shown && canHaveLyrics()) {
+        m_shown = true;
+        refreshView();
+    }
+    // Not modal: the lyrics keep scrolling and can be clicked while it is open.
+    dialog->show();
 }
 
 void LyricsController::loadFileDialog()

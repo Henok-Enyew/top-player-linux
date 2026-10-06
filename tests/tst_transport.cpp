@@ -6,6 +6,7 @@
 #include "Icons.h"
 #include "MainWindow.h"
 #include "PlaylistDrawer.h"
+#include "PlaylistSession.h"
 #include "ResumeManager.h"
 #include "MpvWidget.h"
 #ifdef TOPPLAYER_HAVE_DBUS
@@ -23,9 +24,11 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QListWidget>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QSlider>
 #include <QToolButton>
 #include <QWheelEvent>
 #include <QMouseEvent>
@@ -76,6 +79,9 @@ private Q_SLOTS:
     void modeButtonsFollowMenu();
     void aboutDialog();
     void thumbnailsOnlyOnHover();
+    void controlsRememberState();
+    void fullScreenControlsFloat();
+    void miniPlayer();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -124,6 +130,10 @@ void TransportTest::cleanup()
     delete m_window;
     m_window = nullptr;
     m_mpv = nullptr;
+    // Each test starts from the default volume and modes, and a fresh mini player.
+    QSettings settings(PlaylistSession::configDir() + QStringLiteral("/settings.ini"), QSettings::IniFormat);
+    settings.remove(QStringLiteral("player"));
+    settings.remove(QStringLiteral("miniPlayer"));
 }
 
 QWidget *TransportTest::keyTarget() const
@@ -703,8 +713,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.4"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.4")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.5"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.0.5")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -751,6 +761,122 @@ void TransportTest::thumbnailsOnlyOnHover()
     m_mpv->stop();
     QTRY_VERIFY(!thumbnails->isAvailable());
     QVERIFY(!thumbnails->isOpen());
+}
+
+void TransportTest::controlsRememberState()
+{
+    set("volume", QStringLiteral("37"));
+    set("mute", QStringLiteral("yes"));
+    click("ShuffleButton");
+    click("RepeatButton"); // Off -> All
+    QTRY_COMPARE(prop("volume").toDouble(), 37.0);
+    QTRY_VERIFY(prop("shuffle").toBool());
+    QTRY_COMPARE(m_window->findChild<ControlBar *>()->repeat(), ControlBar::Repeat::All);
+
+    // Saved shortly after the changes, and set again in the next window.
+    const QString file = PlaylistSession::configDir() + QStringLiteral("/settings.ini");
+    QTRY_COMPARE(QSettings(file, QSettings::IniFormat).value(QStringLiteral("player/volume")).toDouble(), 37.0);
+    delete m_window;
+    m_window = new MainWindow;
+    m_window->show();
+    m_mpv = m_window->findChild<MpvWidget *>();
+    auto *bar = m_window->findChild<ControlBar *>();
+    QTRY_COMPARE(prop("volume").toDouble(), 37.0);
+    QTRY_VERIFY(prop("mute").toBool());
+    QTRY_VERIFY(prop("shuffle").toBool());
+    QTRY_VERIFY(bar->isShuffle());
+    QTRY_COMPARE(bar->repeat(), ControlBar::Repeat::All);
+    QCOMPARE(m_window->findChild<QSlider *>(QStringLiteral("VolumeSlider"))->value(), 37);
+
+    // Repeat One comes back as One.
+    bar->setRepeat(ControlBar::Repeat::One);
+    QTRY_COMPARE(bar->repeat(), ControlBar::Repeat::One);
+    bar->saveState();
+    QCOMPARE(QSettings(file, QSettings::IniFormat).value(QStringLiteral("player/repeat")).toString(), QStringLiteral("one"));
+}
+
+void TransportTest::fullScreenControlsFloat()
+{
+    auto *bar = m_window->findChild<ControlBar *>();
+    QVERIFY(!m_window->areControlsOverlaid());
+    m_window->toggleFullScreen();
+    QTRY_VERIFY(m_window->isFullScreen());
+    QVERIFY(m_window->areControlsOverlaid());
+    QTRY_VERIFY(!bar->isVisible());
+    // The video takes the whole screen; the bar is not in the way of the layout.
+    QTRY_COMPARE(m_mpv->geometry().bottom(), m_mpv->parentWidget()->rect().bottom());
+    const QRect video = m_mpv->geometry();
+
+    // Near the bottom edge the controls appear over the video, which stays put.
+    QMouseEvent move(QEvent::MouseMove, QPointF(video.width() / 2.0, video.height() - 4),
+                     m_mpv->mapToGlobal(QPointF(video.width() / 2.0, video.height() - 4)), Qt::NoButton,
+                     Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(m_mpv, &move);
+    QTRY_VERIFY(bar->isVisible());
+    QCOMPARE(m_mpv->geometry(), video);
+    QCOMPARE(bar->geometry().bottom(), video.bottom());
+    QCOMPARE(bar->geometry().width(), video.width());
+    QVERIFY(bar->geometry().top() > video.top());
+    // A click between the floating buttons doesn't pause.
+    QTest::mouseClick(bar, Qt::LeftButton, Qt::NoModifier, QPoint(bar->width() / 2, 2));
+    QTest::qWait(QApplication::doubleClickInterval() + 200);
+    QVERIFY(!prop("pause").toBool());
+
+    // Back in a window, the bar sits below the video again.
+    m_window->toggleFullScreen();
+    QTRY_VERIFY(!m_window->isFullScreen());
+    QVERIFY(!m_window->areControlsOverlaid());
+    QTRY_VERIFY(bar->isVisible());
+    QTRY_VERIFY(bar->geometry().top() > m_mpv->geometry().bottom());
+}
+
+void TransportTest::miniPlayer()
+{
+    const QSize normal = m_window->size();
+    auto *titleBar = m_window->findChild<QWidget *>(QStringLiteral("TitleBar"));
+    auto *restore = m_window->findChild<QToolButton *>(QStringLiteral("MiniRestoreButton"));
+    QVERIFY(titleBar && restore);
+
+    // Ctrl+M: small, on top, no title bar, the controls float.
+    press(Qt::Key_M, Qt::ControlModifier);
+    QVERIFY(m_window->isMiniPlayer());
+    QVERIFY(m_window->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+    QTRY_VERIFY(!titleBar->isVisible());
+    QVERIFY(m_window->areControlsOverlaid());
+    QTRY_COMPARE(m_window->width(), 400);
+    QVERIFY(m_window->height() < normal.height());
+
+    // The pointer over it brings the controls and the way back; few buttons fit.
+    QMouseEvent move(QEvent::MouseMove, QPointF(20, 20), m_mpv->mapToGlobal(QPointF(20, 20)), Qt::NoButton,
+                     Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(m_mpv, &move);
+    QTRY_VERIFY(restore->isVisible());
+    auto *bar = m_window->findChild<ControlBar *>();
+    QTRY_VERIFY(bar->isVisible());
+    QVERIFY(m_window->findChild<QToolButton *>(QStringLiteral("PlayButton"))->isVisible());
+    QVERIFY(!m_window->findChild<QToolButton *>(QStringLiteral("OpenButton"))->isVisible());
+
+    // Its size can be picked; it is remembered.
+    m_window->setMiniPlayerWidth(300);
+    QTRY_COMPARE(m_window->width(), 300);
+    const QSize mini = m_window->size();
+
+    // Esc brings the full window back.
+    QTest::keyClick(m_window, Qt::Key_Escape);
+    QVERIFY(!m_window->isMiniPlayer());
+    QVERIFY(!m_window->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+    QTRY_VERIFY(titleBar->isVisible());
+    QTRY_COMPARE(m_window->size(), normal);
+    QVERIFY(!m_window->areControlsOverlaid());
+    QVERIFY(!restore->isVisible());
+
+    // Reopened at the size it had; a double click on the video opens it back up.
+    m_window->setMiniPlayer(true);
+    QTRY_COMPARE(m_window->size(), mini);
+    QTest::mouseDClick(m_mpv, Qt::LeftButton, Qt::NoModifier, m_mpv->rect().center());
+    QTRY_VERIFY(!m_window->isMiniPlayer());
+    QVERIFY(!m_window->isFullScreen());
+    QTRY_COMPARE(m_window->size(), normal);
 }
 
 int main(int argc, char *argv[])

@@ -1,6 +1,7 @@
 #include "ControlBar.h"
 #include "Icons.h"
 #include "MpvWidget.h"
+#include "PlaylistSession.h"
 #include "SeekBar.h"
 #include "Theme.h"
 #include "TimeFormat.h"
@@ -8,11 +9,13 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QResizeEvent>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -20,6 +23,16 @@ namespace {
 constexpr double kWideAspect = 16.0 / 9.0;
 // Below this width the mode buttons make room for the essentials.
 constexpr int kCompactWidth = 560;
+// Below these (the mini player) only the essentials stay.
+constexpr int kSmallWidth = 420;
+constexpr int kTinyWidth = 340;
+// Changes are written this long after the last one (a wheel spin is one write).
+constexpr int kSaveDelayMs = 600;
+
+QString settingsFile()
+{
+    return PlaylistSession::configDir() + QStringLiteral("/settings.ini");
+}
 
 // loop-file, loop-playlist and video-unscaled read as a flag, a count or a
 // string ("inf", "downscale-big") depending on their value.
@@ -59,10 +72,10 @@ ControlBar::ControlBar(MpvWidget *mpv, QWidget *parent)
     buttons->setSpacing(2);
     layout->addLayout(buttons);
 
-    QToolButton *open = addButton(QStringLiteral("OpenButton"), tr("Open File (Ctrl+O)"), IconType::Open);
+    QToolButton *open = m_openButton = addButton(QStringLiteral("OpenButton"), tr("Open File (Ctrl+O)"), IconType::Open);
     QToolButton *previous = addButton(QStringLiteral("PreviousButton"), tr("Previous (PgUp)"), IconType::Previous);
     m_playButton = addButton(QStringLiteral("PlayButton"), tr("Play / Pause (Space)"), IconType::Play);
-    QToolButton *stop = addButton(QStringLiteral("StopButton"), tr("Stop"), IconType::Stop);
+    QToolButton *stop = m_stopButton = addButton(QStringLiteral("StopButton"), tr("Stop"), IconType::Stop);
     QToolButton *next = addButton(QStringLiteral("NextButton"), tr("Next (PgDn)"), IconType::Next);
     m_shuffleButton = addButton(QStringLiteral("ShuffleButton"), tr("Shuffle"), IconType::Shuffle);
     m_shuffleButton->setCheckable(true);
@@ -134,6 +147,58 @@ ControlBar::ControlBar(MpvWidget *mpv, QWidget *parent)
     m_volumeSlider->setValue(m_mpv->mpvProperty(QStringLiteral("volume")).toInt());
     updateTimeLabel();
     updateModeButtons();
+
+    m_saveTimer.setSingleShot(true);
+    m_saveTimer.setInterval(kSaveDelayMs);
+    connect(&m_saveTimer, &QTimer::timeout, this, &ControlBar::saveState);
+    restoreState();
+}
+
+ControlBar::~ControlBar()
+{
+    if (m_saveTimer.isActive())
+        saveState();
+}
+
+void ControlBar::restoreState()
+{
+    const QSettings settings(settingsFile(), QSettings::IniFormat);
+    if (const QVariant volume = settings.value(QStringLiteral("player/volume")); volume.isValid()) {
+        const int max = std::max(100, m_volumeSlider->maximum());
+        const double value = std::clamp(volume.toDouble(), 0.0, double(max));
+        m_mpv->setMpvProperty(QStringLiteral("volume"), QString::number(value, 'f', 1));
+        const QSignalBlocker blocker(m_volumeSlider);
+        m_volumeSlider->setValue(qRound(value));
+    }
+    if (settings.value(QStringLiteral("player/mute"), false).toBool())
+        m_mpv->setMpvProperty(QStringLiteral("mute"), QStringLiteral("yes"));
+    // Only the mode: the queue restored from the last run keeps its order.
+    if (settings.value(QStringLiteral("player/shuffle"), false).toBool())
+        m_mpv->setMpvProperty(QStringLiteral("shuffle"), QStringLiteral("yes"));
+    const QString repeat = settings.value(QStringLiteral("player/repeat")).toString();
+    if (repeat == QLatin1String("all"))
+        m_mpv->setMpvProperty(QStringLiteral("loop-playlist"), QStringLiteral("inf"));
+    else if (repeat == QLatin1String("one"))
+        m_mpv->setMpvProperty(QStringLiteral("loop-file"), QStringLiteral("inf"));
+}
+
+void ControlBar::scheduleSave()
+{
+    m_saveTimer.start();
+}
+
+void ControlBar::saveState()
+{
+    m_saveTimer.stop();
+    QSettings settings(settingsFile(), QSettings::IniFormat);
+    if (m_volume >= 0)
+        settings.setValue(QStringLiteral("player/volume"), std::round(m_volume * 10) / 10);
+    settings.setValue(QStringLiteral("player/mute"), m_muted);
+    settings.setValue(QStringLiteral("player/shuffle"), m_shuffle);
+    const Repeat repeat = m_loopFile ? Repeat::One : m_loopPlaylist ? Repeat::All : Repeat::Off;
+    settings.setValue(QStringLiteral("player/repeat"), repeat == Repeat::One ? QStringLiteral("one")
+                                                       : repeat == Repeat::All ? QStringLiteral("all")
+                                                                               : QStringLiteral("off"));
 }
 
 void ControlBar::setShuffle(bool on)
@@ -204,10 +269,17 @@ void ControlBar::updateModeButtons()
 void ControlBar::resizeEvent(QResizeEvent *event)
 {
     QFrame::resizeEvent(event);
-    // Narrow windows keep the transport, time, volume, playlist and fullscreen buttons.
-    const bool roomy = event->size().width() >= kCompactWidth;
+    // Narrow windows keep the transport, time, volume, playlist and fullscreen
+    // buttons; the mini player keeps previous, play, next, mute and fullscreen.
+    const int width = event->size().width();
+    const bool roomy = width >= kCompactWidth;
+    const bool small = width < kSmallWidth;
     for (QToolButton *button : {m_shuffleButton, m_repeatButton, m_aspectButton})
         button->setVisible(roomy);
+    for (QWidget *widget : {static_cast<QWidget *>(m_openButton), static_cast<QWidget *>(m_stopButton),
+                            static_cast<QWidget *>(m_playlistButton), static_cast<QWidget *>(m_volumeSlider)})
+        widget->setVisible(!small);
+    m_timeLabel->setVisible(width >= kTinyWidth);
 }
 
 void ControlBar::setPlaylistChecked(bool checked)
@@ -254,19 +326,26 @@ void ControlBar::onPropertyUpdated(const QString &name, const QVariant &value)
             updateTimeLabel();
         }
     } else if (name == QLatin1String("mute")) {
-        m_muteButton->setIcon(skinIcon(value.toBool() ? IconType::Muted : IconType::Volume));
+        m_muted = value.toBool();
+        m_muteButton->setIcon(skinIcon(m_muted ? IconType::Muted : IconType::Volume));
+        scheduleSave();
     } else if (name == QLatin1String("volume")) {
+        m_volume = value.toDouble();
         const QSignalBlocker blocker(m_volumeSlider);
-        m_volumeSlider->setValue(qRound(value.toDouble()));
+        m_volumeSlider->setValue(qRound(m_volume));
+        scheduleSave();
     } else if (name == QLatin1String("shuffle")) {
         m_shuffle = isOn(value);
         updateModeButtons();
+        scheduleSave();
     } else if (name == QLatin1String("loop-file")) {
         m_loopFile = isOn(value);
         updateModeButtons();
+        scheduleSave();
     } else if (name == QLatin1String("loop-playlist")) {
         m_loopPlaylist = isOn(value);
         updateModeButtons();
+        scheduleSave();
     } else if (name == QLatin1String("video-unscaled")) {
         m_unscaled = isOn(value);
         updateModeButtons();

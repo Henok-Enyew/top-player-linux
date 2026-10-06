@@ -9,8 +9,9 @@ class MpvWidget;
 class ResumePrompt;
 class QWidget;
 
-// Remembers where each file was left (~/.config/top-player/resume.ini) and,
+// Remembers where each video was left (~/.config/top-player/resume.ini) and,
 // when one of them is opened again, asks whether to resume or start over.
+// Audio files are not remembered: songs always play from the start.
 class ResumeManager : public QObject
 {
     Q_OBJECT
@@ -65,4 +66,6 @@ private:
     bool m_wasPaused = false;
     // While the prompt is open, positions are not recorded.
     bool m_asking = false;
+    // The playing file is a song (audio without video): nothing is recorded.
+    bool m_audioOnly = false;
 };

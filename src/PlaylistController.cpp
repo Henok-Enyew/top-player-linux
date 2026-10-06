@@ -481,7 +481,8 @@ void PlaylistController::saveSession()
     state.current = idle ? m_mpv->lastPlaylistPos() : m_mpv->mpvProperty(QStringLiteral("playlist-pos")).toInt();
     if (state.current >= state.entries.size())
         state.current = -1;
-    if (!idle && !m_mpv->mpvProperty(QStringLiteral("eof-reached")).toBool())
+    // Songs start over next time; only a video picks up where it was left.
+    if (!idle && !m_mpv->isAudioOnly() && !m_mpv->mpvProperty(QStringLiteral("eof-reached")).toBool())
         state.position = std::max(0.0, m_mpv->mpvProperty(QStringLiteral("time-pos")).toDouble());
     PlaylistSession::save(state);
 }

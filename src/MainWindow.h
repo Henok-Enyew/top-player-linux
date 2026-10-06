@@ -26,6 +26,8 @@ class ResumeManager;
 class ThumbnailGenerator;
 class ThumbnailPopup;
 class TitleBar;
+class QToolButton;
+class QVBoxLayout;
 
 // Borderless top-level window: skin title bar, video surface with the
 // playlist drawer beside it, and the control bar underneath.
@@ -91,6 +93,18 @@ public:
     // Leaves fullscreen for the maximized or normal geometry the window had before.
     void exitFullScreen();
     void setAlwaysOnTop(bool onTop);
+    // The mini player (pop-out): a small, borderless window that stays on top
+    // and, on X11, on every workspace. The controls float over the picture
+    // and fade out; lyrics shrink to the lines that fit. Its size and place
+    // are remembered. Esc, a double click or the corner button bring the
+    // full window back.
+    void setMiniPlayer(bool on);
+    void toggleMiniPlayer() { setMiniPlayer(!m_mini); }
+    bool isMiniPlayer() const { return m_mini; }
+    // Resizes the mini player to `width`, keeping the video's shape.
+    void setMiniPlayerWidth(int width);
+    // True while the control bar floats over the video (fullscreen, mini player).
+    bool areControlsOverlaid() const { return m_controlsOverlaid; }
     // Resizes the window so the video shows at `scale` times its display size.
     void scaleToVideo(qreal scale);
 
@@ -124,8 +138,18 @@ private:
     // Resizes the window so the video area is `scale` times `videoSize`, shrunk
     // to fit the screen, keeping the window centered. Returns false if skipped.
     bool resizeToVideo(const QSize &videoSize, qreal scale);
-    // Shows or hides the title bar, control bar and drawer for fullscreen.
+    // Shows or hides the title bar, control bar and drawer for fullscreen
+    // and the mini player.
     void updateChrome();
+    // Takes the control bar out of the layout to float over the video, or puts it back.
+    void setControlsOverlaid(bool overlaid);
+    // Places the floating control bar and the mini player's buttons.
+    void placeOverlays();
+    // Shows or hides the floating controls (and the mini player's buttons).
+    void setOverlayControlsVisible(bool visible);
+    // Where the mini player opens: where it was last, else the screen's bottom right.
+    QRect miniPlayerGeometry() const;
+    void saveMiniPlayerGeometry();
     // In fullscreen, reveals the control bar near the bottom edge and hides
     // it and the cursor again after a moment without mouse movement.
     void onMouseActivity(const QPoint &globalPos);
@@ -178,11 +202,20 @@ private:
     QTimer m_seekDragTimer;
     // Horizontal wheel (touchpad swipe, tilt wheel) units not yet turned into a seek.
     int m_wheelSeekRemainder = 0;
+    QVBoxLayout *m_rootLayout = nullptr;
+    bool m_controlsOverlaid = false;
+    bool m_wasImmersive = false;
+    // The mini player, and the window it was opened from.
+    bool m_mini = false;
+    QRect m_geometryBeforeMini;
+    bool m_maximizedBeforeMini = false;
+    bool m_onTopBeforeMini = false;
+    bool m_drawerBeforeMini = false;
+    QToolButton *m_miniRestoreButton = nullptr;
     QRect m_geometryBeforeFullScreen;
     bool m_maximizedBeforeFullScreen = false;
     int m_hoverSecond = -1;
     QPoint m_popupAnchor;
-    bool m_wasFullScreen = false;
     double m_clipIn = -1;
     double m_clipOut = -1;
 };

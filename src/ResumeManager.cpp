@@ -51,7 +51,7 @@ ResumeManager::ResumeManager(MpvWidget *mpv, QWidget *overlayParent)
             if (value.isValid())
                 m_duration = value.toDouble();
         } else if (name == QLatin1String("time-pos")) {
-            if (m_asking || m_media.isEmpty() || !value.isValid())
+            if (m_asking || m_media.isEmpty() || !value.isValid() || m_audioOnly)
                 return;
             m_position = value.toDouble();
             if (std::abs(m_position - m_lastSaved) >= kSaveInterval) {
@@ -132,7 +132,7 @@ void ResumeManager::forget(const QString &media)
 
 void ResumeManager::saveNow()
 {
-    if (!m_asking && !m_media.isEmpty() && m_position >= 0)
+    if (!m_asking && !m_audioOnly && !m_media.isEmpty() && m_position >= 0)
         remember(m_media, m_position, m_duration);
 }
 
@@ -154,6 +154,7 @@ void ResumeManager::onFileStarted()
     m_position = -1;
     m_lastSaved = -1;
     m_duration = 0;
+    m_audioOnly = false;
     m_pending.reset();
     if (m_asking) {
         m_asking = false;
@@ -181,6 +182,18 @@ void ResumeManager::onFileLoaded()
     const QVariant duration = m_mpv->mpvProperty(QStringLiteral("duration"));
     if (duration.isValid())
         m_duration = duration.toDouble();
+    // Songs always play from the start: only videos are resumed. Whether the
+    // file is a song is known only now, so let it play if it was held.
+    m_audioOnly = m_mpv->isAudioOnly();
+    if (m_audioOnly) {
+        if (m_pending) {
+            m_pending.reset();
+            forget(m_media);
+            if (mode() == Mode::Ask)
+                m_mpv->setMpvProperty(QStringLiteral("pause"), m_wasPaused ? QStringLiteral("yes") : QStringLiteral("no"));
+        }
+        return;
+    }
     if (!m_pending)
         return;
     if (mode() == Mode::Always) {

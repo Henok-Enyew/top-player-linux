@@ -10,6 +10,7 @@
 class AudioController;
 class LyricsView;
 class MpvWidget;
+class LyricsStyleDialog;
 class SyncEditorDialog;
 class QWidget;
 
@@ -57,6 +58,10 @@ public:
     void openAiPromptDialog();
     // Opens the sync editor for the lyrics, or for the selected subtitles.
     void openSyncEditor(bool subtitles);
+    // Lyrics -> Lyrics Appearance...: font, size, colors, with a live preview.
+    void openStyleDialog();
+    // Plays from `seconds` (a clicked lyrics line).
+    void seekTo(double seconds);
 
 Q_SIGNALS:
     void message(const QString &label, const QString &value = QString());
@@ -78,4 +83,5 @@ private:
     double m_position = 0;
     double m_duration = 0;
     QPointer<SyncEditorDialog> m_syncEditor;
+    QPointer<LyricsStyleDialog> m_styleDialog;
 };

@@ -6,13 +6,13 @@
 #
 #   packaging/arch/build-arch.sh
 pkgname=top-player
-pkgver=1.0.4
+pkgver=1.0.5
 pkgrel=1
 pkgdesc='High-performance, lightweight native media player powered by Qt6 and libmpv'
 arch=('x86_64' 'aarch64')
 url='https://github.com/Henok-Enyew/top-player-linux'
 license=('MIT')
-depends=('qt6-base' 'mpv' 'zlib' 'hicolor-icon-theme')
+depends=('qt6-base' 'mpv' 'zlib' 'libxcb' 'hicolor-icon-theme')
 makedepends=('cmake' 'ninja' 'desktop-file-utils' 'appstream')
 optdepends=('qt6-wayland: native Wayland support'
             'ffmpeg: Cut / Extract Media'
