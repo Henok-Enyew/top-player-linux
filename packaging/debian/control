@@ -11,6 +11,7 @@ Build-Depends: debhelper-compat (= 13),
                libgl-dev,
                libmpv-dev,
                zlib1g-dev,
+               libxcb1-dev,
                desktop-file-utils,
                appstream
 Standards-Version: 4.7.0

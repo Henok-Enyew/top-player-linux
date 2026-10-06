@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config \
-            qt6-base-dev libgl-dev libmpv-dev zlib1g-dev \
+            qt6-base-dev libgl-dev libmpv-dev zlib1g-dev libxcb1-dev \
             ffmpeg xvfb xauth libgl1-mesa-dri
 
       - name: Configure
@@ -48,7 +48,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config \
-            qt6-base-dev libqt6opengl6-dev libgl-dev libmpv-dev zlib1g-dev
+            qt6-base-dev libqt6opengl6-dev libgl-dev libmpv-dev zlib1g-dev libxcb1-dev
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTOPPLAYER_BUILD_TESTS=ON
@@ -67,7 +67,7 @@ jobs:
         run: |
           dnf install -y \
             gcc-c++ cmake ninja-build pkgconf-pkg-config \
-            qt6-qtbase-devel mesa-libGL-devel 'pkgconfig(mpv)' zlib-devel
+            qt6-qtbase-devel mesa-libGL-devel 'pkgconfig(mpv)' zlib-devel libxcb-devel
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

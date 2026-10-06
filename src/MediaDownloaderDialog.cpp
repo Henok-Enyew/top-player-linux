@@ -51,7 +51,7 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
     const QSettings settings(settingsFile(), QSettings::IniFormat);
 
     m_url->setObjectName(QStringLiteral("DownloaderUrl"));
-    m_url->setPlaceholderText(tr("https://www.youtube.com/watch?v=..."));
+    m_url->setPlaceholderText(tr("https://www.youtube.com/watch?v=...  or  https://open.spotify.com/track/..."));
     m_url->setClearButtonEnabled(true);
     // Offer a link that is already on the clipboard.
     const QString clipboard = QGuiApplication::clipboard()->text().trimmed();
@@ -162,9 +162,33 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
             return;
         }
         m_progress->setValue(1000);
-        Q_EMIT downloaded(path, m_play->isChecked());
+        const QStringList files = m_downloader->files();
+        if (files.size() > 1)
+            Q_EMIT downloadedMany(files, m_play->isChecked());
+        else
+            Q_EMIT downloaded(path, m_play->isChecked());
         accept();
     });
+    connect(m_downloader, &MediaDownloader::spotifyResolved, this,
+            [this](const QList<MediaDownloader::SpotifyTrack> &tracks, const QString &collection, const QString &error) {
+                if (!m_resolving)
+                    return;
+                m_resolving = false;
+                setBusy(false);
+                if (tracks.isEmpty()) {
+                    setStatus(error, true);
+                    return;
+                }
+                QStringList urls;
+                QStringList titles;
+                for (const MediaDownloader::SpotifyTrack &track : tracks) {
+                    urls << MediaDownloader::spotifyStreamUrl(track);
+                    titles << (track.artist.isEmpty() ? track.title : track.artist + QStringLiteral(" - ") + track.title);
+                }
+                Q_UNUSED(collection);
+                Q_EMIT tracksStreamRequested(urls, titles);
+                accept();
+            });
     updateState();
 }
 
@@ -205,14 +229,34 @@ void MediaDownloaderDialog::updateState()
 {
     const QString link = url();
     const QString site = MediaDownloader::platformName(link);
+    const bool spotify = MediaDownloader::isSpotifyUrl(link);
     if (m_url->text().trimmed().isEmpty())
-        m_site->setText(tr("Paste a link from YouTube, TikTok, Instagram, X, Vimeo, ..."));
+        m_site->setText(tr("Paste a link from YouTube, Spotify, TikTok, Instagram, X, Vimeo, ..."));
     else if (link.isEmpty())
         m_site->setText(tr("This is not a web link."));
-    else if (!site.isEmpty())
+    else if (spotify) {
+        const std::optional<MediaDownloader::SpotifyLink> parsed = MediaDownloader::parseSpotifyLink(link);
+        const QString type = parsed ? parsed->type : QString();
+        m_site->setText(type == QLatin1String("album")      ? tr("Spotify album: every song is saved as an MP3")
+                        : type == QLatin1String("playlist") ? tr("Spotify playlist: every song is saved as an MP3")
+                        : type == QLatin1String("artist")   ? tr("Spotify artist: their top songs are saved as MP3s")
+                                                            : tr("Spotify link: the song is found on YouTube and saved as an MP3"));
+    } else if (!site.isEmpty())
         m_site->setText(tr("%1 link").arg(site));
     else
         m_site->setText(tr("Other site: yt-dlp will try it"));
+
+    // Spotify has songs only: the format is MP3 while such a link is entered.
+    const int audio = m_format->findData(int(MediaDownloader::Format::AudioMp3));
+    if (spotify && m_formatBeforeSpotify < 0) {
+        m_formatBeforeSpotify = m_format->currentIndex();
+        m_format->setCurrentIndex(audio);
+    } else if (!spotify && m_formatBeforeSpotify >= 0) {
+        m_format->setCurrentIndex(m_formatBeforeSpotify);
+        m_formatBeforeSpotify = -1;
+    }
+    m_format->setToolTip(spotify ? tr("Spotify songs are always saved as MP3") : QString());
+    m_format->setEnabled(!isBusy() && !spotify);
 
     const bool haveTool = !MediaDownloader::executable().isEmpty();
     const bool busy = isBusy();
@@ -232,7 +276,7 @@ void MediaDownloaderDialog::setStatus(const QString &text, bool error)
 void MediaDownloaderDialog::setBusy(bool busy)
 {
     m_url->setEnabled(!busy);
-    m_format->setEnabled(!busy);
+    m_format->setEnabled(!busy && !isSpotify());
     m_directory->setEnabled(!busy);
     m_progress->setVisible(busy || m_progress->value() > 0);
     if (!busy)
@@ -251,7 +295,8 @@ void MediaDownloaderDialog::startDownload()
     }
     QSettings settings(settingsFile(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("downloader/directory"), directory());
-    settings.setValue(QStringLiteral("downloader/format"), int(format()));
+    if (!isSpotify())
+        settings.setValue(QStringLiteral("downloader/format"), int(format()));
     settings.setValue(QStringLiteral("downloader/play"), m_play->isChecked());
 
     m_progress->setValue(0);
@@ -268,6 +313,14 @@ void MediaDownloaderDialog::streamDirectly()
     const QString link = url();
     if (link.isEmpty() || isBusy())
         return;
+    if (MediaDownloader::isSpotifyUrl(link)) {
+        // Read the songs first; each streams from its YouTube match.
+        m_resolving = true;
+        setBusy(true);
+        setStatus(tr("Reading the Spotify link..."));
+        m_downloader->resolveSpotify(link);
+        return;
+    }
     Q_EMIT streamRequested(link, MediaDownloader::streamFormat(format()));
     accept();
 }
@@ -276,6 +329,7 @@ void MediaDownloaderDialog::reject()
 {
     // Esc first stops a running download, then closes.
     if (isBusy()) {
+        m_resolving = false;
         m_downloader->cancel();
         setBusy(false);
         m_progress->setVisible(false);

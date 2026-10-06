@@ -29,6 +29,8 @@
 #include <QRadioButton>
 #include <QSignalSpy>
 #include <QStandardPaths>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -97,6 +99,80 @@ const QByteArray kFakeYtDlp =
     "cp \"$FAKE_SOURCE\" \"$dir/Test Video [abc123].mp4\"\n"
     "echo \"$dir/Test Video [abc123].mp4\"\n";
 
+// Stand-in for yt-dlp searching YouTube for Spotify songs: appends its
+// arguments to $FAKE_LOG, saves $FAKE_SOURCE under the -o name (as an .mp3)
+// and prints it. Songs with "NoMatch" in their name have no upload of the
+// right length (the length-checked search finds nothing); "Missing" ones are
+// not found at all.
+const QByteArray kFakeSpotifyYtDlp =
+    "printf '%s\\n' \"$@\" >> \"$FAKE_LOG\"\n"
+    "echo '----' >> \"$FAKE_LOG\"\n"
+    "dir=\"\"; out=\"\"; prev=\"\"; query=\"\"; strict=no\n"
+    "for a in \"$@\"; do\n"
+    "  if [ \"$prev\" = \"-P\" ]; then dir=\"$a\"; fi\n"
+    "  if [ \"$prev\" = \"-o\" ]; then out=\"$a\"; fi\n"
+    "  if [ \"$a\" = \"--match-filter\" ]; then strict=yes; fi\n"
+    "  prev=\"$a\"; query=\"$a\"\n"
+    "done\n"
+    "case \"$query\" in *Missing*) echo \"ERROR: no results for $query\" >&2; exit 1;; esac\n"
+    "case \"$query\" in *NoMatch*) if [ $strict = yes ]; then exit 0; fi;; esac\n"
+    "name=$(printf '%s' \"$out\" | sed 's/%(ext)s/mp3/')\n"
+    "echo \"[download]  50.0% of   1.00MiB at    1.00MiB/s ETA 00:01\" >&2\n"
+    "cp \"$FAKE_SOURCE\" \"$dir/$name\"\n"
+    "echo \"$dir/$name\"\n"
+    "if [ $strict = yes ]; then exit 101; fi\n";
+
+// Serves Spotify-like pages: `pages` maps a path to its HTML.
+class FakeSpotify : public QObject
+{
+public:
+    QHash<QString, QByteArray> pages;
+    QStringList requests;
+
+    bool listen() { return m_server.listen(QHostAddress::LocalHost); }
+    QUrl url() const { return QUrl(QStringLiteral("http://127.0.0.1:%1").arg(m_server.serverPort())); }
+
+    FakeSpotify()
+    {
+        connect(&m_server, &QTcpServer::newConnection, this, [this] {
+            while (QTcpSocket *socket = m_server.nextPendingConnection()) {
+                connect(socket, &QTcpSocket::readyRead, this, [this, socket] {
+                    const QByteArray request = socket->readAll();
+                    const QString path = QString::fromLatin1(request.split(' ').value(1));
+                    requests << path;
+                    const QByteArray body = pages.value(path);
+                    const QByteArray status = body.isEmpty() ? "404 Not Found" : "200 OK";
+                    socket->write("HTTP/1.1 " + status + "\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: "
+                                  + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+                    socket->disconnectFromHost();
+                });
+                connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+            }
+        });
+    }
+
+private:
+    QTcpServer m_server;
+};
+
+QByteArray nextDataPage(const QByteArray &entity)
+{
+    return "<!DOCTYPE html><html><head><title>Spotify</title></head><body><div id=\"__next\"></div>"
+           "<script id=\"__NEXT_DATA__\" type=\"application/json\">{\"props\":{\"pageProps\":{\"state\":{\"data\":{\"entity\":"
+           + entity + "}}}}}</script></body></html>";
+}
+
+const QByteArray kTrackEntity =
+    "{\"type\":\"track\",\"name\":\"Believer\",\"uri\":\"spotify:track:0pqnGHJpmpxLKifKRmU6WP\","
+    "\"artists\":[{\"name\":\"Imagine Dragons\",\"uri\":\"spotify:artist:x\"}],\"duration\":204346}";
+
+const QByteArray kAlbumEntity =
+    "{\"type\":\"album\",\"name\":\"Night Drive\",\"subtitle\":\"Neon Coast\",\"trackList\":["
+    "{\"uri\":\"spotify:track:a\",\"title\":\"Song One\",\"subtitle\":\"Neon Coast\",\"duration\":180000},"
+    "{\"uri\":\"spotify:track:b\",\"title\":\"NoMatch Two\",\"subtitle\":\"Neon Coast,\u00a0Guest\",\"duration\":200000},"
+    "{\"uri\":\"spotify:track:c\",\"title\":\"Missing Three\",\"subtitle\":\"Neon Coast\",\"duration\":150000},"
+    "{\"uri\":\"spotify:track:d\",\"title\":\"Song Four\",\"subtitle\":\"Neon Coast\",\"duration\":0}]}";
+
 // Stand-in for an ffmpeg that takes its time: reports once, creates the
 // output and waits.
 const QByteArray kSlowFfmpeg =
@@ -138,6 +214,12 @@ private Q_SLOTS:
     void downloadError();
     void cancelDownload();
     void directStream();
+    void spotifyLinks();
+    void spotifyPages();
+    void spotifyArguments();
+    void spotifyDownloadsAlbum();
+    void spotifyDialog();
+    void spotifyStream();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -153,6 +235,7 @@ private:
     QTemporaryDir m_dir;
     QString m_clip;    // 60 s, video + audio
     QString m_fakeBin; // stand-in yt-dlp
+    QString m_spotifyBin; // stand-in yt-dlp searching YouTube
     QString m_slowBin; // stand-in slow ffmpeg
     QString m_emptyBin;
     QByteArray m_path; // the real $PATH
@@ -178,6 +261,9 @@ void ToolsTest::initTestCase()
     m_emptyBin = m_dir.filePath(QStringLiteral("empty-bin"));
     QVERIFY(QDir().mkpath(m_fakeBin) && QDir().mkpath(m_slowBin) && QDir().mkpath(m_emptyBin));
     QVERIFY(writeScript(m_fakeBin + QStringLiteral("/yt-dlp"), kFakeYtDlp));
+    m_spotifyBin = m_dir.filePath(QStringLiteral("spotify-bin"));
+    QVERIFY(QDir().mkpath(m_spotifyBin));
+    QVERIFY(writeScript(m_spotifyBin + QStringLiteral("/yt-dlp"), kFakeSpotifyYtDlp));
     QVERIFY(writeScript(m_slowBin + QStringLiteral("/ffmpeg"), kSlowFfmpeg));
     qputenv("FAKE_LOG", m_dir.filePath(QStringLiteral("yt-dlp-args.txt")).toLocal8Bit());
     qputenv("FAKE_SOURCE", m_clip.toLocal8Bit());
@@ -511,6 +597,11 @@ void ToolsTest::recognizesLinks_data()
     QTest::newRow("x") << "https://x.com/user/status/1" << "https://x.com/user/status/1" << "X (Twitter)";
     QTest::newRow("other site") << "https://example.org/video.mp4" << "https://example.org/video.mp4" << "";
     QTest::newRow("look-alike") << "https://notyoutube.com/watch?v=x" << "https://notyoutube.com/watch?v=x" << "";
+    QTest::newRow("spotify track") << "https://open.spotify.com/track/0pqnGHJpmpxLKifKRmU6WP?si=abc"
+                                   << "https://open.spotify.com/track/0pqnGHJpmpxLKifKRmU6WP?si=abc" << "Spotify";
+    QTest::newRow("spotify uri") << "spotify:track:0pqnGHJpmpxLKifKRmU6WP"
+                                 << "https://open.spotify.com/track/0pqnGHJpmpxLKifKRmU6WP" << "Spotify";
+    QTest::newRow("spotify short link") << "https://spotify.link/AbCdEfGh" << "https://spotify.link/AbCdEfGh" << "Spotify";
     QTest::newRow("words") << "check this out" << "" << "";
     QTest::newRow("ftp") << "ftp://youtube.com/x" << "" << "";
     QTest::newRow("empty") << "" << "" << "";
@@ -703,6 +794,199 @@ void ToolsTest::directStream()
     QVERIFY(!playlist.isEmpty());
     QCOMPARE(playlist.first().toMap().value(QStringLiteral("filename")).toString(),
              QStringLiteral("https://www.tiktok.com/@scout2015/video/6718335390845095173"));
+}
+
+// ---- Spotify ----------------------------------------------------------------
+
+void ToolsTest::spotifyLinks()
+{
+    QVERIFY(MediaDownloader::isSpotifyUrl(QStringLiteral("open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3")));
+    QVERIFY(!MediaDownloader::isSpotifyUrl(QStringLiteral("https://www.youtube.com/watch?v=x")));
+    auto link = MediaDownloader::parseSpotifyLink(QStringLiteral("https://open.spotify.com/intl-de/track/0pqnGHJpmpxLKifKRmU6WP?si=1"));
+    QVERIFY(link);
+    QCOMPARE(link->type, QStringLiteral("track"));
+    QCOMPARE(link->id, QStringLiteral("0pqnGHJpmpxLKifKRmU6WP"));
+    link = MediaDownloader::parseSpotifyLink(QStringLiteral("https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M"));
+    QVERIFY(link);
+    QCOMPARE(link->type, QStringLiteral("playlist"));
+    link = MediaDownloader::parseSpotifyLink(QStringLiteral("spotify:album:1DFixLWuPkv3KT3TnV35m3"));
+    QVERIFY(link);
+    QCOMPARE(link->type, QStringLiteral("album"));
+    // Podcasts, short links (until followed) and other sites are not songs.
+    QVERIFY(!MediaDownloader::parseSpotifyLink(QStringLiteral("https://open.spotify.com/episode/0pqnGHJpmpxLKifKRmU6WP")));
+    QVERIFY(!MediaDownloader::parseSpotifyLink(QStringLiteral("https://spotify.link/AbCdEfGh")));
+    QVERIFY(!MediaDownloader::parseSpotifyLink(QStringLiteral("https://example.com/track/0pqnGHJpmpxLKifKRmU6WP")));
+}
+
+void ToolsTest::spotifyPages()
+{
+    // A track's embed page.
+    QString collection = QStringLiteral("unset");
+    QList<MediaDownloader::SpotifyTrack> tracks = MediaDownloader::parseSpotifyPage(nextDataPage(kTrackEntity), &collection);
+    QCOMPARE(tracks.size(), 1);
+    QCOMPARE(tracks[0].title, QStringLiteral("Believer"));
+    QCOMPARE(tracks[0].artist, QStringLiteral("Imagine Dragons"));
+    QVERIFY(std::abs(tracks[0].duration - 204.346) < 0.001);
+    QCOMPARE(collection, QStringLiteral("unset"));
+
+    // An album: every track, with the album's name; non-breaking spaces cleaned.
+    tracks = MediaDownloader::parseSpotifyPage(nextDataPage(kAlbumEntity), &collection);
+    QCOMPARE(tracks.size(), 4);
+    QCOMPARE(collection, QStringLiteral("Night Drive"));
+    QCOMPARE(tracks[1].title, QStringLiteral("NoMatch Two"));
+    QCOMPARE(tracks[1].artist, QStringLiteral("Neon Coast, Guest"));
+    QCOMPARE(tracks[1].album, QStringLiteral("Night Drive"));
+    QCOMPARE(tracks[0].duration, 180.0);
+
+    // The web player's page: og: tags.
+    const QByteArray web =
+        "<html><head><meta property=\"og:title\" content=\"Don&#x27;t Stop Me Now\"/>"
+        "<meta property=\"og:description\" content=\"Queen &amp; Friends \xc2\xb7 Jazz \xc2\xb7 Song \xc2\xb7 1978\"/>"
+        "<meta property=\"og:type\" content=\"music.song\"/><meta name=\"music:duration\" content=\"209\"/></head></html>";
+    tracks = MediaDownloader::parseSpotifyPage(web);
+    QCOMPARE(tracks.size(), 1);
+    QCOMPARE(tracks[0].title, QStringLiteral("Don't Stop Me Now"));
+    QCOMPARE(tracks[0].artist, QStringLiteral("Queen & Friends"));
+    QCOMPARE(tracks[0].album, QStringLiteral("Jazz"));
+    QCOMPARE(tracks[0].duration, 209.0);
+
+    // Anything else holds no songs.
+    QVERIFY(MediaDownloader::parseSpotifyPage("<html><body>Page not found</body></html>").isEmpty());
+    QVERIFY(MediaDownloader::parseSpotifyPage(QByteArray()).isEmpty());
+}
+
+void ToolsTest::spotifyArguments()
+{
+    MediaDownloader::SpotifyTrack track{QStringLiteral("Believer"), QStringLiteral("Imagine Dragons, Lil Wayne, Someone"),
+                                        QStringLiteral("Evolve: 100% Deluxe"), 204};
+    QCOMPARE(MediaDownloader::spotifyQuery(track), QStringLiteral("Imagine Dragons Lil Wayne - Believer"));
+    const QStringList strict = MediaDownloader::spotifyArguments(track, QStringLiteral("/d"), true);
+    const QString joined = strict.join(QLatin1Char('\n'));
+    QVERIFY(joined.contains(QLatin1String("-P\n/d")));
+    QVERIFY(joined.contains(QLatin1String("-o\nImagine Dragons, Lil Wayne, Someone - Believer.%(ext)s")));
+    QVERIFY(joined.contains(QLatin1String("-x\n--audio-format\nmp3")));
+    QVERIFY(joined.contains(QLatin1String("--embed-metadata")));
+    // Tags carry Spotify's names; ':' and '%' are escaped for yt-dlp.
+    QVERIFY(strict.contains(QStringLiteral("pre_process:Believer |:%(meta_title)s |")));
+    QVERIFY(strict.contains(QStringLiteral("pre_process:Evolve\\: 100%% Deluxe |:%(meta_album)s |")));
+    // The length decides between search results.
+    QVERIFY(strict.contains(QStringLiteral("duration>=192 & duration<=216 & !is_live")));
+    QCOMPARE(strict.mid(strict.size() - 2), (QStringList{QStringLiteral("--"), QStringLiteral("ytsearch5:Imagine Dragons Lil Wayne - Believer")}));
+    const QStringList loose = MediaDownloader::spotifyArguments(track, QStringLiteral("/d"), false);
+    QVERIFY(!loose.contains(QStringLiteral("--match-filter")));
+    QCOMPARE(loose.last(), QStringLiteral("ytsearch1:Imagine Dragons Lil Wayne - Believer"));
+    // A slash can't make a folder of the name.
+    track.title = QStringLiteral("AC/DC Song");
+    QVERIFY(MediaDownloader::spotifyArguments(track, QStringLiteral("/d"), false).contains(
+        QStringLiteral("Imagine Dragons, Lil Wayne, Someone - AC-DC Song.%(ext)s")));
+    QCOMPARE(MediaDownloader::spotifyStreamUrl(track), QStringLiteral("ytdl://ytsearch1:Imagine Dragons Lil Wayne - AC/DC Song"));
+}
+
+void ToolsTest::spotifyDownloadsAlbum()
+{
+    prependPath(m_spotifyBin);
+    QFile::remove(QString::fromLocal8Bit(qgetenv("FAKE_LOG")));
+    FakeSpotify spotify;
+    QVERIFY(spotify.listen());
+    spotify.pages.insert(QStringLiteral("/embed/album/1DFixLWuPkv3KT3TnV35m3"), nextDataPage(kAlbumEntity));
+    const QString downloads = m_dir.filePath(QStringLiteral("spotify"));
+
+    MediaDownloader downloader;
+    downloader.setSpotifyBaseUrl(spotify.url());
+    QSignalSpy resolved(&downloader, &MediaDownloader::spotifyResolved);
+    QSignalSpy finished(&downloader, &MediaDownloader::finished);
+    QSignalSpy progress(&downloader, &MediaDownloader::progress);
+    // Whatever format is asked for, Spotify songs become MP3s.
+    QVERIFY(downloader.start(QStringLiteral("https://open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3"),
+                             MediaDownloader::Format::Best, downloads));
+    QVERIFY(downloader.isRunning());
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 15000);
+    QVERIFY(!downloader.isRunning());
+    QCOMPARE(resolved.size(), 1);
+    QCOMPARE(resolved.first().at(1).toString(), QStringLiteral("Night Drive"));
+    QVERIFY(finished.first().at(0).toBool());
+
+    // The missing song is skipped; the others are saved in album order, the
+    // one without an upload of the right length from the closest match.
+    const QStringList files = downloader.files();
+    QCOMPARE(files, (QStringList{downloads + QStringLiteral("/Neon Coast - Song One.mp3"),
+                                 downloads + QStringLiteral("/Neon Coast, Guest - NoMatch Two.mp3"),
+                                 downloads + QStringLiteral("/Neon Coast - Song Four.mp3")}));
+    for (const QString &file : files)
+        QVERIFY(QFileInfo::exists(file));
+    QCOMPARE(finished.first().at(1).toString(), files.first());
+    // Progress covers the whole album: the first song's half is an eighth of it.
+    QVERIFY(!progress.isEmpty());
+    QCOMPARE(progress.first().at(0).value<MediaDownloader::Progress>().percent, 12.5);
+
+    QFile log(QString::fromLocal8Bit(qgetenv("FAKE_LOG")));
+    QVERIFY(log.open(QIODevice::ReadOnly));
+    const QString calls = QString::fromUtf8(log.readAll());
+    QVERIFY(calls.contains(QLatin1String("ytsearch5:Neon Coast - Song One")));
+    // Retried without the length check, then the next one.
+    QVERIFY(calls.contains(QLatin1String("ytsearch5:Neon Coast Guest - NoMatch Two")));
+    QVERIFY(calls.contains(QLatin1String("ytsearch1:Neon Coast Guest - NoMatch Two")));
+    QVERIFY(calls.contains(QLatin1String("ytsearch1:Neon Coast - Missing Three")));
+    // Without a length, the best match is taken at once.
+    QVERIFY(calls.contains(QLatin1String("ytsearch1:Neon Coast - Song Four")));
+    QVERIFY(!calls.contains(QLatin1String("ytsearch5:Neon Coast - Song Four")));
+    QVERIFY(calls.contains(QLatin1String("pre_process:Night Drive |:%(meta_album)s |")));
+
+    // A link that isn't there: an error, not a hang.
+    finished.clear();
+    QVERIFY(downloader.start(QStringLiteral("https://open.spotify.com/track/0000000000000000000000"),
+                             MediaDownloader::Format::AudioMp3, downloads));
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 15000);
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY(!finished.first().at(2).toString().isEmpty());
+    QVERIFY(!downloader.isRunning());
+}
+
+void ToolsTest::spotifyDialog()
+{
+    prependPath(m_spotifyBin);
+    QGuiApplication::clipboard()->setText(QStringLiteral("spotify:track:0pqnGHJpmpxLKifKRmU6WP"));
+    auto *dialog = new MediaDownloaderDialog(m_window);
+    dialog->show();
+    auto *url = dialog->findChild<QLineEdit *>(QStringLiteral("DownloaderUrl"));
+    auto *format = dialog->findChild<QComboBox *>(QStringLiteral("DownloaderFormat"));
+    auto *site = dialog->findChild<QLabel *>(QStringLiteral("DownloaderSite"));
+    // The URI from "Copy Spotify URI" is taken from the clipboard.
+    QCOMPARE(url->text(), QStringLiteral("https://open.spotify.com/track/0pqnGHJpmpxLKifKRmU6WP"));
+    QVERIFY(site->text().startsWith(QLatin1String("Spotify link")));
+    QVERIFY(dialog->isSpotify());
+    // Songs only: MP3, and the choice is put back for other links.
+    QCOMPARE(dialog->format(), MediaDownloader::Format::AudioMp3);
+    QVERIFY(!format->isEnabled());
+    url->setText(QStringLiteral("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"));
+    QVERIFY(site->text().contains(QLatin1String("playlist")));
+    url->setText(QStringLiteral("https://youtu.be/x"));
+    QVERIFY(format->isEnabled());
+    QCOMPARE(site->text(), QStringLiteral("YouTube link"));
+    delete dialog;
+}
+
+void ToolsTest::spotifyStream()
+{
+    prependPath(m_spotifyBin);
+    FakeSpotify spotify;
+    QVERIFY(spotify.listen());
+    spotify.pages.insert(QStringLiteral("/embed/album/1DFixLWuPkv3KT3TnV35m3"), nextDataPage(kAlbumEntity));
+    auto *dialog = new MediaDownloaderDialog(m_window);
+    dialog->downloader()->setSpotifyBaseUrl(spotify.url());
+    dialog->findChild<QLineEdit *>(QStringLiteral("DownloaderUrl"))->setText(QStringLiteral("https://open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3"));
+    QSignalSpy streams(dialog, &MediaDownloaderDialog::tracksStreamRequested);
+    dialog->show();
+    dialog->streamDirectly();
+    QVERIFY(dialog->isBusy());
+    QTRY_COMPARE_WITH_TIMEOUT(streams.size(), 1, 10000);
+    const QStringList urls = streams.first().at(0).toStringList();
+    const QStringList titles = streams.first().at(1).toStringList();
+    QCOMPARE(urls.size(), 4);
+    QCOMPARE(urls.first(), QStringLiteral("ytdl://ytsearch1:Neon Coast - Song One"));
+    QCOMPARE(titles.first(), QStringLiteral("Neon Coast - Song One"));
+    QTRY_VERIFY(!dialog->isVisible());
+    delete dialog;
 }
 
 int main(int argc, char *argv[])

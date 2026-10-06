@@ -1,6 +1,6 @@
-// Resume prompt: positions are remembered per file, and reopening a file
+// Resume prompt: positions are remembered per video, and reopening a video
 // that was left halfway asks whether to resume or start over (or does one
-// of them by itself, as configured). Drives the real window; needs a
+// of them by itself, as configured). Songs always play from the start. Drives the real window; needs a
 // display (run under xvfb-run) and ffmpeg, which generates the test media.
 
 #include "MainWindow.h"
@@ -10,7 +10,9 @@
 #include "TestClip.h"
 
 #include <QApplication>
+#include <QProcess>
 #include <QPushButton>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -33,6 +35,7 @@ private Q_SLOTS:
     void countsDown();
     void alwaysAndNever();
     void finishedFileIsForgotten();
+    void songsStartOver();
 
 private:
     void open(const QString &file);
@@ -42,7 +45,7 @@ private:
     bool paused() const { return m_mpv->mpvProperty(QStringLiteral("pause")).toBool(); }
 
     QTemporaryDir m_dir;
-    QString m_long, m_other;
+    QString m_long, m_other, m_song;
     MainWindow *m_window = nullptr;
     MpvWidget *m_mpv = nullptr;
     ResumeManager *m_resume = nullptr;
@@ -56,6 +59,14 @@ void ResumeTest::initTestCase()
     if (!makeTestClip(m_long, 120))
         QSKIP("ffmpeg is needed to generate the test media");
     QVERIFY(makeTestClip(m_other, 60));
+    // Two minutes of tone: audio without video.
+    m_song = m_dir.filePath(QStringLiteral("song.mka"));
+    QProcess ffmpeg;
+    ffmpeg.start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")),
+                 {QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-y"), QStringLiteral("-f"),
+                  QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("sine=frequency=440:duration=120"),
+                  QStringLiteral("-c:a"), QStringLiteral("flac"), m_song});
+    QVERIFY(ffmpeg.waitForFinished(60000) && ffmpeg.exitCode() == 0);
 }
 
 void ResumeTest::init()
@@ -78,6 +89,7 @@ void ResumeTest::cleanup()
     m_window = nullptr;
     ResumeManager::forget(m_long);
     ResumeManager::forget(m_other);
+    ResumeManager::forget(m_song);
 }
 
 void ResumeTest::open(const QString &file)
@@ -217,6 +229,35 @@ void ResumeTest::finishedFileIsForgotten()
     QVERIFY(ResumeManager::lookup(m_long));
     leaveAt(m_long, 116);
     QVERIFY(!ResumeManager::lookup(m_long));
+}
+
+void ResumeTest::songsStartOver()
+{
+    // A song left halfway is not remembered...
+    open(m_song);
+    QTRY_VERIFY(m_mpv->isAudioOnly());
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("60"), QStringLiteral("absolute+exact")});
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(time() - 60) < 1.5, 10000);
+    QTest::qWait(400);
+    open(m_other);
+    QTRY_VERIFY(!m_mpv->isAudioOnly());
+    QTest::qWait(300);
+    QVERIFY(!ResumeManager::lookup(m_song));
+
+    // ...and one saved by an older version plays from the start, unasked.
+    ResumeManager::remember(m_song, 60, 120);
+    QVERIFY(ResumeManager::lookup(m_song));
+    open(m_song);
+    QTest::qWait(500);
+    QVERIFY(!m_resume->prompt()->isVisible());
+    QVERIFY(!paused());
+    QVERIFY(time() < 5);
+    QVERIFY(!ResumeManager::lookup(m_song));
+
+    // Videos still ask.
+    leaveAt(m_long, 40);
+    open(m_long);
+    QTRY_VERIFY(m_resume->prompt()->isVisible());
 }
 
 int main(int argc, char *argv[])

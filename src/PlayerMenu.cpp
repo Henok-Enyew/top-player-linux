@@ -233,6 +233,8 @@ void PlayerMenu::buildLyricsMenu()
     QAction *later = addItem(menu, tr("Lyrics Later (+0.1s)"), [lyrics] { lyrics->adjustOffset(0.1); },
                              QKeySequence(Qt::ALT | Qt::Key_BracketRight));
     QAction *remove = addItem(menu, tr("Remove Lyrics for This Track"), [lyrics] { lyrics->removeLyrics(); });
+    menu->addSeparator();
+    addItem(menu, tr("Lyrics Appearance..."), [lyrics] { lyrics->openStyleDialog(); });
     connect(menu, &QMenu::aboutToShow, this, [lyrics, show, autoShow, earlier, later, remove] {
         show->setChecked(lyrics->isShown());
         autoShow->setChecked(LyricsController::autoShow());
@@ -367,6 +369,16 @@ void PlayerMenu::buildWindowMenu()
         m_window->setPlaylistVisible(!m_window->isPlaylistVisible());
     }, QKeySequence(Qt::Key_F6));
     m_playlistAction->setCheckable(true);
+
+    m_miniPlayerAction = addItem(window, tr("Mini Player"), [this] { m_window->toggleMiniPlayer(); },
+                                 QKeySequence(Qt::CTRL | Qt::Key_M));
+    m_miniPlayerAction->setCheckable(true);
+    QMenu *miniSize = window->addMenu(tr("Mini Player Size"));
+    const QList<QPair<QString, int>> miniWidths{
+        {tr("Small"), 300}, {tr("Medium"), 420}, {tr("Large"), 560}, {tr("Extra Large"), 720},
+    };
+    for (const auto &[label, width] : miniWidths)
+        addItem(miniSize, label, [this, width = width] { m_window->setMiniPlayerWidth(width); });
 
     QMenu *size = window->addMenu(tr("Window Size"));
     const QList<QPair<QString, qreal>> scales{
@@ -537,5 +549,6 @@ void PlayerMenu::syncState()
         toggle.action->setChecked(m_mpv->mpvPropertyString(toggle.property) != toggle.offValue);
     m_fullScreenAction->setChecked(m_window->isFullScreen());
     m_onTopAction->setChecked(m_window->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+    m_miniPlayerAction->setChecked(m_window->isMiniPlayer());
     m_playlistAction->setChecked(m_window->isPlaylistVisible());
 }

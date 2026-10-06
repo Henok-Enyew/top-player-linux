@@ -61,10 +61,11 @@ synced lyrics, a 10-band equalizer, a playlist manager and a media library.
 | 📺 **Live TV & Radio** | Free channels and stations from every country, with categories, search and automatic fallback streams. |
 | 💬 **Subtitles without an account** | Exact-match and by-name search, one-click download, dual subtitles, tap-to-sync editor. |
 | 🎤 **Synced lyrics** | Free LRC downloads, a karaoke-style view, a tap-to-sync editor, and a ready-made AI prompt for songs no site has. |
-| ⏯️ **Pick up where you left off** | Reopen any file and choose **Resume** or **Start Over**. |
+| ⏯️ **Pick up where you left off** | Reopen a video and choose **Resume** or **Start Over**; volume, shuffle and repeat are kept between runs. |
+| 🪟 **Mini player** | A small always-on-top window on every workspace, with floating controls and lyrics that fit. |
 | 🎚️ **Studio-style sound** | Preamp, bass, treble, a 10-band equalizer with presets, and night mode. |
 | 📂 **Playlist & Library** | Sorting, search, shuffle and repeat, M3U save/open, and saved folders and playlists. |
-| ✂️ **Built-in tools** | Lossless cutting, audio extraction, and downloads from YouTube and 1000+ sites. |
+| ✂️ **Built-in tools** | Lossless cutting, audio extraction, and downloads from YouTube, Spotify and 1000+ sites. |
 | ⚡ **Fast and light** | Native Qt 6 and libmpv, background scanning, no freezes on huge folders. |
 
 ---
@@ -116,11 +117,14 @@ synced lyrics, a 10-band equalizer, a playlist manager and a media library.
   width spans 3 minutes, or the whole file if shorter); the OSD shows the jump
   and the target time, `Esc` cancels. Sideways touchpad or tilt-wheel
   scrolling seeks 5 s per step.
-- **Resume or start over**: every file remembers where it was left. Opening
-  it again shows a small card, *Continue watching?* (or *listening?*), with
+- **Resume or start over**: every video remembers where it was left. Opening
+  it again shows a small card, *Continue watching?*, with
   **Resume from 12:34** and **Start Over** (`Enter` / `Esc`); it resumes by
   itself after 10 seconds. **Playback → When Reopening a File** switches
-  between asking, **Always Resume** and **Always Start Over**.
+  between asking, **Always Resume** and **Always Start Over**. Songs and other
+  audio files always play from the start.
+- **The control bar remembers**: volume, mute, shuffle and repeat are as you
+  left them when the player starts again.
 - **Opened media plays right away**, even if the last file was paused or
   ran to its end. Opening a folder or playlist **replaces** the playlist;
   a slower scan that finishes after a newer open is dropped.
@@ -150,11 +154,24 @@ on top of Qt's Fusion style; self-painted widgets share the palette in
 - **On-screen display** for volume, seeking, speed, delays, modes and messages.
 - **Click** the video to pause, **double-click** for fullscreen.
 - **Fullscreen** hides the title and control bars; the control bar comes back
-  when the pointer nears the bottom edge, and controls and cursor hide again
-  after two seconds. The playlist drawer stays as you left it and opens and
+  **over** the video when the pointer nears the bottom edge (the picture
+  doesn't move), and controls and cursor hide again after two seconds. The playlist drawer stays as you left it and opens and
   closes with `F6` in fullscreen too.
 - **Window size** follows the video (100%, shrunk to fit the screen), or pick
   50% / 100% / 150% / 200% (`Alt+1`..`Alt+4`); **Always on Top** (`Ctrl+T`).
+- **Mini Player** (`Ctrl+M`, the picture-in-picture button in the title bar,
+  or **Window → Mini Player**): the window pops out into a small borderless
+  player in the corner of the screen that stays **on top** and, on X11, on
+  **every workspace**. The controls float over it while the pointer is there;
+  drag it anywhere, resize it from its edges or pick **Window → Mini Player
+  Size** (Small to Extra Large). Lyrics shrink to fit: in a small mini player
+  only the lines around the sung one show. Its size and place are kept. `Esc`,
+  a double click or the corner button bring the full window back.
+
+  > On Wayland, apps can't pin themselves to every workspace: use your
+  > desktop's window menu (`Alt+Space` → *Always on Visible Workspace* on
+  > GNOME, *On All Desktops* on KDE), or run the player under XWayland with
+  > `QT_QPA_PLATFORM=xcb top-player`.
 - **About Top Player** (`F1`): version, credits, links, license, and the Qt,
   libmpv and video acceleration details.
 
@@ -206,6 +223,15 @@ blurred tint of the cover. Plain (unsynced) lyrics scroll along with the song.
   track; **Export As...** writes `.lrc` or `.srt`.
 - **Lyrics Earlier / Later** (`Alt+[` / `Alt+]`) shift synced lyrics by 0.1 s
   and save the offset.
+- **Browse and jump**: drag the lyrics or scroll the wheel over them to look
+  ahead or back; they glide back to the sung line a few seconds later (or at
+  once with **Back to current line**). Hovering a synced line shows its time,
+  and **clicking it plays from there**. Lines without a time (plain lyrics
+  typed in to read along) only scroll.
+- **Lyrics Appearance...**: font, size, line spacing, alignment (left, center,
+  right), the current line's color, bold and glow, and how much a video is
+  darkened behind the lyrics, previewed live. `Ctrl` + wheel over the lyrics
+  changes their size.
 
 ### Audio Control & Equalizer
 
@@ -339,6 +365,14 @@ Countries** and **every other country** alphabetically. Then:
   **Best Video + Audio**, **4K**, **1080p**, **720p** or **Audio Only (.mp3)**
   and a folder (`~/Videos` by default), with progress, speed and ETA.
   **Direct Stream** plays the link without saving it.
+- **Spotify** links work too: songs, albums, playlists and artists
+  (`open.spotify.com/...`, `spotify.link/...` or a copied `spotify:track:...`
+  URI). Spotify's audio is DRM-protected, so each song is read from Spotify's
+  public page (title, artists, album, length), found on YouTube, preferring an
+  upload of the same length, and saved as an MP3 named "Artist - Title" and
+  tagged with Spotify's title, artist and album. Albums and playlists are
+  saved song by song and queued in order; **Direct Stream** plays them the
+  same way without saving.
 
 > [!NOTE]
 > The tools use the system's `ffmpeg` and `yt-dlp`, so they are available in
@@ -348,7 +382,7 @@ Countries** and **every other country** alphabetically. Then:
 
 | What | Where |
 | --- | --- |
-| Settings | `~/.config/top-player/settings.ini` |
+| Settings (also volume, shuffle and repeat, lyrics appearance, mini player size) | `~/.config/top-player/settings.ini` |
 | Last playlist and position | `~/.config/top-player/last_playlist.json` |
 | Library | `~/.config/top-player/library.json` |
 | Library playlists | `~/.config/top-player/playlists/<name>.m3u8` |
@@ -356,7 +390,7 @@ Countries** and **every other country** alphabetically. Then:
 | Live TV & Radio lists and logos | `~/.cache/top-player/streams/` |
 | Downloaded subtitles | `~/.cache/top-player/subtitles/` |
 | Lyrics (downloaded, synced, assigned) | `~/.config/top-player/lyrics/` |
-| Resume positions | `~/.config/top-player/resume.ini` |
+| Resume positions (videos) | `~/.config/top-player/resume.ini` |
 
 Settings from versions before 1.0 are copied over from
 `~/.config/potplayer-linux` on the first start.
@@ -438,9 +472,10 @@ mpv property or command, and check marks reflect mpv's live state.
 | Input | Action |
 | --- | --- |
 | Double-click video, `Enter` | Toggle fullscreen |
-| `Esc` | Leave fullscreen |
+| `Esc` | Leave fullscreen or the mini player |
 | `F6` | Show / hide the playlist |
 | `Ctrl+T` | Always on top |
+| `Ctrl+M` | Mini player |
 | `Alt+1`..`Alt+4` | Window size 50–200% |
 | Drag video or title bar | Move window |
 | Drag window edge | Resize window |
@@ -473,6 +508,9 @@ mpv property or command, and check marks reflect mpv's live state.
 | `Alt+Y` | Download lyrics |
 | `Ctrl+Y` | Lyrics sync editor |
 | `Alt+[` / `Alt+]` | Lyrics earlier / later 0.1 s |
+| Drag / wheel over lyrics | Browse the lyrics |
+| Click a lyrics line | Play from that line |
+| `Ctrl` + wheel over lyrics | Lyrics size |
 | `Enter` / `Esc` | Resume / start over (resume card) |
 
 **Tools and dialogs**
@@ -502,10 +540,12 @@ mpv property or command, and check marks reflect mpv's live state.
 
 | Distro | Packages |
 | --- | --- |
-| Ubuntu / Debian | `build-essential cmake ninja-build pkg-config qt6-base-dev libqt6opengl6-dev libgl-dev libmpv-dev zlib1g-dev` |
-| Fedora | `gcc-c++ cmake ninja-build pkgconf-pkg-config qt6-qtbase-devel mesa-libGL-devel mpv-devel zlib-devel` |
-| openSUSE | `gcc-c++ cmake ninja pkgconf qt6-base-devel Mesa-libGL-devel mpv-devel zlib-devel` |
-| Arch Linux | `base-devel cmake ninja qt6-base mpv zlib` |
+| Ubuntu / Debian | `build-essential cmake ninja-build pkg-config qt6-base-dev libqt6opengl6-dev libgl-dev libmpv-dev zlib1g-dev libxcb1-dev` |
+| Fedora | `gcc-c++ cmake ninja-build pkgconf-pkg-config qt6-qtbase-devel mesa-libGL-devel mpv-devel zlib-devel libxcb-devel` |
+| openSUSE | `gcc-c++ cmake ninja pkgconf qt6-base-devel Mesa-libGL-devel mpv-devel zlib-devel libxcb-devel` |
+| Arch Linux | `base-devel cmake ninja qt6-base mpv zlib libxcb` |
+
+`libxcb` is optional: without it the mini player can't put itself on every X11 workspace.
 
 ### Compile and run
 
@@ -534,11 +574,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.4 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.5 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.4 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.4 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.4 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.5 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.5 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.5 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -565,7 +605,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.4**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
+| [**1.0.5**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
+| [1.0.4](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
 | [1.0.3](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
 | [1.0.2](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.2) | 2026-10-03 | Media keys over MPRIS, swipe / sideways-scroll seeking, autoplay on open, opening a folder replaces the playlist, clickable library sections, new window buttons and a PotPlayer-style playlist bar, lighter playback |
 | [1.0.1](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.1) | 2026-10-03 | Live TV fix (referrer / user agent, fallback streams), every country with categories and Hide geo-blocked, playlist in fullscreen, shuffle / repeat / aspect buttons, better Open Playlist |
@@ -587,9 +628,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.4 && git push origin v1.0.4`
+2. `git tag v1.0.5 && git push origin v1.0.5`
 
-A tag with a suffix such as `v1.0.4-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.5-rc1` is published as a pre-release.
 
 </details>
 

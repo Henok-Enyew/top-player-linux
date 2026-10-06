@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(top-player
-    VERSION 1.0.4
+    VERSION 1.0.5
     DESCRIPTION "Top Player: a lightweight Qt6 + libmpv media player for Linux"
     LANGUAGES CXX)
 
@@ -22,6 +22,8 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS Core Concurrent Gui Widgets Network Ope
 find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
+# Keeps the mini player on every workspace under X11 (optional).
+pkg_check_modules(XCB QUIET IMPORTED_TARGET xcb)
 # Unpacks the ZIP archives subtitle sites hand out.
 find_package(ZLIB REQUIRED)
 
@@ -135,6 +137,8 @@ add_library(top-player-core OBJECT
     src/TimeFormat.h
     src/TitleBar.cpp
     src/TitleBar.h
+    src/WindowPin.cpp
+    src/WindowPin.h
     src/ZipArchive.cpp
     src/ZipArchive.h
 )
@@ -169,6 +173,13 @@ if(TARGET Qt6::DBus)
     target_link_libraries(top-player-core PUBLIC Qt6::DBus)
 else()
     message(STATUS "Qt6 DBus not found: building without MPRIS (media keys)")
+endif()
+
+if(XCB_FOUND)
+    target_compile_definitions(top-player-core PUBLIC TOPPLAYER_HAVE_XCB)
+    target_link_libraries(top-player-core PUBLIC PkgConfig::XCB)
+else()
+    message(STATUS "xcb not found: the mini player can't pin itself to every X11 workspace")
 endif()
 
 add_executable(top-player src/main.cpp)

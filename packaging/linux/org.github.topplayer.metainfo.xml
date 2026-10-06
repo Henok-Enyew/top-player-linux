@@ -33,6 +33,19 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.5" date="2026-10-06">
+      <description>
+        <ul>
+          <li>The volume, mute, shuffle and repeat set last are kept for the next run</li>
+          <li>Download from URL takes Spotify links: songs, albums and playlists are found on YouTube and saved as MP3s tagged with the Spotify title, artist and album (or streamed)</li>
+          <li>Lyrics can be scrolled by dragging or with the wheel; clicking a timed line plays from it, and they glide back to the sung line by themselves</li>
+          <li>Lyrics Appearance: font, size, line spacing, alignment, highlight color, glow and how much a video is darkened behind them</li>
+          <li>Mini player (Ctrl+M): a small window that stays on top and, on X11, on every workspace, with floating controls and lyrics that fit its size</li>
+          <li>Songs always play from the start; only videos offer to resume</li>
+          <li>In fullscreen the controls float over the video, so it no longer jumps when they appear</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.4" date="2026-10-05">
       <description>
         <ul>

@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.0.4 packaging/rpm/build-rpm.sh
+#   VERSION=1.0.5 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.0.4
+Version:        1.0.5
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -36,6 +36,7 @@ BuildRequires:  cmake(Qt6OpenGL)
 BuildRequires:  cmake(Qt6OpenGLWidgets)
 BuildRequires:  pkgconfig(gl)
 BuildRequires:  pkgconfig(zlib)
+BuildRequires:  pkgconfig(xcb)
 BuildRequires:  desktop-file-utils
 BuildRequires:  /usr/bin/appstreamcli
 
@@ -76,6 +77,15 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Tue Oct 06 2026 Henok Enyew Andargie - 1.0.5-1
+- Volume, mute, shuffle and repeat are kept between runs
+- Spotify links (songs, albums, playlists) download as tagged MP3s
+- Lyrics: scroll through them, click a timed line to play from it
+- Lyrics appearance: font, size, spacing, alignment and colors
+- Mini player that stays on top and on every workspace (X11)
+- Songs always start from the beginning; videos still resume
+- Fullscreen controls float over the video instead of moving it
+
 * Mon Oct 05 2026 Henok Enyew Andargie - 1.0.4-1
 - Packages for Debian, Ubuntu, openSUSE and Arch Linux
 - Builds with Qt 6.2

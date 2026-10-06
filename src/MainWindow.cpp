@@ -24,6 +24,9 @@
 #include "ThumbnailGenerator.h"
 #include "ThumbnailPopup.h"
 #include "TitleBar.h"
+#include "WindowPin.h"
+#include "Icons.h"
+#include "PlaylistSession.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -45,6 +48,9 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QScreen>
+#include <QSettings>
+#include <QStyle>
+#include <QToolButton>
 #include <QStandardPaths>
 #include <QTreeView>
 #include <QVBoxLayout>
@@ -73,6 +79,18 @@ constexpr double kSeekDragSpanSeconds = 180.0;
 constexpr int kSeekDragIntervalMs = 60;
 // A horizontal wheel notch (120 units) or touchpad swipe of the same size seeks this far.
 constexpr double kWheelSeekSeconds = 5.0;
+// The normal window's smallest size, and the mini player's.
+constexpr QSize kMinimumSize(420, 260);
+constexpr QSize kMiniMinimumSize(200, 112);
+constexpr int kMiniDefaultWidth = 400;
+constexpr int kMiniScreenMargin = 24;
+// The window manager needs the mini player mapped before it can be pinned.
+constexpr int kPinDelayMs = 150;
+
+QString settingsFile()
+{
+    return PlaylistSession::configDir() + QStringLiteral("/settings.ini");
+}
 
 // Keys that a focused list keeps for its own navigation instead of letting the
 // player's shortcuts (volume, fullscreen) take them. A tree also keeps Left and
@@ -111,7 +129,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setWindowFlag(Qt::FramelessWindowHint);
     setAcceptDrops(true);
-    setMinimumSize(420, 260);
+    setMinimumSize(kMinimumSize);
     // Clicking the video takes keyboard focus back from the playlist, so the
     // arrow keys control the player again.
     m_mpv->setFocusPolicy(Qt::ClickFocus);
@@ -128,12 +146,12 @@ MainWindow::MainWindow(QWidget *parent)
     body->addWidget(m_mpv, 1);
     body->addWidget(m_drawer);
 
-    auto *layout = new QVBoxLayout(m_root);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
-    layout->addWidget(m_titleBar);
-    layout->addLayout(body, 1);
-    layout->addWidget(m_controlBar);
+    m_rootLayout = new QVBoxLayout(m_root);
+    m_rootLayout->setContentsMargins(0, 0, 0, 0);
+    m_rootLayout->setSpacing(0);
+    m_rootLayout->addWidget(m_titleBar);
+    m_rootLayout->addLayout(body, 1);
+    m_rootLayout->addWidget(m_controlBar);
     setCentralWidget(m_root);
 
     // Stacked over the video in creation order: the audio view, the lyrics,
@@ -160,7 +178,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_mpv, &MpvWidget::seeked, this, &MainWindow::showSeekOsd);
     // Like PotPlayer, open each file at 100% of its video resolution.
     connect(m_mpv, &MpvWidget::videoSizeKnown, this, [this](const QSize &size) {
-        if (!isFullScreen() && !isMaximized())
+        if (!isFullScreen() && !isMaximized() && !m_mini)
             resizeToVideo(size, 1.0);
     });
     connect(m_audio, &AudioController::message, m_osd,
@@ -213,14 +231,27 @@ MainWindow::MainWindow(QWidget *parent)
                             QStringLiteral("absolute+keyframes")});
     });
 
+    // The mini player's way back to the full window, in its top-right corner.
+    m_miniRestoreButton = new QToolButton(m_root);
+    m_miniRestoreButton->setObjectName(QStringLiteral("MiniRestoreButton"));
+    m_miniRestoreButton->setIcon(skinIcon(IconType::Maximize));
+    m_miniRestoreButton->setIconSize(QSize(16, 16));
+    m_miniRestoreButton->setToolTip(tr("Back to Full Window (Esc)"));
+    m_miniRestoreButton->setFocusPolicy(Qt::NoFocus);
+    m_miniRestoreButton->hide();
+    connect(m_miniRestoreButton, &QToolButton::clicked, this, [this] { setMiniPlayer(false); });
+    connect(m_titleBar, &TitleBar::miniPlayerRequested, this, [this] { setMiniPlayer(true); });
+
     m_idleTimer.setSingleShot(true);
     m_idleTimer.setInterval(kIdleHideMs);
     connect(&m_idleTimer, &QTimer::timeout, this, [this] {
-        if (!isFullScreen())
+        if (!m_controlsOverlaid)
             return;
-        if (!m_controlBar->underMouse())
-            m_controlBar->hide();
-        m_mpv->setCursor(Qt::BlankCursor);
+        if (!m_controlBar->underMouse() && !m_miniRestoreButton->underMouse())
+            setOverlayControlsVisible(false);
+        // The mini player keeps the pointer: it is a window among others.
+        if (isFullScreen())
+            m_mpv->setCursor(Qt::BlankCursor);
     });
     // Mouse moves over child widgets (the video, the bars) drive the fullscreen chrome.
     for (QWidget *widget : {static_cast<QWidget *>(m_mpv), m_root, static_cast<QWidget *>(m_controlBar)})
@@ -535,6 +566,20 @@ void MainWindow::openMediaDownloaderDialog()
             m_mpv->insertFiles({path});
         m_osd->showValue(tr("Downloaded:"), QFileInfo(path).fileName());
     });
+    connect(dialog, &MediaDownloaderDialog::downloadedMany, this, [this](const QStringList &paths, bool play) {
+        if (play)
+            openFiles(paths);
+        else
+            m_mpv->insertFiles(paths);
+        m_osd->showValue(tr("Downloaded:"), tr("%n song(s)", nullptr, int(paths.size())));
+    });
+    connect(dialog, &MediaDownloaderDialog::tracksStreamRequested, this,
+            [this](const QStringList &urls, const QStringList &titles) {
+                // Each entry is a YouTube search that mpv resolves through yt-dlp.
+                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), MediaDownloader::streamFormat(MediaDownloader::Format::AudioMp3));
+                m_mpv->loadTitledFiles(urls, titles);
+                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n song(s)", nullptr, int(titles.size())));
+            });
     connect(dialog, &MediaDownloaderDialog::streamRequested, this, [this](const QString &url, const QString &format) {
         // mpv resolves the page through yt-dlp, picking streams with this format.
         m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
@@ -667,6 +712,8 @@ void MainWindow::toggleFullScreen()
         exitFullScreen();
         return;
     }
+    if (m_mini)
+        setMiniPlayer(false);
     m_maximizedBeforeFullScreen = isMaximized();
     m_geometryBeforeFullScreen = m_maximizedBeforeFullScreen ? normalGeometry() : geometry();
     showFullScreen();
@@ -704,6 +751,8 @@ void MainWindow::scaleToVideo(qreal scale)
     if (videoWidth <= 0 || videoHeight <= 0)
         return;
 
+    if (m_mini)
+        setMiniPlayer(false);
     if (isFullScreen() || isMaximized())
         showNormal();
     if (resizeToVideo(QSize(videoWidth, videoHeight), scale))
@@ -775,20 +824,26 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     m_playlist->saveSession();
     m_resume->saveNow();
+    m_controlBar->saveState();
+    if (m_mini)
+        saveMiniPlayerGeometry();
     QMainWindow::closeEvent(event);
 }
 
 void MainWindow::updateChrome()
 {
-    const bool fullScreen = isFullScreen();
-    if (fullScreen == m_wasFullScreen)
+    // Fullscreen and the mini player show the picture only; the controls
+    // float over it when the pointer comes near.
+    const bool immersive = isFullScreen() || m_mini;
+    if (immersive == m_wasImmersive)
         return;
-    m_wasFullScreen = fullScreen;
+    m_wasImmersive = immersive;
 
-    m_titleBar->setVisible(!fullScreen);
-    m_controlBar->setVisible(!fullScreen);
+    m_titleBar->setVisible(!immersive);
+    setControlsOverlaid(immersive);
     // The playlist drawer stays as it is: only the user opens or closes it.
-    if (fullScreen) {
+    if (immersive) {
+        setOverlayControlsVisible(false);
         m_idleTimer.start();
     } else {
         m_idleTimer.stop();
@@ -796,10 +851,159 @@ void MainWindow::updateChrome()
     }
 }
 
+void MainWindow::setControlsOverlaid(bool overlaid)
+{
+    if (overlaid == m_controlsOverlaid)
+        return;
+    m_controlsOverlaid = overlaid;
+    // Over the video the bar no longer takes room from it, so showing and
+    // hiding it doesn't move the picture.
+    if (overlaid)
+        m_rootLayout->removeWidget(m_controlBar);
+    else
+        m_rootLayout->addWidget(m_controlBar);
+    m_controlBar->setProperty("overlay", overlaid);
+    m_controlBar->style()->unpolish(m_controlBar);
+    m_controlBar->style()->polish(m_controlBar);
+    if (overlaid) {
+        placeOverlays();
+    } else {
+        m_miniRestoreButton->hide();
+        m_controlBar->show();
+    }
+}
+
+void MainWindow::setOverlayControlsVisible(bool visible)
+{
+    if (!m_controlsOverlaid)
+        return;
+    if (visible) {
+        placeOverlays();
+        m_controlBar->show();
+        m_controlBar->raise();
+        if (m_mini) {
+            m_miniRestoreButton->show();
+            m_miniRestoreButton->raise();
+        }
+    } else {
+        m_controlBar->hide();
+        m_miniRestoreButton->hide();
+    }
+}
+
+void MainWindow::placeOverlays()
+{
+    if (!m_controlsOverlaid)
+        return;
+    // Along the bottom of the video, beside an open playlist drawer.
+    const QRect video = m_mpv->geometry();
+    const int height = m_controlBar->sizeHint().height();
+    m_controlBar->setGeometry(video.left(), video.bottom() + 1 - height, video.width(), height);
+    const QSize button = m_miniRestoreButton->sizeHint();
+    m_miniRestoreButton->setGeometry(video.right() - button.width() - 6, video.top() + 6, button.width(), button.height());
+}
+
+QRect MainWindow::miniPlayerGeometry() const
+{
+    const QRect saved = QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("miniPlayer/geometry")).toRect();
+    if (saved.isValid() && saved.width() >= kMiniMinimumSize.width() && saved.height() >= kMiniMinimumSize.height()) {
+        // Only where a screen still is (monitors come and go).
+        for (QScreen *screen : QGuiApplication::screens()) {
+            if (screen->availableGeometry().intersected(saved).width() >= kMiniMinimumSize.width() / 2)
+                return saved;
+        }
+    }
+    // The video's shape, or a short strip for audio and lyrics.
+    const int videoWidth = m_mpv->mpvProperty(QStringLiteral("dwidth")).toInt();
+    const int videoHeight = m_mpv->mpvProperty(QStringLiteral("dheight")).toInt();
+    int height = kMiniDefaultWidth * 9 / 16;
+    if (!m_mpv->isIdle() && !m_mpv->isAudioOnly() && videoWidth > 0 && videoHeight > 0)
+        height = std::clamp(kMiniDefaultWidth * videoHeight / videoWidth, kMiniMinimumSize.height(), kMiniDefaultWidth);
+    QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+    const QRect available = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
+    return QRect(available.right() - kMiniScreenMargin - kMiniDefaultWidth + 1,
+                 available.bottom() - kMiniScreenMargin - height + 1, kMiniDefaultWidth, height);
+}
+
+void MainWindow::saveMiniPlayerGeometry()
+{
+    if (m_mini)
+        QSettings(settingsFile(), QSettings::IniFormat).setValue(QStringLiteral("miniPlayer/geometry"), geometry());
+}
+
+void MainWindow::setMiniPlayer(bool on)
+{
+    if (on == m_mini)
+        return;
+    if (on) {
+        if (isFullScreen())
+            exitFullScreen();
+        m_maximizedBeforeMini = isMaximized();
+        m_geometryBeforeMini = m_maximizedBeforeMini ? normalGeometry() : geometry();
+        m_onTopBeforeMini = windowFlags().testFlag(Qt::WindowStaysOnTopHint);
+        m_drawerBeforeMini = m_drawer->isExpanded();
+        m_mini = true;
+        m_drawer->setExpanded(false);
+        if (isMaximized())
+            showNormal();
+        setMinimumSize(kMiniMinimumSize);
+        setAlwaysOnTop(true);
+        setGeometry(miniPlayerGeometry());
+        updateChrome();
+        QPointer<MainWindow> self = this;
+        QTimer::singleShot(kPinDelayMs, this, [self] {
+            if (self && self->m_mini)
+                WindowPin::setOnAllWorkspaces(self->windowHandle(), true);
+        });
+        m_osd->showValue(tr("Mini Player"), WindowPin::isSupported() ? tr("On top, on every workspace") : tr("On top"));
+        return;
+    }
+
+    saveMiniPlayerGeometry();
+    WindowPin::setOnAllWorkspaces(windowHandle(), false);
+    m_mini = false;
+    setMinimumSize(kMinimumSize);
+    setAlwaysOnTop(m_onTopBeforeMini);
+    updateChrome();
+    if (m_maximizedBeforeMini) {
+        showMaximized();
+    } else if (m_geometryBeforeMini.isValid()) {
+        setGeometry(m_geometryBeforeMini);
+    }
+    if (m_drawerBeforeMini)
+        setPlaylistVisible(true);
+}
+
+void MainWindow::setMiniPlayerWidth(int width)
+{
+    if (!m_mini)
+        setMiniPlayer(true);
+    const QRect current = geometry();
+    const double aspect = current.width() > 0 ? double(current.height()) / current.width() : 9.0 / 16.0;
+    QSize size(width, static_cast<int>(std::lround(width * aspect)));
+    size = size.expandedTo(kMiniMinimumSize);
+    QRect frame(QPoint(), size);
+    // Grow from the corner the window sits in, so it stays tucked away.
+    QScreen *screen = this->screen();
+    const QRect available = screen ? screen->availableGeometry() : current;
+    const bool right = current.center().x() > available.center().x();
+    const bool bottom = current.center().y() > available.center().y();
+    frame.moveLeft(right ? current.right() - size.width() + 1 : current.left());
+    frame.moveTop(bottom ? current.bottom() - size.height() + 1 : current.top());
+    frame.moveLeft(std::clamp(frame.left(), available.left(), std::max(available.left(), available.right() - size.width() + 1)));
+    frame.moveTop(std::clamp(frame.top(), available.top(), std::max(available.top(), available.bottom() - size.height() + 1)));
+    setGeometry(frame);
+    saveMiniPlayerGeometry();
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     // This sees every event of the application; let the rest through at once.
     const QEvent::Type type = event->type();
+    if ((type == QEvent::Resize || type == QEvent::Move) && (watched == m_mpv || watched == m_root)) {
+        placeOverlays();
+        return QMainWindow::eventFilter(watched, event);
+    }
     if (type != QEvent::ShortcutOverride && type != QEvent::KeyPress && type != QEvent::MouseMove)
         return QMainWindow::eventFilter(watched, event);
     // A shortcut fires unless the focused widget claims the key first. Let a
@@ -816,7 +1020,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         endSeekDrag(true);
         return true;
     }
-    // Esc always leaves fullscreen, whichever widget has the keyboard.
+    // Esc always leaves fullscreen or the mini player, whichever widget has the keyboard.
+    if (event->type() == QEvent::KeyPress && m_mini && !isFullScreen() && watched->isWidgetType()
+        && static_cast<QWidget *>(watched)->window() == this
+        && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
+        setMiniPlayer(false);
+        return true;
+    }
     if (event->type() == QEvent::KeyPress && isFullScreen() && watched->isWidgetType()
         && static_cast<QWidget *>(watched)->window() == this
         && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
@@ -832,13 +1042,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 void MainWindow::onMouseActivity(const QPoint &globalPos)
 {
-    if (!isFullScreen())
+    if (!m_controlsOverlaid)
         return;
     m_mpv->unsetCursor();
-    // Reveal the controls when the pointer nears the bottom edge.
-    const int revealHeight = m_controlBar->sizeHint().height() * 2;
-    if (mapFromGlobal(globalPos).y() >= height() - revealHeight)
-        m_controlBar->show();
+    const QPoint pos = mapFromGlobal(globalPos);
+    if (m_mini) {
+        // The mini player is small: anywhere over it brings the controls.
+        if (rect().contains(pos))
+            setOverlayControlsVisible(true);
+    } else {
+        // Reveal the controls when the pointer nears the bottom edge.
+        const int revealHeight = m_controlBar->sizeHint().height() * 2;
+        if (pos.y() >= height() - revealHeight)
+            setOverlayControlsVisible(true);
+    }
     m_idleTimer.start();
 }
 
@@ -851,7 +1068,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         toggleFullScreen();
         break;
     case Qt::Key_Escape:
-        exitFullScreen();
+        if (m_mini && !isFullScreen())
+            setMiniPlayer(false);
+        else
+            exitFullScreen();
         break;
     default:
         QMainWindow::keyPressEvent(event);
@@ -1004,7 +1224,11 @@ void MainWindow::mouseDoubleClickEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton && isOverVideo(event->globalPosition().toPoint())) {
         m_clickTimer.stop();
         m_videoPress.reset();
-        toggleFullScreen();
+        // The mini player opens back up into the full window.
+        if (m_mini)
+            setMiniPlayer(false);
+        else
+            toggleFullScreen();
         event->accept();
         return;
     }
@@ -1013,6 +1237,11 @@ void MainWindow::mouseDoubleClickEvent(QMouseEvent *event)
 
 bool MainWindow::isOverVideo(const QPoint &globalPos) const
 {
+    // The floating controls cover part of the video; clicks between their
+    // buttons are not clicks on the picture.
+    if (m_controlsOverlaid && m_controlBar->isVisible()
+        && m_controlBar->rect().contains(m_controlBar->mapFromGlobal(globalPos)))
+        return false;
     return m_mpv->isVisible() && m_mpv->rect().contains(m_mpv->mapFromGlobal(globalPos));
 }
 

@@ -6,7 +6,7 @@ class QLabel;
 class QToolButton;
 
 // Slim skin title bar for the frameless window: logo, title and the window
-// buttons (pin on top, minimize, maximize, fullscreen, close), as in
+// buttons (mini player, pin on top, minimize, maximize, fullscreen, close), as in
 // PotPlayer's corner. Dragging it moves the window (the press falls through
 // to MainWindow).
 class TitleBar : public QFrame
@@ -23,6 +23,7 @@ public:
 Q_SIGNALS:
     void pinToggled(bool pinned);
     void fullScreenRequested();
+    void miniPlayerRequested();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

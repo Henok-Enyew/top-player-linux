@@ -58,6 +58,24 @@ QLabel {
     border-top: 1px solid #2a2d35;
 }
 
+/* Fullscreen and the mini player: the bar floats over the video. */
+#ControlBar[overlay="true"] {
+    background: rgba(18, 19, 22, 222);
+    border-top: 1px solid rgba(255, 255, 255, 22);
+}
+
+#MiniRestoreButton {
+    background: rgba(18, 19, 22, 200);
+    border: 1px solid rgba(255, 255, 255, 30);
+    border-radius: 6px;
+    padding: 5px;
+}
+
+#MiniRestoreButton:hover {
+    background: #10303a;
+    border-color: #00d2ff;
+}
+
 QToolButton {
     background: transparent;
     border: none;
