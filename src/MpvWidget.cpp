@@ -792,8 +792,11 @@ void MpvWidget::requestSoftwareFrame()
         // Rows of a multiple of 64 bytes, as mpv prefers.
         const int alignedWidth = (size.width() + 15) & ~15;
         QImage image(alignedWidth, size.height(), QImage::Format_RGB32);
-        if (image.isNull())
+        if (image.isNull()) {
+            // Out of memory: let the next frame try again.
+            QMetaObject::invokeMethod(this, [this] { onSoftwareFrame({}); }, Qt::QueuedConnection);
             return;
+        }
         int surfaceSize[2] = {size.width(), size.height()};
         size_t stride = static_cast<size_t>(image.bytesPerLine());
         char format[] = "bgr0";
@@ -819,7 +822,7 @@ void MpvWidget::requestSoftwareFrame()
 void MpvWidget::onSoftwareFrame(const QImage &frame)
 {
     m_frameBusy = false;
-    if (!m_idle)
+    if (!m_idle && !frame.isNull())
         m_frame = frame;
     update();
     if (std::exchange(m_frameDirty, false))
