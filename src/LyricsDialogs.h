@@ -79,7 +79,8 @@ private:
 };
 
 // Lyrics -> Lyrics Appearance...: font, size, line spacing, alignment, the
-// highlight color and the dimming behind lyrics over a video. Every change
+// highlight color, the dimming and blur behind lyrics over a video, and the
+// blur and strength of the cover behind a song's lyrics. Every change
 // shows at once on the lyrics (styleChanged()); Cancel puts the old look back.
 class LyricsStyleDialog : public QDialog
 {
@@ -116,4 +117,10 @@ private:
     QCheckBox *m_glow;
     QSlider *m_dim;
     QLabel *m_dimLabel;
+    QSlider *m_videoBlur;
+    QLabel *m_videoBlurLabel;
+    QSlider *m_blur;
+    QLabel *m_blurLabel;
+    QSlider *m_backdrop;
+    QLabel *m_backdropLabel;
 };

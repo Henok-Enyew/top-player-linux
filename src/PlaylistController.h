@@ -10,6 +10,7 @@
 #include <optional>
 #include <utility>
 
+class DownloadQueue;
 class MediaLibrary;
 class MediaProber;
 class MpvWidget;
@@ -76,6 +77,8 @@ public:
     QList<PlaylistOps::Entry> entries();
 
     MediaLibrary *library() const { return m_library; }
+    // Saves online entries of the playlist (the drawer's Download actions).
+    DownloadQueue *downloads() const { return m_downloads; }
     void addFolderToLibraryDialog();
     void addPlaylistFileToLibraryDialog();
     void saveQueueToLibraryDialog();
@@ -102,6 +105,7 @@ private:
     QWidget *m_dialogParent;
     MediaProber *m_prober;
     MediaLibrary *m_library;
+    DownloadQueue *m_downloads;
     QVariantList m_playlist;
     QList<PlaylistOps::Entry> m_entries;
     // A duration sort waiting for the prober to finish.

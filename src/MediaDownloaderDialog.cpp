@@ -16,6 +16,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QVBoxLayout>
 
@@ -38,6 +39,7 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
     , m_format(new QComboBox(this))
     , m_directory(new QLineEdit(this))
     , m_play(new QCheckBox(tr("Play immediately upon download"), this))
+    , m_wholePlaylist(new QCheckBox(tr("Whole playlist (every video in it)"), this))
     , m_progress(new QProgressBar(this))
     , m_speed(new QLabel(this))
     , m_status(new QLabel(this))
@@ -75,6 +77,8 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
     directoryRow->addWidget(m_directory, 1);
     directoryRow->addWidget(browse);
 
+    m_wholePlaylist->setObjectName(QStringLiteral("DownloaderWholePlaylist"));
+    m_wholePlaylist->setVisible(false);
     m_play->setObjectName(QStringLiteral("DownloaderPlay"));
     m_play->setChecked(settings.value(QStringLiteral("downloader/play"), true).toBool());
 
@@ -102,6 +106,7 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
     auto *form = new QFormLayout;
     form->addRow(tr("URL:"), m_url);
     form->addRow(QString(), m_site);
+    form->addRow(QString(), m_wholePlaylist);
     form->addRow(tr("Format:"), m_format);
     form->addRow(tr("Save to:"), directoryRow);
     form->addRow(QString(), m_play);
@@ -131,6 +136,26 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
     connect(m_url, &QLineEdit::textChanged, this, &MediaDownloaderDialog::updateState);
     connect(m_url, &QLineEdit::returnPressed, this, &MediaDownloaderDialog::startDownload);
     connect(m_directory, &QLineEdit::textChanged, this, &MediaDownloaderDialog::updateState);
+    connect(m_wholePlaylist, &QCheckBox::toggled, this, &MediaDownloaderDialog::updateState);
+    connect(m_downloader, &MediaDownloader::playlistResolved, this,
+            [this](const QList<MediaDownloader::PlaylistEntry> &entries, const QString &, const QString &error) {
+                if (!m_resolving)
+                    return;
+                m_resolving = false;
+                setBusy(false);
+                if (entries.isEmpty()) {
+                    setStatus(error, true);
+                    return;
+                }
+                QStringList urls;
+                QStringList titles;
+                for (const MediaDownloader::PlaylistEntry &entry : entries) {
+                    urls << entry.url;
+                    titles << entry.title;
+                }
+                Q_EMIT tracksStreamRequested(urls, titles, MediaDownloader::streamFormat(format()));
+                accept();
+            });
     connect(browse, &QPushButton::clicked, this, [this] {
         const QString dir = QFileDialog::getExistingDirectory(this, tr("Save Downloads To"), directory());
         if (!dir.isEmpty())
@@ -186,7 +211,7 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
                     titles << (track.artist.isEmpty() ? track.title : track.artist + QStringLiteral(" - ") + track.title);
                 }
                 Q_UNUSED(collection);
-                Q_EMIT tracksStreamRequested(urls, titles);
+                Q_EMIT tracksStreamRequested(urls, titles, MediaDownloader::streamFormat(MediaDownloader::Format::AudioMp3));
                 accept();
             });
     updateState();
@@ -203,6 +228,11 @@ QString MediaDownloaderDialog::defaultDirectory()
             return dir;
     }
     return QDir::homePath();
+}
+
+bool MediaDownloaderDialog::isWholePlaylist() const
+{
+    return MediaDownloader::isPlaylistUrl(url()) && m_wholePlaylist->isChecked();
 }
 
 QString MediaDownloaderDialog::url() const
@@ -241,10 +271,25 @@ void MediaDownloaderDialog::updateState()
                         : type == QLatin1String("playlist") ? tr("Spotify playlist: every song is saved as an MP3")
                         : type == QLatin1String("artist")   ? tr("Spotify artist: their top songs are saved as MP3s")
                                                             : tr("Spotify link: the song is found on YouTube and saved as an MP3"));
+    } else if (MediaDownloader::isPlaylistUrl(link)) {
+        m_site->setText(MediaDownloader::isPlaylistOnlyUrl(link) ? tr("YouTube playlist")
+                                                                 : tr("YouTube video in a playlist"));
     } else if (!site.isEmpty())
         m_site->setText(tr("%1 link").arg(site));
     else
         m_site->setText(tr("Other site: yt-dlp will try it"));
+
+    // A playlist link: the whole playlist, or (for a video in one) just the
+    // video, as first offered.
+    const bool playlist = MediaDownloader::isPlaylistUrl(link);
+    m_wholePlaylist->setVisible(playlist);
+    if (playlist && link != m_playlistLink) {
+        m_playlistLink = link;
+        const QSignalBlocker blocker(m_wholePlaylist);
+        m_wholePlaylist->setChecked(MediaDownloader::isPlaylistOnlyUrl(link));
+    }
+    m_downloadButton->setText(isWholePlaylist() ? tr("Download Playlist") : tr("Download"));
+    m_streamButton->setText(isWholePlaylist() ? tr("Stream Playlist (No Download)") : tr("Direct Stream (No Download)"));
 
     // Spotify has songs only: the format is MP3 while such a link is entered.
     const int audio = m_format->findData(int(MediaDownloader::Format::AudioMp3));
@@ -276,6 +321,7 @@ void MediaDownloaderDialog::setStatus(const QString &text, bool error)
 void MediaDownloaderDialog::setBusy(bool busy)
 {
     m_url->setEnabled(!busy);
+    m_wholePlaylist->setEnabled(!busy);
     m_format->setEnabled(!busy && !isSpotify());
     m_directory->setEnabled(!busy);
     m_progress->setVisible(busy || m_progress->value() > 0);
@@ -301,7 +347,9 @@ void MediaDownloaderDialog::startDownload()
 
     m_progress->setValue(0);
     m_progress->setVisible(true);
-    if (!m_downloader->start(link, format(), directory())) {
+    const bool started = isWholePlaylist() ? m_downloader->startPlaylist(link, format(), directory())
+                                           : m_downloader->start(link, format(), directory());
+    if (!started) {
         setStatus(tr("Could not start yt-dlp."), true);
         return;
     }
@@ -319,6 +367,17 @@ void MediaDownloaderDialog::streamDirectly()
         setBusy(true);
         setStatus(tr("Reading the Spotify link..."));
         m_downloader->resolveSpotify(link);
+        return;
+    }
+    if (isWholePlaylist()) {
+        // Each video becomes a playlist entry, titled, which can be downloaded on its own.
+        if (!m_downloader->resolvePlaylist(link)) {
+            setStatus(tr("Could not start yt-dlp."), true);
+            return;
+        }
+        m_resolving = true;
+        setBusy(true);
+        setStatus(tr("Reading the playlist..."));
         return;
     }
     Q_EMIT streamRequested(link, MediaDownloader::streamFormat(format()));

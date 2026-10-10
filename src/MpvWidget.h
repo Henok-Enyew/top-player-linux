@@ -1,27 +1,56 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QHash>
-#include <QOpenGLWidget>
+#include <QImage>
 #include <QSet>
 #include <QSize>
 #include <QStringList>
 #include <QTimer>
 #include <QVariant>
+#include <QWidget>
 
 #include <memory>
+#include <optional>
 
+class MpvGlSurface;
+class QOpenGLWidget;
 class QTemporaryDir;
+class QThread;
 struct mpv_handle;
 struct mpv_render_context;
 
-// An OpenGL surface that renders video through libmpv's render API.
-class MpvWidget : public QOpenGLWidget
+// The video surface: plays media through libmpv and draws the picture with
+// libmpv's render API. The picture is drawn with OpenGL by a child surface
+// that fills this widget, or, in the software (compatibility) video output,
+// by the CPU into an image this widget paints. Widgets stacked over the video
+// (lyrics, the OSD, ...) are children of this widget.
+class MpvWidget : public QWidget
 {
     Q_OBJECT
 
 public:
+    enum class VideoOutput {
+        OpenGL,   // GPU rendering, hardware decoding: the default
+        Software, // drawn by the CPU into a plain widget; for systems where
+                  // OpenGL video stays black or the window stops updating
+    };
+
     explicit MpvWidget(QWidget *parent = nullptr);
     ~MpvWidget() override;
+
+    // The video output new players use: --video-output, else
+    // $TOPPLAYER_VIDEO_OUTPUT ("opengl" or "software"), else the setting.
+    static VideoOutput configuredVideoOutput();
+    // The saved setting, used from the next start on.
+    static void saveVideoOutput(VideoOutput output);
+    // Overrides the setting for this run (the --video-output option);
+    // nullopt goes back to the setting.
+    static void overrideVideoOutput(std::optional<VideoOutput> output);
+    static std::optional<VideoOutput> parseVideoOutput(const QString &name);
+    VideoOutput videoOutput() const { return m_output; }
+    // The last picture drawn, at its rendered size (for tests and screenshots).
+    QImage grabFrame();
 
     // `subtitles` are added once the file has loaded.
     void loadFile(const QString &pathOrUrl, const QStringList &subtitles = {});
@@ -93,13 +122,18 @@ public:
     void setMpvProperty(const QString &name, const QString &value);
 
     // The OpenGL renderer the video is drawn with, e.g. "Mesa Intel(R) UHD
-    // Graphics 620 (KBL GT2)"; empty until the widget is first shown.
+    // Graphics 620 (KBL GT2)"; empty until the widget is first shown, and
+    // with the software video output.
     QString glRenderer() const { return m_glRenderer; }
 
     // Tracks of `type` ("video", "audio" or "sub") from mpv's track-list.
     QList<QVariantMap> tracks(const QString &type) const;
     // Human-readable track name, e.g. "#2: Commentary [jpn] (aac)".
     static QString trackLabel(const QVariantMap &track);
+
+    // The codec in an mpv log message saying no decoder could be opened for
+    // it (prefix "vd"), else empty.
+    static QString missingDecoderCodec(const QString &prefix, const QString &text);
 
     static bool isSubtitleFile(const QString &path);
     // A QFileDialog name filter matching subtitle files.
@@ -127,10 +161,17 @@ Q_SIGNALS:
     // Not emitted for audio files, whose cover art or visualization is no
     // reason to resize the window.
     void videoSizeKnown(const QSize &size);
+    // The OpenGL picture keeps failing to reach the screen while the window
+    // is in front (the video stays black, the window only updates when the
+    // pointer moves). The software video output avoids it. Emitted once.
+    void renderStalled();
+    // The video of the file can't be shown, e.g. its codec is missing from
+    // the system's FFmpeg. `codec` is mpv's codec name, if known.
+    void videoDecodeFailed(const QString &codec, const QString &message);
 
 protected:
-    void initializeGL() override;
-    void paintGL() override;
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private Q_SLOTS:
     void processMpvEvents();
@@ -138,6 +179,22 @@ private Q_SLOTS:
     void onFrameSwapped();
 
 private:
+    friend class MpvGlSurface;
+    // OpenGL: called by the surface.
+    void initializeGl();
+    void paintGl();
+    // Software: creates the render context and its thread.
+    void initializeSoftware();
+    // Software: renders a frame on the render thread, then paints it.
+    void requestSoftwareFrame();
+    void onSoftwareFrame(const QImage &frame);
+    // Commands deferred until the render context existed.
+    void runPendingLoads();
+    // Counts a frame that took `ms` to reach the screen (OpenGL).
+    void noteFrameLatency(qint64 ms);
+    bool windowInFront() const;
+    void repaintVideo();
+
     static void onMpvWakeup(void *ctx);
     static void onMpvRenderUpdate(void *ctx);
     struct QueuedCommand {
@@ -169,6 +226,23 @@ private:
 
     mpv_handle *m_mpv = nullptr;
     mpv_render_context *m_renderCtx = nullptr;
+    VideoOutput m_output = VideoOutput::OpenGL;
+    MpvGlSurface *m_surface = nullptr;
+    // Software output: the render thread, an object living in it to queue
+    // work on, the last frame, and whether a frame is being or should be drawn.
+    QThread *m_renderThread = nullptr;
+    QObject *m_renderWorker = nullptr;
+    QImage m_frame;
+    bool m_frameBusy = false;
+    bool m_frameDirty = false;
+    // OpenGL: when a frame was asked for that hasn't reached the screen yet,
+    // slow frames counted, and whether renderStalled() went out.
+    QElapsedTimer m_frameRequested;
+    QTimer *m_stallTimer = nullptr;
+    int m_slowFrames = 0;
+    bool m_stallReported = false;
+    // Codecs a decode failure was reported for.
+    QSet<QString> m_reportedCodecs;
     // Files requested before the GL context existed; loading them earlier
     // would make mpv's video output fail to initialize.
     // Commands that start playback, deferred until the render context exists.

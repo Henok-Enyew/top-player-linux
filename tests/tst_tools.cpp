@@ -6,6 +6,9 @@
 #include "ResumeManager.h"
 #include "ControlBar.h"
 #include "MainWindow.h"
+#include "PlaylistDrawer.h"
+#include "PlaylistController.h"
+#include "DownloadQueue.h"
 #include "MediaCutter.h"
 #include "MediaCutterDialog.h"
 #include "MediaDownloader.h"
@@ -33,6 +36,8 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
+#include <QMenu>
 
 #include <clocale>
 #include <cmath>
@@ -121,6 +126,34 @@ const QByteArray kFakeSpotifyYtDlp =
     "cp \"$FAKE_SOURCE\" \"$dir/$name\"\n"
     "echo \"$dir/$name\"\n"
     "if [ $strict = yes ]; then exit 101; fi\n";
+
+// Stand-in for yt-dlp with a YouTube playlist: appends its arguments to
+// $FAKE_LOG; with --dump-single-json prints the playlist (one deleted video,
+// one flat entry with only an id), else saves two videos into a folder named
+// after it, printing yt-dlp's item lines.
+const QByteArray kFakePlaylistYtDlp =
+    "printf '%s\\n' \"$@\" >> \"$FAKE_LOG\"\n"
+    "echo '----' >> \"$FAKE_LOG\"\n"
+    "dir=\"\"; prev=\"\"; json=no\n"
+    "for a in \"$@\"; do\n"
+    "  if [ \"$prev\" = \"-P\" ]; then dir=\"$a\"; fi\n"
+    "  if [ \"$a\" = \"--dump-single-json\" ]; then json=yes; fi\n"
+    "  prev=\"$a\"\n"
+    "done\n"
+    "if [ $json = yes ]; then\n"
+    "  echo '{\"_type\":\"playlist\",\"title\":\"Road Trip\",\"entries\":["
+    "{\"id\":\"aaa111\",\"title\":\"First Song\",\"duration\":61,\"url\":\"https://www.youtube.com/watch?v=aaa111\",\"ie_key\":\"Youtube\"},"
+    "{\"id\":\"bbb222\",\"title\":\"[Deleted video]\",\"url\":\"https://www.youtube.com/watch?v=bbb222\"},"
+    "{\"id\":\"ccc333\",\"title\":\"Third Song\",\"ie_key\":\"Youtube\",\"url\":\"ccc333\"}]}'\n"
+    "  exit 0\n"
+    "fi\n"
+    "mkdir -p \"$dir/Road Trip\"\n"
+    "for i in 1 2; do\n"
+    "  echo \"[download] Downloading item $i of 2\" >&2\n"
+    "  echo \"[download]  50.0% of   1.00MiB at    1.00MiB/s ETA 00:01\" >&2\n"
+    "  cp \"$FAKE_SOURCE\" \"$dir/Road Trip/00$i - Song $i [id$i].mp4\"\n"
+    "  echo \"$dir/Road Trip/00$i - Song $i [id$i].mp4\"\n"
+    "done\n";
 
 // Serves Spotify-like pages: `pages` maps a path to its HTML.
 class FakeSpotify : public QObject
@@ -220,6 +253,9 @@ private Q_SLOTS:
     void spotifyDownloadsAlbum();
     void spotifyDialog();
     void spotifyStream();
+    void playlistLinks();
+    void youtubePlaylistDialog();
+    void downloadPlaylistEntries();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -236,6 +272,7 @@ private:
     QString m_clip;    // 60 s, video + audio
     QString m_fakeBin; // stand-in yt-dlp
     QString m_spotifyBin; // stand-in yt-dlp searching YouTube
+    QString m_playlistBin; // stand-in yt-dlp with a YouTube playlist
     QString m_slowBin; // stand-in slow ffmpeg
     QString m_emptyBin;
     QByteArray m_path; // the real $PATH
@@ -264,6 +301,9 @@ void ToolsTest::initTestCase()
     m_spotifyBin = m_dir.filePath(QStringLiteral("spotify-bin"));
     QVERIFY(QDir().mkpath(m_spotifyBin));
     QVERIFY(writeScript(m_spotifyBin + QStringLiteral("/yt-dlp"), kFakeSpotifyYtDlp));
+    m_playlistBin = m_dir.filePath(QStringLiteral("playlist-bin"));
+    QVERIFY(QDir().mkpath(m_playlistBin));
+    QVERIFY(writeScript(m_playlistBin + QStringLiteral("/yt-dlp"), kFakePlaylistYtDlp));
     QVERIFY(writeScript(m_slowBin + QStringLiteral("/ffmpeg"), kSlowFfmpeg));
     qputenv("FAKE_LOG", m_dir.filePath(QStringLiteral("yt-dlp-args.txt")).toLocal8Bit());
     qputenv("FAKE_SOURCE", m_clip.toLocal8Bit());
@@ -987,6 +1027,176 @@ void ToolsTest::spotifyStream()
     QCOMPARE(titles.first(), QStringLiteral("Neon Coast - Song One"));
     QTRY_VERIFY(!dialog->isVisible());
     delete dialog;
+}
+
+void ToolsTest::playlistLinks()
+{
+    // What a playlist entry downloads from.
+    QCOMPARE(MediaDownloader::downloadSource(QStringLiteral("ytdl://ytsearch1:Neon Coast - Song One")),
+             QStringLiteral("ytsearch1:Neon Coast - Song One"));
+    QCOMPARE(MediaDownloader::downloadSource(QStringLiteral("https://www.youtube.com/watch?v=abc123")),
+             QStringLiteral("https://www.youtube.com/watch?v=abc123"));
+    QVERIFY(MediaDownloader::downloadSource(QStringLiteral("/home/me/Videos/a.mkv")).isEmpty());
+    QVERIFY(MediaDownloader::downloadSource(QStringLiteral("file:///home/me/a.mkv")).isEmpty());
+
+    // YouTube playlists, alone or with a video picked.
+    QVERIFY(MediaDownloader::isPlaylistUrl(QStringLiteral("https://www.youtube.com/playlist?list=PL123")));
+    QVERIFY(MediaDownloader::isPlaylistOnlyUrl(QStringLiteral("youtube.com/playlist?list=PL123")));
+    QVERIFY(MediaDownloader::isPlaylistUrl(QStringLiteral("https://www.youtube.com/watch?v=abc&list=PL123")));
+    QVERIFY(!MediaDownloader::isPlaylistOnlyUrl(QStringLiteral("https://www.youtube.com/watch?v=abc&list=PL123")));
+    QVERIFY(!MediaDownloader::isPlaylistUrl(QStringLiteral("https://www.youtube.com/watch?v=abc")));
+    QVERIFY(!MediaDownloader::isPlaylistUrl(QStringLiteral("https://example.com/watch?list=PL123")));
+
+    // yt-dlp's flat playlist: deleted videos left out, bare ids made into links.
+    const QByteArray json = R"({"title":"Road Trip","entries":[
+        {"id":"aaa111","title":"First Song","duration":61,"url":"https://www.youtube.com/watch?v=aaa111","ie_key":"Youtube"},
+        {"id":"bbb222","title":"[Deleted video]","url":"https://www.youtube.com/watch?v=bbb222"},
+        {"id":"ccc333","title":"Third Song","ie_key":"Youtube","url":"ccc333"}]})";
+    QString title;
+    const QList<MediaDownloader::PlaylistEntry> entries = MediaDownloader::parsePlaylistJson(json, &title);
+    QCOMPARE(title, QStringLiteral("Road Trip"));
+    QCOMPARE(entries.size(), 2);
+    QCOMPARE(entries[0].title, QStringLiteral("First Song"));
+    QCOMPARE(entries[0].duration, 61.0);
+    QCOMPARE(entries[1].url, QStringLiteral("https://www.youtube.com/watch?v=ccc333"));
+    QVERIFY(MediaDownloader::parsePlaylistJson("not json").isEmpty());
+
+    // A whole playlist is saved into a folder named after it, in order.
+    const QStringList args = MediaDownloader::playlistArguments(QStringLiteral("https://www.youtube.com/playlist?list=PL123"),
+                                                                MediaDownloader::Format::AudioMp3, QStringLiteral("/dl"));
+    QVERIFY(args.contains(QStringLiteral("--yes-playlist")));
+    QVERIFY(args.contains(QStringLiteral("-x")));
+    QVERIFY(args.at(args.indexOf(QStringLiteral("-o")) + 1).contains(QLatin1String("playlist_index")));
+    QCOMPARE(args.last(), QStringLiteral("https://www.youtube.com/playlist?list=PL123"));
+    // A single entry can be named after its title.
+    const QStringList named = MediaDownloader::arguments(QStringLiteral("https://youtu.be/x"), MediaDownloader::Format::Best,
+                                                         QStringLiteral("/dl"), QStringLiteral("AC/DC - 100% Live"));
+    QCOMPARE(named.at(named.indexOf(QStringLiteral("-o")) + 1), QStringLiteral("AC-DC - 100%% Live.%(ext)s"));
+}
+
+void ToolsTest::youtubePlaylistDialog()
+{
+    prependPath(m_playlistBin);
+    QFile::remove(QString::fromLocal8Bit(qgetenv("FAKE_LOG")));
+    const QString downloads = m_dir.filePath(QStringLiteral("playlist-downloads"));
+    auto *dialog = new MediaDownloaderDialog(m_window);
+    dialog->show();
+    auto *url = dialog->findChild<QLineEdit *>(QStringLiteral("DownloaderUrl"));
+    auto *whole = dialog->findChild<QCheckBox *>(QStringLiteral("DownloaderWholePlaylist"));
+    QVERIFY(whole);
+    // A video picked from a playlist: just that video unless asked.
+    url->setText(QStringLiteral("https://www.youtube.com/watch?v=abc&list=PL123"));
+    QVERIFY(whole->isVisibleTo(dialog));
+    QVERIFY(!whole->isChecked());
+    url->setText(QStringLiteral("https://youtu.be/abc"));
+    QVERIFY(!whole->isVisibleTo(dialog));
+    // The playlist itself: every video.
+    url->setText(QStringLiteral("https://www.youtube.com/playlist?list=PL123"));
+    QVERIFY(whole->isVisibleTo(dialog));
+    QVERIFY(whole->isChecked());
+    QVERIFY(dialog->isWholePlaylist());
+
+    // Streaming: each video becomes a titled entry, in the chosen format.
+    auto *format = dialog->findChild<QComboBox *>(QStringLiteral("DownloaderFormat"));
+    format->setCurrentIndex(format->findData(int(MediaDownloader::Format::Max720)));
+    QSignalSpy streams(dialog, &MediaDownloaderDialog::tracksStreamRequested);
+    dialog->streamDirectly();
+    QTRY_COMPARE_WITH_TIMEOUT(streams.size(), 1, 10000);
+    QCOMPARE(streams.first().at(0).toStringList(),
+             QStringList({QStringLiteral("https://www.youtube.com/watch?v=aaa111"), QStringLiteral("https://www.youtube.com/watch?v=ccc333")}));
+    QCOMPARE(streams.first().at(1).toStringList(), QStringList({QStringLiteral("First Song"), QStringLiteral("Third Song")}));
+    QCOMPARE(streams.first().at(2).toString(), MediaDownloader::streamFormat(MediaDownloader::Format::Max720));
+    QTRY_VERIFY(!dialog->isVisible());
+    delete dialog;
+
+    // Downloading: every video, into the playlist's folder.
+    dialog = new MediaDownloaderDialog(m_window);
+    dialog->show();
+    dialog->findChild<QLineEdit *>(QStringLiteral("DownloaderUrl"))->setText(QStringLiteral("https://www.youtube.com/playlist?list=PL123"));
+    dialog->findChild<QLineEdit *>(QStringLiteral("DownloaderDirectory"))->setText(downloads);
+    QCOMPARE(dialog->findChild<QPushButton *>(QStringLiteral("DownloaderDownloadButton"))->text(), QStringLiteral("Download Playlist"));
+    QSignalSpy many(dialog, &MediaDownloaderDialog::downloadedMany);
+    dialog->startDownload();
+    QTRY_COMPARE_WITH_TIMEOUT(many.size(), 1, 10000);
+    const QStringList files = many.first().at(0).toStringList();
+    QCOMPARE(files, QStringList({downloads + QStringLiteral("/Road Trip/001 - Song 1 [id1].mp4"),
+                                 downloads + QStringLiteral("/Road Trip/002 - Song 2 [id2].mp4")}));
+    QVERIFY(QFileInfo::exists(files.last()));
+    QFile log(QString::fromLocal8Bit(qgetenv("FAKE_LOG")));
+    QVERIFY(log.open(QIODevice::ReadOnly));
+    QVERIFY(QString::fromUtf8(log.readAll()).contains(QLatin1String("--yes-playlist")));
+    QTRY_VERIFY(!dialog->isVisible());
+    delete dialog;
+}
+
+void ToolsTest::downloadPlaylistEntries()
+{
+    prependPath(m_fakeBin);
+    const QString downloads = m_dir.filePath(QStringLiteral("entry-downloads"));
+    DownloadQueue *queue = m_window->playlist()->downloads();
+    queue->setDirectory(downloads);
+    // A streamed video, a Spotify song found on YouTube, and a local file;
+    // queued without playing.
+    const QString video = QStringLiteral("https://www.youtube.com/watch?v=abc123");
+    const QString song = QStringLiteral("ytdl://ytsearch1:Neon Coast - Song One");
+    m_mpv->restorePlaylist({video, song, m_clip}, -1);
+    auto *view = m_window->findChild<PlaylistView *>();
+    auto *drawer = m_window->findChild<PlaylistDrawer *>();
+    QTRY_COMPARE(view->count(), 3);
+    constexpr int downloadRole = Qt::UserRole + 4;
+    constexpr int downloadableRole = Qt::UserRole + 5;
+    QVERIFY(view->item(0)->data(downloadableRole).toBool());
+    QVERIFY(view->item(1)->data(downloadableRole).toBool());
+    QVERIFY(!view->item(2)->data(downloadableRole).toBool());
+
+    // The download button of an online entry opens the formats.
+    m_window->setPlaylistVisible(true);
+    QTRY_VERIFY(view->isVisible());
+    QTRY_COMPARE(drawer->width(), drawer->preferredWidth());
+    QSignalSpy buttons(view, &PlaylistView::downloadButtonClicked);
+    QStringList offered;
+    QTimer::singleShot(300, this, [&offered] {
+        if (auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
+            for (QAction *action : menu->actions()) {
+                if (!action->isSeparator())
+                    offered << action->text();
+            }
+            menu->close();
+        }
+    });
+    const QRect row = view->visualItemRect(view->item(0));
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(row.right() - row.height() / 2 - 2, row.center().y()));
+    QTRY_COMPARE(buttons.size(), 1);
+    QTRY_COMPARE(offered.size(), 4);
+    QVERIFY(offered.last().contains(QLatin1String("MP3")));
+    // The rest of the row still selects.
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(row.left() + 20, row.center().y()));
+    QCOMPARE(buttons.size(), 1);
+    QVERIFY(view->item(0)->isSelected());
+
+    // Downloading them all: the local file is skipped, the others are saved
+    // one after another and show their state.
+    QSignalSpy done(queue, &DownloadQueue::finished);
+    Q_EMIT drawer->downloadRequested({0, 1, 2}, MediaDownloader::Format::Max720);
+    QCOMPARE(queue->pending(), 2);
+    QCOMPARE(view->item(1)->data(downloadRole).toString(), QStringLiteral("Queued"));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 15000);
+    QVERIFY(done.at(0).at(1).toBool());
+    QVERIFY(done.at(1).at(1).toBool());
+    QCOMPARE(view->item(0)->data(downloadRole).toString(), QStringLiteral("Saved"));
+    QCOMPARE(view->item(1)->data(downloadRole).toString(), QStringLiteral("Saved"));
+    QVERIFY(view->item(2)->data(downloadRole).toString().isEmpty());
+    QVERIFY(QFileInfo::exists(downloads + QStringLiteral("/Test Video [abc123].mp4")));
+    // The song was searched for on YouTube, in the format asked for.
+    QFile log(QString::fromLocal8Bit(qgetenv("FAKE_LOG")));
+    QVERIFY(log.open(QIODevice::ReadOnly));
+    const QStringList args = QString::fromUtf8(log.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    QCOMPARE(args.last(), QStringLiteral("ytsearch1:Neon Coast - Song One"));
+    QVERIFY(args.contains(MediaDownloader::streamFormat(MediaDownloader::Format::Max720)));
+    // The state survives the list being rebuilt.
+    m_mpv->command({QStringLiteral("playlist-move"), QStringLiteral("2"), QStringLiteral("0")});
+    QTRY_COMPARE(view->item(1)->data(downloadRole).toString(), QStringLiteral("Saved"));
+    QVERIFY(m_window->findChild<OsdWidget *>()->text().startsWith(QLatin1String("Downloaded:")));
 }
 
 int main(int argc, char *argv[])

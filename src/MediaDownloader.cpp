@@ -10,8 +10,10 @@
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QUrlQuery>
 
 #include <algorithm>
+#include <utility>
 
 namespace {
 
@@ -147,9 +149,8 @@ QString metadataLiteral(const QString &value)
     return literal + QStringLiteral(" |");
 }
 
-QString fileNameFor(const MediaDownloader::SpotifyTrack &track)
+QString fileNameFor(QString name)
 {
-    QString name = track.artist.isEmpty() ? track.title : track.artist + QStringLiteral(" - ") + track.title;
     static const QRegularExpression unsafe(QStringLiteral(R"([/\\\x00-\x1f])"));
     name.replace(unsafe, QStringLiteral("-"));
     name = name.simplified().left(150);
@@ -157,6 +158,11 @@ QString fileNameFor(const MediaDownloader::SpotifyTrack &track)
         return QStringLiteral("%(title).150B [%(id)s].%(ext)s");
     name.replace(QLatin1Char('%'), QStringLiteral("%%"));
     return name + QStringLiteral(".%(ext)s");
+}
+
+QString fileNameFor(const MediaDownloader::SpotifyTrack &track)
+{
+    return fileNameFor(track.artist.isEmpty() ? track.title : track.artist + QStringLiteral(" - ") + track.title);
 }
 
 QString formatSelector(MediaDownloader::Format format)
@@ -176,6 +182,17 @@ QString formatSelector(MediaDownloader::Format format)
     return QStringLiteral("bv*+ba/b");
 }
 
+// The format arguments shared by single videos and playlists.
+QStringList formatArguments(MediaDownloader::Format format)
+{
+    if (format == MediaDownloader::Format::AudioMp3) {
+        return {QStringLiteral("-f"), formatSelector(format), QStringLiteral("-x"),
+                QStringLiteral("--audio-format"), QStringLiteral("mp3"),
+                QStringLiteral("--audio-quality"), QStringLiteral("0")};
+    }
+    return {QStringLiteral("-f"), formatSelector(format), QStringLiteral("--merge-output-format"), QStringLiteral("mp4")};
+}
+
 } // namespace
 
 MediaDownloader::MediaDownloader(QObject *parent)
@@ -184,6 +201,8 @@ MediaDownloader::MediaDownloader(QObject *parent)
 {
     qRegisterMetaType<MediaDownloader::SpotifyTrack>();
     qRegisterMetaType<QList<MediaDownloader::SpotifyTrack>>();
+    qRegisterMetaType<MediaDownloader::PlaylistEntry>();
+    qRegisterMetaType<QList<MediaDownloader::PlaylistEntry>>();
 }
 
 MediaDownloader::~MediaDownloader()
@@ -196,26 +215,36 @@ QString MediaDownloader::executable()
     return QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
 }
 
-QStringList MediaDownloader::arguments(const QString &url, Format format, const QString &directory)
+QStringList MediaDownloader::arguments(const QString &url, Format format, const QString &directory, const QString &name)
 {
     QStringList args{
         // One progress line per update, even though --print makes yt-dlp quiet.
         QStringLiteral("--newline"), QStringLiteral("--progress"),
         QStringLiteral("--no-playlist"), QStringLiteral("--no-mtime"),
         QStringLiteral("-P"), directory,
-        QStringLiteral("-o"), QStringLiteral("%(title).150B [%(id)s].%(ext)s"),
+        QStringLiteral("-o"), name.trimmed().isEmpty() ? QStringLiteral("%(title).150B [%(id)s].%(ext)s") : fileNameFor(name),
         // The final file, after merging or audio extraction.
         QStringLiteral("--print"), QStringLiteral("after_move:filepath"),
     };
-    if (format == Format::AudioMp3) {
-        args << QStringLiteral("-f") << formatSelector(format) << QStringLiteral("-x")
-             << QStringLiteral("--audio-format") << QStringLiteral("mp3")
-             << QStringLiteral("--audio-quality") << QStringLiteral("0");
-    } else {
-        args << QStringLiteral("-f") << formatSelector(format)
-             << QStringLiteral("--merge-output-format") << QStringLiteral("mp4");
-    }
+    args << formatArguments(format);
     // "--" so that a URL can never be read as an option.
+    args << QStringLiteral("--") << url;
+    return args;
+}
+
+QStringList MediaDownloader::playlistArguments(const QString &url, Format format, const QString &directory)
+{
+    QStringList args{
+        QStringLiteral("--newline"), QStringLiteral("--progress"),
+        QStringLiteral("--yes-playlist"), QStringLiteral("--no-mtime"),
+        // An unavailable video doesn't stop the rest.
+        QStringLiteral("--ignore-errors"),
+        QStringLiteral("-P"), directory,
+        QStringLiteral("-o"),
+        QStringLiteral("%(playlist_title,playlist_id|Playlist).100B/%(playlist_index|0)03d - %(title).150B [%(id)s].%(ext)s"),
+        QStringLiteral("--print"), QStringLiteral("after_move:filepath"),
+    };
+    args << formatArguments(format);
     args << QStringLiteral("--") << url;
     return args;
 }
@@ -419,6 +448,173 @@ QString MediaDownloader::spotifyStreamUrl(const SpotifyTrack &track)
     return QStringLiteral("ytdl://ytsearch1:") + spotifyQuery(track);
 }
 
+QString MediaDownloader::downloadSource(const QString &entry)
+{
+    const QString trimmed = entry.trimmed();
+    if (trimmed.startsWith(QLatin1String("ytdl://"), Qt::CaseInsensitive))
+        return trimmed.mid(7);
+    const QUrl url(trimmed);
+    const QString scheme = url.scheme().toLower();
+    if ((scheme == QLatin1String("http") || scheme == QLatin1String("https")) && !url.host().isEmpty())
+        return trimmed;
+    return {};
+}
+
+bool MediaDownloader::isPlaylistUrl(const QString &text)
+{
+    const QString normalized = normalizeUrl(text);
+    if (platformName(normalized) != QLatin1String("YouTube"))
+        return false;
+    const QUrlQuery query{QUrl(normalized)};
+    return !query.queryItemValue(QStringLiteral("list")).isEmpty();
+}
+
+bool MediaDownloader::isPlaylistOnlyUrl(const QString &text)
+{
+    const QUrl url(normalizeUrl(text));
+    return isPlaylistUrl(text) && url.path() == QLatin1String("/playlist");
+}
+
+QList<MediaDownloader::PlaylistEntry> MediaDownloader::parsePlaylistJson(const QByteArray &json, QString *title)
+{
+    QList<PlaylistEntry> entries;
+    const QJsonObject root = QJsonDocument::fromJson(json).object();
+    if (root.isEmpty())
+        return entries;
+    const auto entryOf = [](const QJsonObject &item) {
+        PlaylistEntry entry;
+        entry.title = cleanText(item.value(QStringLiteral("title")).toString());
+        entry.duration = item.value(QStringLiteral("duration")).toDouble();
+        QString url = item.value(QStringLiteral("webpage_url")).toString();
+        if (url.isEmpty())
+            url = item.value(QStringLiteral("url")).toString();
+        const QString id = item.value(QStringLiteral("id")).toString();
+        const QString extractor = item.value(QStringLiteral("ie_key")).toString();
+        // Flat entries of some sites carry only the video's id.
+        if (!url.contains(QLatin1String("://")) && !id.isEmpty()
+            && (extractor.isEmpty() || extractor.compare(QLatin1String("Youtube"), Qt::CaseInsensitive) == 0))
+            url = QStringLiteral("https://www.youtube.com/watch?v=") + id;
+        entry.url = url;
+        return entry;
+    };
+    const QJsonValue list = root.value(QStringLiteral("entries"));
+    if (!list.isArray()) {
+        // A single video.
+        const PlaylistEntry entry = entryOf(root);
+        if (!entry.url.isEmpty())
+            entries.append(entry);
+        if (title)
+            *title = entry.title;
+        return entries;
+    }
+    if (title)
+        *title = cleanText(root.value(QStringLiteral("title")).toString());
+    for (const QJsonValue &value : list.toArray()) {
+        const PlaylistEntry entry = entryOf(value.toObject());
+        // Deleted and private videos come as "[Deleted video]" without a usable page.
+        if (entry.url.contains(QLatin1String("://")) && entry.title != QLatin1String("[Deleted video]")
+            && entry.title != QLatin1String("[Private video]"))
+            entries.append(entry);
+    }
+    return entries;
+}
+
+bool MediaDownloader::isResolving() const
+{
+    return !m_resolver.isNull();
+}
+
+bool MediaDownloader::resolvePlaylist(const QString &url)
+{
+    const QString program = executable();
+    if (program.isEmpty())
+        return false;
+    if (QProcess *old = m_resolver.data()) {
+        old->disconnect(this);
+        old->kill();
+        old->deleteLater();
+    }
+    auto *process = new QProcess(this);
+    m_resolver = process;
+    connect(process, &QProcess::finished, this, [this, process](int exitCode, QProcess::ExitStatus status) {
+        if (m_resolver != process)
+            return;
+        m_resolver = nullptr;
+        process->deleteLater();
+        QString title;
+        const QList<PlaylistEntry> entries = parsePlaylistJson(process->readAllStandardOutput(), &title);
+        if (!entries.isEmpty()) {
+            Q_EMIT playlistResolved(entries, title, {});
+            return;
+        }
+        QString error;
+        for (const QString &line : QString::fromUtf8(process->readAllStandardError()).split(QLatin1Char('\n'))) {
+            if (line.startsWith(QLatin1String("ERROR:")))
+                error = line.mid(6).trimmed();
+        }
+        if (error.isEmpty())
+            error = status == QProcess::NormalExit && exitCode == 0 ? tr("This playlist has no videos that can be played.")
+                                                                    : tr("yt-dlp couldn't read the playlist.");
+        Q_EMIT playlistResolved({}, {}, error);
+    });
+    connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart || m_resolver != process)
+            return;
+        m_resolver = nullptr;
+        process->deleteLater();
+        Q_EMIT playlistResolved({}, {}, tr("Could not start yt-dlp: %1").arg(process->errorString()));
+    });
+    process->start(program, {QStringLiteral("--flat-playlist"), QStringLiteral("--dump-single-json"),
+                             QStringLiteral("--no-warnings"), QStringLiteral("--yes-playlist"), QStringLiteral("--"), url});
+    return true;
+}
+
+bool MediaDownloader::startEntry(const QString &entry, const QString &title, Format format, const QString &directory)
+{
+    const QString source = downloadSource(entry);
+    if (source.isEmpty() || isRunning() || executable().isEmpty())
+        return false;
+    QDir().mkpath(directory);
+    m_files.clear();
+    m_failed.clear();
+    // A Spotify song streamed through a YouTube search: saved like Spotify downloads.
+    static const QRegularExpression search(QStringLiteral("^ytsearch\\d*:(.+)$"));
+    if (const QRegularExpressionMatch m = search.match(source); m.hasMatch() && format == Format::AudioMp3) {
+        SpotifyTrack track;
+        const QString name = title.isEmpty() ? m.captured(1) : title;
+        const qsizetype dash = name.indexOf(QStringLiteral(" - "));
+        track.artist = dash > 0 ? name.left(dash).trimmed() : QString();
+        track.title = dash > 0 ? name.mid(dash + 3).trimmed() : name.trimmed();
+        m_spotifyDownload = true;
+        m_directory = directory;
+        m_tracks = {track};
+        m_track = 0;
+        m_strict = false;
+        startSpotifyTrack();
+        return true;
+    }
+    if (isSpotifyUrl(source))
+        return start(source, format, directory);
+    return launch(arguments(source, format, directory, title));
+}
+
+bool MediaDownloader::startPlaylist(const QString &url, Format format, const QString &directory)
+{
+    if (isRunning() || executable().isEmpty())
+        return false;
+    QDir().mkpath(directory);
+    m_files.clear();
+    m_failed.clear();
+    m_playlistDownload = true;
+    m_item = 0;
+    m_items = 0;
+    if (!launch(playlistArguments(url, format, directory))) {
+        m_playlistDownload = false;
+        return false;
+    }
+    return true;
+}
+
 void MediaDownloader::resolveSpotify(const QString &url)
 {
     if (m_reply)
@@ -571,6 +767,7 @@ bool MediaDownloader::launch(const QStringList &args)
     m_stdout.clear();
     m_stderr.clear();
     m_path.clear();
+    m_paths.clear();
     m_errors.clear();
 
     auto *process = new QProcess(this);
@@ -586,6 +783,7 @@ bool MediaDownloader::launch(const QStringList &args)
         m_process = nullptr;
         m_spotify = false;
         m_spotifyDownload = false;
+        m_playlistDownload = false;
         process->deleteLater();
         Q_EMIT finished(false, {}, tr("Could not start yt-dlp: %1").arg(process->errorString()));
     });
@@ -613,7 +811,16 @@ void MediaDownloader::handleLine(const QString &line)
         // An album or playlist reports its progress as a whole.
         if (m_spotifyDownload && m_tracks.size() > 1)
             parsed->percent = (m_track + parsed->percent / 100.0) * 100.0 / m_tracks.size();
+        else if (m_playlistDownload && m_items > 0)
+            parsed->percent = (std::max(0, m_item - 1) + parsed->percent / 100.0) * 100.0 / m_items;
         Q_EMIT progress(*parsed);
+        return;
+    }
+    static const QRegularExpression item(QStringLiteral("^\\[download\\] Downloading (?:item|video) (\\d+) of (\\d+)"));
+    if (const QRegularExpressionMatch m = item.match(line); m.hasMatch()) {
+        m_item = m.captured(1).toInt();
+        m_items = m.captured(2).toInt();
+        Q_EMIT stageChanged(tr("Video %1 of %2").arg(m_item).arg(m_items));
         return;
     }
     if (line.startsWith(QLatin1String("ERROR:"))) {
@@ -627,6 +834,7 @@ void MediaDownloader::handleLine(const QString &line)
     } else if (!line.startsWith(QLatin1Char('[')) && QFileInfo(line).isAbsolute()) {
         // --print after_move:filepath
         m_path = line;
+        m_paths.append(line);
     }
 }
 
@@ -659,7 +867,19 @@ void MediaDownloader::onFinished(int exitCode, QProcess::ExitStatus status)
         startSpotifyTrack();
         return;
     }
-    if (status == QProcess::NormalExit && exitCode == 0 && saved) {
+    if (std::exchange(m_playlistDownload, false)) {
+        // Some videos of a playlist may be unavailable; the rest count.
+        QStringList files;
+        for (const QString &path : std::as_const(m_paths)) {
+            if (QFileInfo::exists(path) && !files.contains(path))
+                files.append(path);
+        }
+        if (status == QProcess::NormalExit && !files.isEmpty()) {
+            m_files = files;
+            Q_EMIT finished(true, files.first(), {});
+            return;
+        }
+    } else if (status == QProcess::NormalExit && exitCode == 0 && saved) {
         m_files = {m_path};
         Q_EMIT finished(true, m_path, {});
         return;
@@ -674,6 +894,14 @@ void MediaDownloader::cancel()
 {
     m_spotify = false;
     m_spotifyDownload = false;
+    m_playlistDownload = false;
+    if (QProcess *resolver = m_resolver.data()) {
+        m_resolver = nullptr;
+        resolver->disconnect(this);
+        resolver->kill();
+        resolver->waitForFinished(1000);
+        resolver->deleteLater();
+    }
     if (QNetworkReply *reply = m_reply.data()) {
         m_reply = nullptr;
         reply->abort();

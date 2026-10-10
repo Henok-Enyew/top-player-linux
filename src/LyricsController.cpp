@@ -42,6 +42,7 @@ LyricsController::LyricsController(MpvWidget *mpv, AudioController *audio, QWidg
                               "or get a ready-made prompt for an AI to write the LRC file."));
     connect(m_mpv, &MpvWidget::fileLoaded, this, &LyricsController::onFileLoaded);
     connect(m_view, &LyricsView::seekRequested, this, &LyricsController::seekTo);
+    connect(m_view, &LyricsView::backgroundChanged, this, &LyricsController::updateVideoBlur);
     connect(m_view, &LyricsView::message, this, [this](const QString &label, const QString &value) {
         Q_EMIT message(label, value);
     });
@@ -118,6 +119,23 @@ void LyricsController::refreshView()
     // Created right after the audio view, so it sits above it and below the
     // start screen and the OSD.
     m_view->show();
+}
+
+void LyricsController::updateVideoBlur()
+{
+    const LyricsStyle &style = m_view->lyricsStyle();
+    const bool overVideo = m_view->isVisible() && !m_mpv->isIdle() && !m_mpv->isAudioOnly();
+    // Up to a strong Gaussian blur; the scrim darkens on top.
+    const int sigma = overVideo ? qRound(style.videoBlur * 0.3) : 0;
+    if (sigma == m_videoBlur)
+        return;
+    const QString label = QStringLiteral("@lyricsblur");
+    if (m_videoBlur > 0)
+        m_mpv->command({QStringLiteral("vf"), QStringLiteral("remove"), label});
+    m_videoBlur = sigma;
+    if (sigma > 0)
+        m_mpv->command({QStringLiteral("vf"), QStringLiteral("add"),
+                        label + QStringLiteral(":lavfi=[gblur=sigma=%1]").arg(sigma)});
 }
 
 void LyricsController::setShown(bool shown)

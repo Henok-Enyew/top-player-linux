@@ -234,6 +234,16 @@ void EmptyStateTest::mediaFilesInFolder()
     QVERIFY(MediaFiles::isMediaFile(QStringLiteral("a.flac")));
     QVERIFY(!MediaFiles::isMediaFile(QStringLiteral("a.srt")));
     QVERIFY(MediaFiles::isPlaylistFile(QStringLiteral("a.m3u8")));
+    // The common formats, and the file dialog's patterns in both cases
+    // (GTK's file chooser matches them case-sensitively).
+    for (const char *name : {"a.mkv", "a.mp4", "a.webm", "a.avi", "a.mov", "a.m2ts", "a.mts", "a.wmv", "a.flv",
+                             "a.mpg", "a.vob", "a.ogv", "a.3gp", "a.mxf", "a.hevc", "a.mp3", "a.m4a", "a.opus",
+                             "a.wav", "a.ogg", "a.aac", "a.m4b"})
+        QVERIFY2(MediaFiles::isMediaFile(QString::fromLatin1(name)), name);
+    const QString filter = MediaFiles::mediaFileFilter();
+    QVERIFY(filter.contains(QStringLiteral("*.mkv")));
+    QVERIFY(filter.contains(QStringLiteral("*.MKV")));
+    QVERIFY(filter.contains(QStringLiteral("*.MP4")));
 }
 
 void EmptyStateTest::openFileButton()

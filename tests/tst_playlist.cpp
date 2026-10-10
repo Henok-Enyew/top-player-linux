@@ -91,6 +91,7 @@ private Q_SLOTS:
     void shiftOrder();
     void moveButtons();
     void playingEntryUpdatesInPlace();
+    void playingEntryScrollsIntoView();
     void filterKeepsPlaylist();
     void filteredMove();
     void removeMissingAndDuplicates();
@@ -347,6 +348,33 @@ void PlaylistTest::playingEntryUpdatesInPlace()
     QCOMPARE(m_view->item(0), first);
     QVERIFY(!first->font().bold());
     QCOMPARE(viewFiles(), m_expected);
+}
+
+void PlaylistTest::playingEntryScrollsIntoView()
+{
+    // A long queue in a short list: the next song is scrolled to when it starts.
+    QStringList files;
+    for (int i = 0; i < 12; ++i)
+        files.append(m_expected);
+    load(files);
+    m_window->setPlaylistVisible(true);
+    m_window->resize(640, 300);
+    QTRY_VERIFY(m_view->isVisible());
+    QTRY_COMPARE(m_drawer->width(), m_drawer->preferredWidth());
+    const auto rowVisible = [this](int row) {
+        return m_view->viewport()->rect().contains(m_view->visualItemRect(m_view->item(row)));
+    };
+    const int last = int(files.size()) - 1;
+    QTRY_VERIFY(!rowVisible(last));
+    // As playback moving on would: only playlist-pos changes.
+    m_mpv->command({QStringLiteral("playlist-play-index"), QString::number(last)});
+    QTRY_VERIFY(m_view->item(last)->font().bold());
+    QCOMPARE(m_drawer->playingRow(), last);
+    QTRY_VERIFY(rowVisible(last));
+    // Also after the window shrinks to the new video's size.
+    QTRY_COMPARE(m_window->height(), m_window->minimumHeight());
+    QTRY_VERIFY(rowVisible(last));
+    QVERIFY(!m_view->item(0)->font().bold());
 }
 
 void PlaylistTest::sortByName()

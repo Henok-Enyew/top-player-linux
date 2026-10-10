@@ -14,20 +14,38 @@
 namespace {
 
 const QStringList kVideoExtensions{
-    QStringLiteral("3g2"), QStringLiteral("3gp"), QStringLiteral("asf"), QStringLiteral("avi"),
-    QStringLiteral("divx"), QStringLiteral("f4v"), QStringLiteral("flv"), QStringLiteral("m2ts"),
-    QStringLiteral("m4v"), QStringLiteral("mkv"), QStringLiteral("mov"), QStringLiteral("mp4"),
-    QStringLiteral("mpeg"), QStringLiteral("mpg"), QStringLiteral("mts"), QStringLiteral("ogv"),
-    QStringLiteral("rm"), QStringLiteral("rmvb"), QStringLiteral("ts"), QStringLiteral("vob"),
-    QStringLiteral("webm"), QStringLiteral("wmv"),
+    QStringLiteral("264"), QStringLiteral("265"), QStringLiteral("3g2"), QStringLiteral("3gp"),
+    QStringLiteral("3gpp"), QStringLiteral("amv"), QStringLiteral("asf"), QStringLiteral("avc"),
+    QStringLiteral("avi"), QStringLiteral("avs"), QStringLiteral("bik"), QStringLiteral("divx"),
+    QStringLiteral("dv"), QStringLiteral("dvr-ms"), QStringLiteral("evo"), QStringLiteral("f4v"),
+    QStringLiteral("flv"), QStringLiteral("gifv"), QStringLiteral("h264"), QStringLiteral("h265"),
+    QStringLiteral("hevc"), QStringLiteral("ivf"), QStringLiteral("m1v"), QStringLiteral("m2p"),
+    QStringLiteral("m2t"), QStringLiteral("m2ts"), QStringLiteral("m2v"), QStringLiteral("m4v"),
+    QStringLiteral("mjpeg"), QStringLiteral("mjpg"), QStringLiteral("mk3d"), QStringLiteral("mkv"),
+    QStringLiteral("mov"), QStringLiteral("mp2v"), QStringLiteral("mp4"), QStringLiteral("mp4v"),
+    QStringLiteral("mpe"), QStringLiteral("mpeg"), QStringLiteral("mpg"), QStringLiteral("mpv"),
+    QStringLiteral("mts"), QStringLiteral("mxf"), QStringLiteral("nsv"), QStringLiteral("nut"),
+    QStringLiteral("ogm"), QStringLiteral("ogv"), QStringLiteral("ogx"), QStringLiteral("qt"),
+    QStringLiteral("rec"), QStringLiteral("rm"), QStringLiteral("rmvb"), QStringLiteral("rv"),
+    QStringLiteral("tod"), QStringLiteral("tp"), QStringLiteral("trp"), QStringLiteral("ts"),
+    QStringLiteral("vob"), QStringLiteral("vp8"), QStringLiteral("vp9"), QStringLiteral("webm"),
+    QStringLiteral("wm"), QStringLiteral("wmv"), QStringLiteral("wtv"), QStringLiteral("xvid"),
+    QStringLiteral("y4m"),
 };
 
 const QStringList kAudioExtensions{
-    QStringLiteral("aac"), QStringLiteral("ac3"), QStringLiteral("aif"), QStringLiteral("aiff"),
-    QStringLiteral("alac"), QStringLiteral("ape"), QStringLiteral("dts"), QStringLiteral("flac"),
-    QStringLiteral("m4a"), QStringLiteral("mka"), QStringLiteral("mp3"), QStringLiteral("mpc"),
-    QStringLiteral("oga"), QStringLiteral("ogg"), QStringLiteral("opus"), QStringLiteral("tta"),
-    QStringLiteral("wav"), QStringLiteral("wma"), QStringLiteral("wv"),
+    QStringLiteral("3ga"), QStringLiteral("aac"), QStringLiteral("ac3"), QStringLiteral("adts"),
+    QStringLiteral("aif"), QStringLiteral("aifc"), QStringLiteral("aiff"), QStringLiteral("alac"),
+    QStringLiteral("amr"), QStringLiteral("ape"), QStringLiteral("au"), QStringLiteral("awb"),
+    QStringLiteral("caf"), QStringLiteral("dff"), QStringLiteral("dsf"), QStringLiteral("dts"),
+    QStringLiteral("eac3"), QStringLiteral("flac"), QStringLiteral("it"), QStringLiteral("m4a"),
+    QStringLiteral("m4b"), QStringLiteral("m4r"), QStringLiteral("mka"), QStringLiteral("mod"),
+    QStringLiteral("mp1"), QStringLiteral("mp2"), QStringLiteral("mp3"), QStringLiteral("mpa"),
+    QStringLiteral("mpc"), QStringLiteral("oga"), QStringLiteral("ogg"), QStringLiteral("opus"),
+    QStringLiteral("ra"), QStringLiteral("s3m"), QStringLiteral("shn"), QStringLiteral("snd"),
+    QStringLiteral("spx"), QStringLiteral("thd"), QStringLiteral("tta"), QStringLiteral("voc"),
+    QStringLiteral("w64"), QStringLiteral("wav"), QStringLiteral("weba"), QStringLiteral("wma"),
+    QStringLiteral("wv"), QStringLiteral("xm"),
 };
 
 const QStringList kPlaylistExtensions{
@@ -36,9 +54,15 @@ const QStringList kPlaylistExtensions{
 
 QString patterns(const QStringList &extensions)
 {
+    // Upper case too: the desktop's file chooser (GTK, through the portal)
+    // matches patterns case-sensitively, which would hide "Movie.MKV".
     QStringList result;
     for (const QString &ext : extensions)
         result.append(QStringLiteral("*.") + ext);
+    for (const QString &ext : extensions) {
+        if (ext.toUpper() != ext)
+            result.append(QStringLiteral("*.") + ext.toUpper());
+    }
     return result.join(QLatin1Char(' '));
 }
 

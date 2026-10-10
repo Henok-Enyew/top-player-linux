@@ -302,6 +302,12 @@ LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
     , m_glow(new QCheckBox(tr("Glow behind current line"), this))
     , m_dim(new QSlider(Qt::Horizontal, this))
     , m_dimLabel(valueLabel(this))
+    , m_videoBlur(new QSlider(Qt::Horizontal, this))
+    , m_videoBlurLabel(valueLabel(this))
+    , m_blur(new QSlider(Qt::Horizontal, this))
+    , m_blurLabel(valueLabel(this))
+    , m_backdrop(new QSlider(Qt::Horizontal, this))
+    , m_backdropLabel(valueLabel(this))
 {
     setObjectName(QStringLiteral("LyricsStyleDialog"));
     setWindowTitle(tr("Lyrics Appearance"));
@@ -389,6 +395,25 @@ LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
     dimRow->addWidget(m_dim, 1);
     dimRow->addWidget(m_dimLabel);
     videoForm->addRow(tr("Darken video:"), dimRow);
+    const auto sliderRow = [this](QSlider *slider, QLabel *label, const char *name) {
+        slider->setObjectName(QString::fromLatin1(name));
+        slider->setRange(0, 100);
+        slider->setSingleStep(5);
+        slider->setPageStep(10);
+        auto *row = new QHBoxLayout;
+        row->addWidget(slider, 1);
+        row->addWidget(label);
+        return row;
+    };
+    videoForm->addRow(tr("Blur video:"), sliderRow(m_videoBlur, m_videoBlurLabel, "LyricsVideoBlurSlider"));
+    m_videoBlur->setToolTip(tr("Blurs the video behind the lyrics. Uses some CPU while the lyrics show."));
+
+    // Behind songs
+    auto *cover = new QGroupBox(tr("Behind songs (album cover)"), this);
+    auto *coverForm = new QFormLayout(cover);
+    coverForm->addRow(tr("Background blur:"), sliderRow(m_blur, m_blurLabel, "LyricsBlurSlider"));
+    coverForm->addRow(tr("Background image:"), sliderRow(m_backdrop, m_backdropLabel, "LyricsBackdropSlider"));
+    m_backdrop->setToolTip(tr("How strongly the cover shows behind the lyrics; 0% hides it."));
 
     auto *hint = new QLabel(tr("Tip: drag or scroll the lyrics to look ahead, click a timed line to play from it, "
                                "and Ctrl+scroll over them to resize."), this);
@@ -402,6 +427,7 @@ LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
     layout->addWidget(text);
     layout->addWidget(highlight);
     layout->addWidget(video);
+    layout->addWidget(cover);
     layout->addWidget(hint);
     layout->addWidget(buttons);
 
@@ -431,6 +457,11 @@ LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
     connect(m_bold, &QCheckBox::toggled, this, [this](bool on) { edit([on](LyricsStyle &s) { s.bold = on; }); });
     connect(m_glow, &QCheckBox::toggled, this, [this](bool on) { edit([on](LyricsStyle &s) { s.glow = on; }); });
     connect(m_dim, &QSlider::valueChanged, this, [this](int value) { edit([value](LyricsStyle &s) { s.dim = value; }); });
+    connect(m_videoBlur, &QSlider::valueChanged, this,
+            [this](int value) { edit([value](LyricsStyle &s) { s.videoBlur = value; }); });
+    connect(m_blur, &QSlider::valueChanged, this, [this](int value) { edit([value](LyricsStyle &s) { s.blur = value; }); });
+    connect(m_backdrop, &QSlider::valueChanged, this,
+            [this](int value) { edit([value](LyricsStyle &s) { s.backdrop = value; }); });
     connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, this,
             [this] { setLyricsStyle(LyricsStyle()); });
     connect(buttons, &QDialogButtonBox::accepted, this, [this] {
@@ -487,5 +518,11 @@ void LyricsStyleDialog::syncControls()
     m_glow->setChecked(m_style.glow);
     m_dim->setValue(m_style.dim);
     m_dimLabel->setText(QStringLiteral("%1%").arg(m_style.dim));
+    m_videoBlur->setValue(m_style.videoBlur);
+    m_videoBlurLabel->setText(m_style.videoBlur ? QStringLiteral("%1%").arg(m_style.videoBlur) : tr("Off"));
+    m_blur->setValue(m_style.blur);
+    m_blurLabel->setText(QStringLiteral("%1%").arg(m_style.blur));
+    m_backdrop->setValue(m_style.backdrop);
+    m_backdropLabel->setText(QStringLiteral("%1%").arg(m_style.backdrop));
     m_syncing = false;
 }

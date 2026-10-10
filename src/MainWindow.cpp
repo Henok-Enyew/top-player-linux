@@ -7,6 +7,7 @@
 #include "EmptyStateWidget.h"
 #include "LiveStreamDialog.h"
 #include "LyricsController.h"
+#include "LyricsView.h"
 #include "MediaCutterDialog.h"
 #include "MediaDownloaderDialog.h"
 #include "MediaFiles.h"
@@ -274,6 +275,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_emptyState, &EmptyStateWidget::urlsDropped, this, &MainWindow::openUrls);
     connect(m_mpv, &MpvWidget::fileStarted, m_emptyState, [this] { m_emptyState->setActive(false); });
     connect(m_mpv, &MpvWidget::fileFailed, this, &MainWindow::onFileFailed);
+    connect(m_mpv, &MpvWidget::renderStalled, this, &MainWindow::offerSoftwareVideo);
+    connect(m_mpv, &MpvWidget::videoDecodeFailed, this, &MainWindow::onVideoDecodeFailed);
     connect(m_controlBar, &ControlBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::pinToggled, this, [this](bool onTop) {
@@ -656,11 +659,12 @@ void MainWindow::openMediaDownloaderDialog()
         m_osd->showValue(tr("Downloaded:"), tr("%n song(s)", nullptr, int(paths.size())));
     });
     connect(dialog, &MediaDownloaderDialog::tracksStreamRequested, this,
-            [this](const QStringList &urls, const QStringList &titles) {
-                // Each entry is a YouTube search that mpv resolves through yt-dlp.
-                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), MediaDownloader::streamFormat(MediaDownloader::Format::AudioMp3));
+            [this](const QStringList &urls, const QStringList &titles, const QString &format) {
+                // Each entry is a page (or a YouTube search for a Spotify song)
+                // that mpv resolves through yt-dlp.
+                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
                 m_mpv->loadTitledFiles(urls, titles);
-                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n song(s)", nullptr, int(titles.size())));
+                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n entries", nullptr, int(titles.size())));
             });
     connect(dialog, &MediaDownloaderDialog::streamRequested, this, [this](const QString &url, const QString &format) {
         // mpv resolves the page through yt-dlp, picking streams with this format.
@@ -919,6 +923,8 @@ void MainWindow::updateChrome()
     // Fullscreen and the mini player show the picture only; the controls
     // float over it when the pointer comes near.
     const bool immersive = isFullScreen() || m_mini;
+    // A drag anywhere on the mini player moves it, over the lyrics too.
+    m_lyrics->view()->setTakesPresses(!m_mini);
     if (immersive == m_wasImmersive)
         return;
     m_wasImmersive = immersive;
@@ -1019,10 +1025,29 @@ bool MainWindow::beginResize(Qt::Edges edges, const QPoint &globalPos)
     return true;
 }
 
+bool MainWindow::beginMove(const QPoint &globalPos)
+{
+    if (isFullScreen() || !windowHandle())
+        return false;
+    m_videoPress.reset();
+    m_clickTimer.stop();
+    if (windowHandle()->startSystemMove())
+        return true;
+    // No window manager support: move the window along with the pointer.
+    m_manualResize = ManualResize{{}, globalPos, geometry()};
+    grabMouse(Qt::ClosedHandCursor);
+    return true;
+}
+
 void MainWindow::updateManualResize(const QPoint &globalPos)
 {
     const ManualResize &resize = *m_manualResize;
     const QPoint delta = globalPos - resize.origin;
+    if (!resize.edges) {
+        if (pos() != resize.geometry.topLeft() + delta)
+            move(resize.geometry.topLeft() + delta);
+        return;
+    }
     const QSize min = minimumSize().expandedTo(minimumSizeHint().boundedTo(minimumSize()));
     const QSize max = maximumSize();
     QRect g = resize.geometry;
@@ -1191,6 +1216,63 @@ void MainWindow::offerX11Mode()
 void MainWindow::restartInX11Mode(bool x11)
 {
     PlaylistSession::setX11Mode(x11);
+    restartPlayer(x11);
+}
+
+void MainWindow::setVideoOutput(MpvWidget::VideoOutput output)
+{
+    MpvWidget::saveVideoOutput(output);
+    if (output != m_mpv->videoOutput())
+        restartPlayer();
+}
+
+void MainWindow::offerSoftwareVideo()
+{
+    if (m_mpv->videoOutput() == MpvWidget::VideoOutput::Software)
+        return;
+    auto *box = new QMessageBox(QMessageBox::Warning, tr("Video Isn't Showing Properly"),
+                                tr("The video picture isn't reaching the screen: it stays black, or the window "
+                                   "only updates while the pointer moves over it. This happens with some graphics "
+                                   "drivers and desktops."),
+                                QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("SoftwareVideoQuestion"));
+    box->setInformativeText(tr("Top Player can restart with the software video output, which draws the picture "
+                               "without OpenGL. It uses more CPU, but works everywhere. Playback continues "
+                               "from where it is.\n\nYou can switch back any time: Video \u203a Video Output."));
+    QPushButton *restart = box->addButton(tr("Use Software Video Output"), QMessageBox::AcceptRole);
+    box->addButton(tr("Keep OpenGL"), QMessageBox::RejectRole);
+    box->setDefaultButton(restart);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, restart](QAbstractButton *button) {
+        if (button == restart)
+            QTimer::singleShot(0, this, [this] { setVideoOutput(MpvWidget::VideoOutput::Software); });
+    });
+    box->open();
+}
+
+void MainWindow::onVideoDecodeFailed(const QString &codec, const QString &message)
+{
+    Q_UNUSED(message);
+    const QString name = codec.toUpper();
+    m_osd->showValue(tr("Can't decode the video"), tr("%1 codec missing").arg(name));
+    auto *box = new QMessageBox(QMessageBox::Warning, tr("Video Codec Missing"),
+                                tr("This video uses the %1 codec, which the FFmpeg installed on this system can't "
+                                   "decode, so only the sound plays.").arg(name),
+                                QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("CodecMissingMessage"));
+    box->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    box->setInformativeText(tr("Some distributions ship FFmpeg without patented codecs (H.264, HEVC, ...). "
+                               "Install the full FFmpeg to play them:\n\n"
+                               "Fedora: enable RPM Fusion, then\n"
+                               "    sudo dnf swap ffmpeg-free ffmpeg --allowerasing\n"
+                               "openSUSE: install ffmpeg from Packman\n\n"
+                               "The Flatpak and AppImage builds bring their own codecs."));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+void MainWindow::restartPlayer(std::optional<bool> x11)
+{
     const bool playing = !m_mpv->isIdle() && !m_mpv->mpvProperty(QStringLiteral("pause")).toBool();
     const bool mini = m_mini;
     QStringList args{QStringLiteral("--handoff")};
@@ -1205,7 +1287,8 @@ void MainWindow::restartInX11Mode(bool x11)
     process.setArguments(args);
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     // Falls back to Wayland if the X11 platform plugin is missing.
-    env.insert(QStringLiteral("QT_QPA_PLATFORM"), x11 ? QStringLiteral("xcb;wayland") : QStringLiteral("wayland;xcb"));
+    if (x11)
+        env.insert(QStringLiteral("QT_QPA_PLATFORM"), *x11 ? QStringLiteral("xcb;wayland") : QStringLiteral("wayland;xcb"));
     process.setProcessEnvironment(env);
 
     // Hand the queue and position over, then make way for the new instance.
@@ -1403,7 +1486,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         // Wait for the release (a click: pause) or for the pointer to move (a drag: move the window).
         m_videoPress = globalPos;
     } else if (canMove) {
-        windowHandle()->startSystemMove();
+        beginMove(globalPos);
     } else {
         QMainWindow::mousePressEvent(event);
         return;
@@ -1423,11 +1506,13 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
         && (globalPos - *m_videoPress).manhattanLength() >= QApplication::startDragDistance()) {
         const QPoint origin = *std::exchange(m_videoPress, std::nullopt);
         const QPoint delta = globalPos - origin;
-        // Sideways scrubs through the file; otherwise the drag moves the window.
-        if (std::abs(delta.x()) > std::abs(delta.y()) && beginSeekDrag(origin))
+        // Sideways scrubs through the file; otherwise the drag moves the
+        // window. The mini player is a window to place: any drag moves it
+        // (the touchpad's sideways swipe still seeks).
+        if (!m_mini && std::abs(delta.x()) > std::abs(delta.y()) && beginSeekDrag(origin))
             updateSeekDrag(globalPos);
-        else if (!isFullScreen() && windowHandle())
-            windowHandle()->startSystemMove();
+        else
+            beginMove(origin);
         event->accept();
         return;
     }

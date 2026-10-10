@@ -20,10 +20,15 @@
 #include "TestClip.h"
 
 #include <QApplication>
+#include <QScreen>
 #include <QDialog>
 #include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
 #include <QListWidget>
 #include <QSettings>
 #include <QSignalSpy>
@@ -86,9 +91,13 @@ private Q_SLOTS:
     void miniPlayer();
     void resizeFromEdges();
     void miniPlayerResizes();
+    void miniPlayerDragMoves();
     void nextAndPreviousPlayFromPause();
     void playlistShortcut();
     void restartHandsOverSession();
+    void videoIsDrawn_data();
+    void videoIsDrawn();
+    void missingCodecIsReported();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -208,7 +217,7 @@ void TransportTest::stopButton()
     QTRY_COMPARE(timeLabel->text().count(QStringLiteral("00:00:00")), 2);
     auto *playButton = m_window->findChild<QToolButton *>(QStringLiteral("PlayButton"));
     QTRY_COMPARE(iconImage(playButton->icon()), iconImage(skinIcon(IconType::Play)));
-    const QImage frame = m_mpv->grabFramebuffer();
+    const QImage frame = m_mpv->grabFrame();
     QCOMPARE(frame.pixelColor(frame.rect().center()).rgb(), m_mpv->palette().color(QPalette::Window).rgb());
 
     // Play starts the stopped entry again.
@@ -724,8 +733,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.6"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.6")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.7"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.0.7")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -919,6 +928,34 @@ void drag(QWidget *window, const QPoint &from, const QPoint &to)
 
 } // namespace
 
+void TransportTest::miniPlayerDragMoves()
+{
+    m_window->setMiniPlayer(true);
+    QTRY_COMPARE(m_window->width(), 400);
+    pauseAt(100);
+    if (QTest::currentTestFailed())
+        return;
+    // Sideways over the video: the mini player moves (no window manager under
+    // Xvfb: it moves itself), and playback doesn't seek.
+    const QPoint start = m_window->pos();
+    const QPoint middle(m_window->width() / 2, m_window->height() / 2);
+    drag(m_window, middle, middle + QPoint(-120, 10));
+    QTRY_COMPARE(m_window->pos(), start + QPoint(-120, 10));
+    QVERIFY(!m_window->isResizing());
+    QVERIFY(std::abs(prop("time-pos").toDouble() - 100) < 0.5);
+    QTest::qWait(QApplication::doubleClickInterval() + 200);
+    QVERIFY(prop("pause").toBool());
+
+    // In the full window the same drag still scrubs through the file.
+    m_window->setMiniPlayer(false);
+    QTRY_VERIFY(!m_window->isMiniPlayer());
+    const QPoint before = m_window->pos();
+    const QPoint center(m_window->width() / 2, m_window->height() / 2);
+    drag(m_window, center, center + QPoint(120, 0));
+    QTRY_VERIFY(prop("time-pos").toDouble() > 101);
+    QCOMPARE(m_window->pos(), before);
+}
+
 void TransportTest::resizeFromEdges()
 {
     // No window manager under Xvfb: the window resizes itself.
@@ -1085,6 +1122,75 @@ void TransportTest::restartHandsOverSession()
     QTRY_VERIFY(!prop("pause").toBool());
     // A normal start doesn't restore what remembering is off for.
     PlaylistSession::setRememberPlaylist(true);
+}
+
+void TransportTest::videoIsDrawn_data()
+{
+    QTest::addColumn<int>("output");
+    QTest::newRow("opengl") << int(MpvWidget::VideoOutput::OpenGL);
+    QTest::newRow("software") << int(MpvWidget::VideoOutput::Software);
+}
+
+void TransportTest::videoIsDrawn()
+{
+    QFETCH(int, output);
+    // A plain red picture, in a window of its own with the chosen output.
+    const QString red = m_dir.filePath(QStringLiteral("red.mkv"));
+    if (!QFileInfo::exists(red)) {
+        QProcess ffmpeg;
+        ffmpeg.start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")),
+                     {QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-y"), QStringLiteral("-f"),
+                      QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("color=c=red:size=160x90:rate=10:duration=30"),
+                      QStringLiteral("-c:v"), QStringLiteral("mpeg4"), QStringLiteral("-q:v"), QStringLiteral("2"), red});
+        QVERIFY(ffmpeg.waitForFinished(60000) && ffmpeg.exitCode() == 0);
+    }
+    delete m_window;
+    m_window = nullptr;
+    MpvWidget::overrideVideoOutput(MpvWidget::VideoOutput(output));
+    {
+        MpvWidget video;
+        QCOMPARE(int(video.videoOutput()), output);
+        video.resize(320, 180);
+        video.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&video));
+        video.loadFile(red);
+        QTRY_VERIFY_WITH_TIMEOUT(video.mpvProperty(QStringLiteral("time-pos")).toDouble() > 0.3, 10000);
+        // What reaches the screen, not just the frame drawn.
+        const auto screenCenter = [&video] {
+            const QPoint center = video.mapToGlobal(video.rect().center());
+            const QImage shot = video.screen()->grabWindow(0, center.x() - 2, center.y() - 2, 4, 4).toImage();
+            return shot.isNull() ? QColor() : shot.pixelColor(1, 1);
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(
+            [&] {
+                const QColor center = screenCenter();
+                return center.red() > 200 && center.green() < 60 && center.blue() < 60;
+            }(),
+            10000);
+        // Stopping blanks the picture to the skin's background.
+        video.stop();
+        QTRY_VERIFY(video.isIdle());
+        QTRY_COMPARE(screenCenter().rgb(), video.palette().color(QPalette::Window).rgb());
+    }
+    MpvWidget::overrideVideoOutput(std::nullopt);
+}
+
+void TransportTest::missingCodecIsReported()
+{
+    QCOMPARE(MpvWidget::missingDecoderCodec(QStringLiteral("vd"),
+                                            QStringLiteral("Failed to initialize a decoder for codec 'hevc'.\n")),
+             QStringLiteral("hevc"));
+    QVERIFY(MpvWidget::missingDecoderCodec(QStringLiteral("ad"),
+                                           QStringLiteral("Failed to initialize a decoder for codec 'eac3'.")).isEmpty());
+    QVERIFY(MpvWidget::missingDecoderCodec(QStringLiteral("vd"), QStringLiteral("Using software decoding.")).isEmpty());
+
+    // The window explains it and how to get the codec.
+    Q_EMIT m_mpv->videoDecodeFailed(QStringLiteral("hevc"), QStringLiteral("Failed to initialize a decoder for codec 'hevc'."));
+    QMessageBox *box = nullptr;
+    QTRY_VERIFY((box = m_window->findChild<QMessageBox *>(QStringLiteral("CodecMissingMessage"))));
+    QVERIFY(box->text().contains(QStringLiteral("HEVC")));
+    QVERIFY(box->informativeText().contains(QStringLiteral("ffmpeg")));
+    box->close();
 }
 
 int main(int argc, char *argv[])

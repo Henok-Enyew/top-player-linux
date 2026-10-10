@@ -22,6 +22,9 @@ struct LyricsStyle {
     bool glow = true;            // a soft accent glow behind it
     bool bold = true;            // and bold
     int dim = 70;                // % darkening behind lyrics over a video
+    int videoBlur = 0;           // blur of the video behind lyrics, 0..100
+    int blur = 85;               // blur of the cover behind a song's lyrics, 0..100
+    int backdrop = 35;           // how strongly the cover shows behind them, 0..100
 
     static constexpr double kMinScale = 0.6;
     static constexpr double kMaxScale = 2.5;
@@ -81,6 +84,9 @@ public:
     int visibleRadius() const;
     // True when the window is so small that the title strip is left out.
     bool isCompact() const;
+    // Off: presses on the lyrics are left to the window (the mini player,
+    // which a drag anywhere moves). The wheel still browses.
+    void setTakesPresses(bool takes) { m_takesPresses = takes; }
 
     // Browsing ends this long after the last scroll or pointer movement.
     static constexpr int kBrowseHoldMs = 4000;
@@ -92,12 +98,16 @@ Q_SIGNALS:
     void message(const QString &label, const QString &value);
     // Ctrl+wheel changed the text size; the new style is saved already.
     void lyricsStyleChanged(const LyricsStyle &style);
+    // Shown or hidden, over a video or not, or a new style: what is behind
+    // the lyrics may need to change (the video's blur).
+    void backgroundChanged();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void hideEvent(QHideEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -128,6 +138,10 @@ private:
     QString m_title;
     QString m_artist;
     QImage m_artwork;
+    // The blurred cover behind a song's lyrics, for the size and blur it was made for.
+    QImage m_backdrop;
+    QSize m_backdropSize;
+    int m_backdropBlur = -1;
     QPixmap m_cover;
     QColor m_tint;
     bool m_opaque = true;
@@ -146,6 +160,7 @@ private:
     QVariantAnimation m_emphasisAnimation;
 
     bool m_browsing = false;
+    bool m_takesPresses = true;
     QTimer m_browseTimer;
     int m_hovered = -1;
     bool m_backHovered = false;

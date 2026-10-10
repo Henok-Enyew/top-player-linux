@@ -171,6 +171,12 @@ void drawIcon(QPainter &p, IconType type)
         p.drawPath(polygon({{2.5, 4.5}, {8, 4.5}, {9.5, 6.5}, {17.5, 6.5}, {17.5, 15.5}, {2.5, 15.5}}));
         p.drawLine(QPointF(2.5, 8.5), QPointF(17.5, 8.5));
         break;
+    case IconType::Download:
+        // An arrow down onto a tray.
+        p.drawLine(QPointF(10, 3), QPointF(10, 12.5));
+        p.drawPolyline(QPolygonF({{6, 9}, {10, 13}, {14, 9}}));
+        p.drawPolyline(QPolygonF({{4, 13}, {4, 16.5}, {16, 16.5}, {16, 13}}));
+        break;
     case IconType::Url:
         // A globe: outline, meridian and two parallels.
         p.drawEllipse(QPointF(10, 10), 7, 7);

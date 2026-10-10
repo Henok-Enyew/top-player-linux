@@ -1,8 +1,11 @@
 #include "PlayerMenu.h"
 #include "AudioController.h"
+#include "DownloadQueue.h"
+#include "Icons.h"
 #include "LyricsController.h"
 #include "MainWindow.h"
 #include "MpvWidget.h"
+#include "PlaylistController.h"
 #include "ResumeManager.h"
 
 #include <QActionGroup>
@@ -88,6 +91,30 @@ void PlayerMenu::buildVideoMenu()
         {tr("270°"), QStringLiteral("270")},
     });
     addToggle(video, tr("Deinterlace"), QStringLiteral("deinterlace"), QKeySequence(Qt::CTRL | Qt::Key_D));
+
+    // OpenGL, or the CPU where OpenGL video stays black: takes a restart.
+    QMenu *output = video->addMenu(tr("Video Output"));
+    output->setObjectName(QStringLiteral("VideoOutputMenu"));
+    auto *outputs = new QActionGroup(output);
+    const QList<QPair<QString, MpvWidget::VideoOutput>> choices{
+        {tr("OpenGL (Recommended)"), MpvWidget::VideoOutput::OpenGL},
+        {tr("Software (Compatibility)"), MpvWidget::VideoOutput::Software},
+    };
+    for (const auto &[label, value] : choices) {
+        QAction *action = output->addAction(label);
+        action->setCheckable(true);
+        action->setActionGroup(outputs);
+        action->setObjectName(value == MpvWidget::VideoOutput::Software ? QStringLiteral("SoftwareVideoAction")
+                                                                        : QStringLiteral("OpenGLVideoAction"));
+        action->setToolTip(value == MpvWidget::VideoOutput::Software
+                               ? tr("Draws the video without OpenGL, for systems where the picture stays black. "
+                                    "Restarts the player.")
+                               : tr("Draws the video on the GPU. Restarts the player."));
+        connect(output, &QMenu::aboutToShow, action, [this, action, value = value] {
+            action->setChecked(m_mpv->videoOutput() == value);
+        });
+        connect(action, &QAction::triggered, this, [this, value = value] { m_window->setVideoOutput(value); });
+    }
     video->addSeparator();
     QAction *screenshot = addCommand(video, tr("Take Screenshot"), {QStringLiteral("screenshot")},
                                      QKeySequence(Qt::CTRL | Qt::Key_E));
@@ -358,6 +385,34 @@ void PlayerMenu::buildToolsMenu()
     tools->addSeparator();
     addItem(tools, tr("Cut / Extract Media..."), [this] { m_window->openMediaCutterDialog(); },
             QKeySequence(Qt::CTRL | Qt::Key_X));
+
+    // Saves the stream that is playing (a YouTube video, a Spotify song, ...).
+    QMenu *download = tools->addMenu(skinIcon(IconType::Download), tr("Download What's Playing"));
+    download->setObjectName(QStringLiteral("DownloadPlayingMenu"));
+    using Format = MediaDownloader::Format;
+    const QList<QPair<QString, Format>> formats{
+        {tr("Video (Best Quality, MP4)"), Format::Best},
+        {tr("Video (1080p, MP4)"), Format::Max1080},
+        {tr("Video (720p, MP4)"), Format::Max720},
+        {tr("Audio Only (MP3)"), Format::AudioMp3},
+    };
+    for (const auto &[label, format] : formats) {
+        addItem(download, label, [this, format = format] {
+            const QString path = m_mpv->isIdle() ? QString() : m_mpv->mpvPropertyString(QStringLiteral("path"));
+            if (!DownloadQueue::canDownload(path)) {
+                Q_EMIT osdRequested(tr("Only streams from the web can be downloaded"), QString());
+                return;
+            }
+            const QString title = m_mpv->mpvPropertyString(QStringLiteral("media-title"));
+            if (m_window->playlist()->downloads()->enqueue(path, title, format))
+                Q_EMIT osdRequested(tr("Downloading"), title);
+            else if (MediaDownloader::executable().isEmpty())
+                Q_EMIT osdRequested(tr("Install yt-dlp to download"), QString());
+        });
+    }
+    connect(tools, &QMenu::aboutToShow, download, [this, download] {
+        download->setEnabled(!m_mpv->isIdle() && DownloadQueue::canDownload(m_mpv->mpvPropertyString(QStringLiteral("path"))));
+    });
 }
 
 void PlayerMenu::buildWindowMenu()
