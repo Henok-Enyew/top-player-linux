@@ -7,6 +7,7 @@
 #include "EmptyStateWidget.h"
 #include "LiveStreamDialog.h"
 #include "LyricsController.h"
+#include "LyricsView.h"
 #include "MediaCutterDialog.h"
 #include "MediaDownloaderDialog.h"
 #include "MediaFiles.h"
@@ -921,6 +922,8 @@ void MainWindow::updateChrome()
     // Fullscreen and the mini player show the picture only; the controls
     // float over it when the pointer comes near.
     const bool immersive = isFullScreen() || m_mini;
+    // A drag anywhere on the mini player moves it, over the lyrics too.
+    m_lyrics->view()->setTakesPresses(!m_mini);
     if (immersive == m_wasImmersive)
         return;
     m_wasImmersive = immersive;
@@ -1021,10 +1024,29 @@ bool MainWindow::beginResize(Qt::Edges edges, const QPoint &globalPos)
     return true;
 }
 
+bool MainWindow::beginMove(const QPoint &globalPos)
+{
+    if (isFullScreen() || !windowHandle())
+        return false;
+    m_videoPress.reset();
+    m_clickTimer.stop();
+    if (windowHandle()->startSystemMove())
+        return true;
+    // No window manager support: move the window along with the pointer.
+    m_manualResize = ManualResize{{}, globalPos, geometry()};
+    grabMouse(Qt::ClosedHandCursor);
+    return true;
+}
+
 void MainWindow::updateManualResize(const QPoint &globalPos)
 {
     const ManualResize &resize = *m_manualResize;
     const QPoint delta = globalPos - resize.origin;
+    if (!resize.edges) {
+        if (pos() != resize.geometry.topLeft() + delta)
+            move(resize.geometry.topLeft() + delta);
+        return;
+    }
     const QSize min = minimumSize().expandedTo(minimumSizeHint().boundedTo(minimumSize()));
     const QSize max = maximumSize();
     QRect g = resize.geometry;
@@ -1463,7 +1485,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         // Wait for the release (a click: pause) or for the pointer to move (a drag: move the window).
         m_videoPress = globalPos;
     } else if (canMove) {
-        windowHandle()->startSystemMove();
+        beginMove(globalPos);
     } else {
         QMainWindow::mousePressEvent(event);
         return;
@@ -1483,11 +1505,13 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
         && (globalPos - *m_videoPress).manhattanLength() >= QApplication::startDragDistance()) {
         const QPoint origin = *std::exchange(m_videoPress, std::nullopt);
         const QPoint delta = globalPos - origin;
-        // Sideways scrubs through the file; otherwise the drag moves the window.
-        if (std::abs(delta.x()) > std::abs(delta.y()) && beginSeekDrag(origin))
+        // Sideways scrubs through the file; otherwise the drag moves the
+        // window. The mini player is a window to place: any drag moves it
+        // (the touchpad's sideways swipe still seeks).
+        if (!m_mini && std::abs(delta.x()) > std::abs(delta.y()) && beginSeekDrag(origin))
             updateSeekDrag(globalPos);
-        else if (!isFullScreen() && windowHandle())
-            windowHandle()->startSystemMove();
+        else
+            beginMove(origin);
         event->accept();
         return;
     }

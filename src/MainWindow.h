@@ -124,6 +124,9 @@ public:
     // Returns false if the window can't be resized now (fullscreen, maximized).
     bool beginResize(Qt::Edges edges, const QPoint &globalPos);
     bool isResizing() const { return m_manualResize.has_value(); }
+    // Moves the window as the pointer moves from `globalPos`: through the
+    // window manager, or by itself where that isn't available.
+    bool beginMove(const QPoint &globalPos);
     // The window edges within reach of `pos` (window coordinates), if it can be resized.
     Qt::Edges edgesAt(const QPoint &pos) const;
     // Resizes the window so the video shows at `scale` times its display size.
@@ -241,8 +244,9 @@ private:
     QToolButton *m_miniRestoreButton = nullptr;
     // The mini player's resize handle, in the corner facing the middle of the screen.
     QWidget *m_resizeGrip = nullptr;
-    // A resize the window does itself (when the window manager can't): the
-    // edges dragged, where the drag started and the geometry then.
+    // A resize (or, without edges, a move) the window does itself when the
+    // window manager can't: the edges dragged, where the drag started and
+    // the geometry then.
     struct ManualResize {
         Qt::Edges edges;
         QPoint origin;

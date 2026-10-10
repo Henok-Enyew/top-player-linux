@@ -91,6 +91,7 @@ private Q_SLOTS:
     void miniPlayer();
     void resizeFromEdges();
     void miniPlayerResizes();
+    void miniPlayerDragMoves();
     void nextAndPreviousPlayFromPause();
     void playlistShortcut();
     void restartHandsOverSession();
@@ -926,6 +927,34 @@ void drag(QWidget *window, const QPoint &from, const QPoint &to)
 }
 
 } // namespace
+
+void TransportTest::miniPlayerDragMoves()
+{
+    m_window->setMiniPlayer(true);
+    QTRY_COMPARE(m_window->width(), 400);
+    pauseAt(100);
+    if (QTest::currentTestFailed())
+        return;
+    // Sideways over the video: the mini player moves (no window manager under
+    // Xvfb: it moves itself), and playback doesn't seek.
+    const QPoint start = m_window->pos();
+    const QPoint middle(m_window->width() / 2, m_window->height() / 2);
+    drag(m_window, middle, middle + QPoint(-120, 10));
+    QTRY_COMPARE(m_window->pos(), start + QPoint(-120, 10));
+    QVERIFY(!m_window->isResizing());
+    QVERIFY(std::abs(prop("time-pos").toDouble() - 100) < 0.5);
+    QTest::qWait(QApplication::doubleClickInterval() + 200);
+    QVERIFY(prop("pause").toBool());
+
+    // In the full window the same drag still scrubs through the file.
+    m_window->setMiniPlayer(false);
+    QTRY_VERIFY(!m_window->isMiniPlayer());
+    const QPoint before = m_window->pos();
+    const QPoint center(m_window->width() / 2, m_window->height() / 2);
+    drag(m_window, center, center + QPoint(120, 0));
+    QTRY_VERIFY(prop("time-pos").toDouble() > 101);
+    QCOMPARE(m_window->pos(), before);
+}
 
 void TransportTest::resizeFromEdges()
 {

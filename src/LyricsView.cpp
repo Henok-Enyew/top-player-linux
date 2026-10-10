@@ -435,7 +435,7 @@ void LyricsView::mousePressEvent(QMouseEvent *event)
     }
     // Only presses on the lyrics themselves (or anywhere in the column while
     // browsing) are ours; the rest is the player's.
-    if (!columnRect().contains(pos) || (!m_browsing && lineAt(pos) < 0)) {
+    if (!m_takesPresses || !columnRect().contains(pos) || (!m_browsing && lineAt(pos) < 0)) {
         event->ignore();
         return;
     }

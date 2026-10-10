@@ -81,6 +81,9 @@ public:
     int visibleRadius() const;
     // True when the window is so small that the title strip is left out.
     bool isCompact() const;
+    // Off: presses on the lyrics are left to the window (the mini player,
+    // which a drag anywhere moves). The wheel still browses.
+    void setTakesPresses(bool takes) { m_takesPresses = takes; }
 
     // Browsing ends this long after the last scroll or pointer movement.
     static constexpr int kBrowseHoldMs = 4000;
@@ -146,6 +149,7 @@ private:
     QVariantAnimation m_emphasisAnimation;
 
     bool m_browsing = false;
+    bool m_takesPresses = true;
     QTimer m_browseTimer;
     int m_hovered = -1;
     bool m_backHovered = false;
