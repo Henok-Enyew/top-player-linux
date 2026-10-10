@@ -23,11 +23,13 @@
 #include <QStackedWidget>
 #include <QStyledItemDelegate>
 #include <QTabBar>
+#include <QTimer>
 #include <QToolButton>
 #include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <utility>
 
 namespace {
 
@@ -370,6 +372,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     if (parentWidget())
         parentWidget()->installEventFilter(this);
 
+    m_view->viewport()->installEventFilter(this);
     connect(m_view, &QListWidget::itemActivated, this,
             [this](QListWidgetItem *item) { Q_EMIT playRequested(m_view->row(item)); });
     connect(m_view, &PlaylistView::moveRequested, this, &PlaylistDrawer::moveRequested);
@@ -553,6 +556,17 @@ bool PlaylistDrawer::eventFilter(QObject *watched, QEvent *event)
             setDrawerWidth(targetWidth());
         return QFrame::eventFilter(watched, event);
     }
+    if (watched == m_view->viewport() && event->type() == QEvent::Resize && m_revealedId.isValid()) {
+        // The window often resizes to the new video just after it starts:
+        // keep the playing entry in view.
+        const QVariant revealed = std::exchange(m_revealedId, QVariant());
+        const int row = playingRow();
+        if (row >= 0 && m_view->item(row)->data(kIdRole) != revealed)
+            m_revealedId = revealed;
+        else
+            QTimer::singleShot(0, this, &PlaylistDrawer::revealPlaying);
+        return QFrame::eventFilter(watched, event);
+    }
     if (watched == m_filter && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress)) {
         // Keys the search field uses itself, which the player would otherwise take as hotkeys.
         const auto *key = static_cast<QKeyEvent *>(event);
@@ -601,16 +615,55 @@ bool PlaylistDrawer::updateEntriesInPlace(const QVariantList &playlist)
             PlaylistOps::displayName({filename, entry.value(QStringLiteral("title")).toString()}));
         if (item->text() != text)
             item->setText(text);
-        const bool playing = entry.value(QStringLiteral("current")).toBool();
-        if (item->data(kPlayingRole).toBool() != playing) {
-            QFont font = m_view->font();
-            font.setBold(playing);
-            item->setFont(font);
-            item->setData(Qt::ForegroundRole, playing ? QVariant(kPlayingColor) : QVariant());
-            item->setData(kPlayingRole, playing);
-        }
+        markPlaying(item, entry.value(QStringLiteral("current")).toBool());
     }
     return true;
+}
+
+void PlaylistDrawer::markPlaying(QListWidgetItem *item, bool playing)
+{
+    if (item->data(kPlayingRole).toBool() == playing)
+        return;
+    QFont font = m_view->font();
+    font.setBold(playing);
+    item->setFont(font);
+    item->setData(Qt::ForegroundRole, playing ? QVariant(kPlayingColor) : QVariant());
+    item->setData(kPlayingRole, playing);
+}
+
+void PlaylistDrawer::setPlayingRow(int row)
+{
+    for (int i = 0; i < m_view->count(); ++i)
+        markPlaying(m_view->item(i), i == row);
+    revealPlaying();
+}
+
+int PlaylistDrawer::playingRow() const
+{
+    for (int i = 0; i < m_view->count(); ++i) {
+        if (m_view->item(i)->data(kPlayingRole).toBool())
+            return i;
+    }
+    return -1;
+}
+
+void PlaylistDrawer::revealPlaying()
+{
+    const int row = playingRow();
+    if (row < 0) {
+        m_revealedId = {};
+        return;
+    }
+    QListWidgetItem *item = m_view->item(row);
+    const QVariant id = item->data(kIdRole);
+    // Once per new entry, and not while the user is looking through the list.
+    if (id == m_revealedId || m_view->isRowHidden(row) || m_view->viewport()->underMouse())
+        return;
+    m_revealedId = id;
+    // Centered, so the songs around it show too (and a scroll bar appearing
+    // afterwards can't push it out again).
+    if (!m_view->viewport()->rect().contains(m_view->visualItemRect(item)))
+        m_view->scrollToItem(item, QAbstractItemView::PositionAtCenter);
 }
 
 void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double> &durations)
@@ -618,6 +671,7 @@ void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double
     if (updateEntriesInPlace(playlist)) {
         setDurations(durations);
         applyFilter();
+        revealPlaying();
         return;
     }
     // Entries keep their selection when the playlist is reordered (e.g. by
@@ -673,6 +727,12 @@ void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double
     }
     applyFilter();
     m_view->setUpdatesEnabled(true);
+    // A rebuilt list starts at the top: show the playing entry again, unless
+    // the entries just moved by the user are being kept in view.
+    if (selectedIds.isEmpty()) {
+        m_revealedId = {};
+        revealPlaying();
+    }
 }
 
 void PlaylistDrawer::setDurations(const QList<double> &durations)

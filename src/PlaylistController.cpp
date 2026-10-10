@@ -100,9 +100,14 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
             saveSession();
     });
     // The playing entry changes without the playlist changing.
-    connect(m_mpv, &MpvWidget::propertyUpdated, this, [this](const QString &name) {
-        if (name == QLatin1String("playlist-pos"))
-            scheduleSave();
+    connect(m_mpv, &MpvWidget::propertyUpdated, this, [this](const QString &name, const QVariant &value) {
+        if (name != QLatin1String("playlist-pos"))
+            return;
+        // The highlight follows at once: mpv doesn't always report the
+        // playlist again when only the playing entry changes.
+        if (value.isValid() && value.toInt() >= 0)
+            m_drawer->setPlayingRow(value.toInt());
+        scheduleSave();
     });
 }
 

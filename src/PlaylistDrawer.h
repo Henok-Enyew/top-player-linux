@@ -68,6 +68,11 @@ public:
     // `durations` (seconds, negative if unknown) parallels `playlist` and may be empty.
     void setEntries(const QVariantList &playlist, const QList<double> &durations = {});
     void setDurations(const QList<double> &durations);
+    // Marks entry `row` as the one playing (-1: none) and scrolls it into
+    // view, unless the pointer is over the list. Follows mpv's playlist-pos,
+    // which changes without the playlist itself being reported again.
+    void setPlayingRow(int row);
+    int playingRow() const;
 
     // Hides the entries that don't match every word of `text` (in name or path).
     // The playlist itself is not changed.
@@ -124,6 +129,9 @@ private:
     // Checks the session options to match the saved settings.
     void syncOptions();
     void showContextMenu(const QPoint &pos);
+    void markPlaying(QListWidgetItem *item, bool playing);
+    // Scrolls the playing entry into view if it moved since the last time.
+    void revealPlaying();
     void applyFilter();
     void updateCount();
     // The width the drawer should have while open.
@@ -147,4 +155,6 @@ private:
     int m_preferredWidth;
     bool m_expanded = false;
     bool m_wide = false;
+    // mpv's id of the entry last scrolled into view.
+    QVariant m_revealedId;
 };
