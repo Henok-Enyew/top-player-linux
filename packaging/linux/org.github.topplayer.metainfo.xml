@@ -33,6 +33,21 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.7" date="2026-10-10">
+      <description>
+        <ul>
+          <li>Fixed: the video could stay black on some Mesa graphics drivers while the sound and the clock ran on</li>
+          <li>New software (compatibility) video output for systems where OpenGL video doesn't reach the screen; the player offers it when it notices</li>
+          <li>A video whose codec the system's FFmpeg lacks (HEVC MKVs on Fedora's ffmpeg-free) now says so and how to fix it</li>
+          <li>Many more video and audio formats are recognized, and upper-case extensions show in the file dialog</li>
+          <li>The playlist highlights and scrolls to the song that starts playing</li>
+          <li>Download streamed playlist entries (YouTube, Spotify songs, ...) as video or MP3 from a button on the entry or the right-click menu</li>
+          <li>YouTube playlists: stream every video as a playlist entry, or save them all</li>
+          <li>Lyrics: blur and strength of the cover behind songs, and a blur for the video behind lyrics</li>
+          <li>Dragging the mini player's picture moves it instead of seeking</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.6" date="2026-10-06">
       <description>
         <ul>

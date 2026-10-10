@@ -35,10 +35,10 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.0.6** · 🪟 a **mini player that floats above every app** and on every workspace (with one-click
-> X11 mode on Wayland) · ↔️ **resize from any edge or corner**, with a grip on the mini player · 🖼️ **song
-> covers with the visualizer off** and a **default artwork** for songs without one · ⏭️ **Next / Previous play
-> straight from pause** · ⌨️ playlist on **`Ctrl+B`**
+> **New in 1.0.7** · 🎬 **video that no longer stays black** on some graphics drivers, plus a **software video
+> output** for the rest · ⬇️ **download streamed songs and videos** right from the playlist (video or MP3) ·
+> 📺 **YouTube playlists** (stream or save them all) · 🌫️ **lyrics background blur** and video blur · 🪟 drag the
+> mini player anywhere · 🎯 the playlist follows the song that plays
 
 ---
 
@@ -74,8 +74,9 @@ controls and lyrics that shrink to fit. Drag it anywhere, resize it any way.
 <td valign="top">
 
 ### ⬇️ Downloads
-YouTube, TikTok, Instagram, X and 1000+ sites through yt-dlp, and **Spotify songs, albums
-and playlists** saved as tagged MP3s. Or just stream them.
+YouTube (videos and whole playlists), TikTok, Instagram, X and 1000+ sites through yt-dlp, and
+**Spotify songs, albums and playlists** saved as tagged MP3s. Or stream them, and save any streamed
+entry from the playlist later.
 
 </td>
 <td valign="top">
@@ -315,8 +316,9 @@ blurred tint of the cover. Plain (unsynced) lyrics scroll along with the song.
   and **clicking it plays from there**. Lines without a time (plain lyrics
   typed in to read along) only scroll.
 - **Lyrics Appearance...**: font, size, line spacing, alignment (left, center,
-  right), the current line's color, bold and glow, and how much a video is
-  darkened behind the lyrics, previewed live. `Ctrl` + wheel over the lyrics
+  right), the current line's color, bold and glow, how much a video is
+  darkened and blurred behind the lyrics, and how blurred and how strong the
+  album cover behind a song's lyrics is, previewed live. `Ctrl` + wheel over the lyrics
   changes their size.
 
 </details>
@@ -477,6 +479,17 @@ Countries** and **every other country** alphabetically. Then:
   tagged with Spotify's title, artist and album. Albums and playlists are
   saved song by song and queued in order; **Direct Stream** plays them the
   same way without saving.
+- **YouTube playlists**: paste a playlist link (or a video picked from one and
+  tick **Whole playlist**). **Stream Playlist** queues every video as a titled
+  playlist entry; **Download Playlist** saves them all, in order, into a
+  folder named after the playlist.
+- **Download from the playlist**: entries that stream from the web (YouTube
+  videos, Spotify songs, ...) show a ⬇ button when the pointer is over them,
+  and the playlist's right-click menu has **Download**, **Download Selected**
+  and **Download All Online Entries**, each as **Video** (best, 1080p, 720p
+  MP4) or **Audio Only (MP3)**. Downloads run one after another into the
+  download folder, and each entry shows its state (Queued, 45%, Saved).
+  **Tools › Download What's Playing** saves the stream that plays.
 
 > [!NOTE]
 > The tools use the system's `ffmpeg` and `yt-dlp`, so they are available in
@@ -515,8 +528,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.6/Top_Player-1.0.6-x86_64.AppImage
-chmod +x Top_Player-1.0.6-x86_64.AppImage && ./Top_Player-1.0.6-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.7/Top_Player-1.0.7-x86_64.AppImage
+chmod +x Top_Player-1.0.7-x86_64.AppImage && ./Top_Player-1.0.7-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -546,6 +559,19 @@ Each release also includes a `SHA256SUMS` file to verify the downloads.
 >
 > On Ubuntu 22.04, FFmpeg 4.4 has no Spectrum visualization; the other
 > visualizations work.
+
+> [!IMPORTANT]
+> **Video black or missing, sound playing?**
+> - Fedora ships FFmpeg without patented codecs (`ffmpeg-free`), so HEVC (and
+>   on some setups H.264) videos, common in MKV files, play sound only. Top
+>   Player says so when it happens. Install the full FFmpeg from
+>   [RPM Fusion](https://rpmfusion.org/Configuration):
+>   `sudo dnf swap ffmpeg-free ffmpeg --allowerasing`. On openSUSE, use
+>   Packman's ffmpeg. The AppImage and Flatpak bring their own codecs.
+> - If the picture stays black or the window only updates while the pointer
+>   moves, switch to **Video › Video Output › Software (Compatibility)**
+>   (the player offers it when it notices), or start it with
+>   `top-player --video-output=software`.
 
 **Optional tools:** `ffmpeg` for Cut / Extract Media (`sudo dnf install ffmpeg`
 from RPM Fusion, `sudo apt install ffmpeg`, `sudo zypper install ffmpeg` or
@@ -597,7 +623,7 @@ mpv property or command, and check marks reflect mpv's live state.
 | `Ctrl+T` | Always on top |
 | `Ctrl+M` | Mini player |
 | `Alt+1`..`Alt+4` | Window size 50–200% |
-| Drag video or title bar | Move window |
+| Drag video or title bar | Move window (sideways on the video seeks, except in the mini player, where any drag moves it) |
 | Drag window edge or corner | Resize window (the mini player also has a grip) |
 | Right-click | Context menu |
 | `F1` | About Top Player |
@@ -696,11 +722,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.6 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.7 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.6 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.6 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.6 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.7 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.7 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.7 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -729,7 +755,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.6**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
+| [**1.0.7**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
+| [1.0.6](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
 | [1.0.5](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
 | [1.0.4](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
 | [1.0.3](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.3) | 2026-10-04 | Resume or start over when reopening a file, synced lyrics (LRCLIB download, karaoke-style view, AI prompt, load from file), tap-to-sync editor for lyrics and subtitles, custom audio artwork shows over visualizers and can be dropped on the window |
@@ -753,9 +780,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.6 && git push origin v1.0.6`
+2. `git tag v1.0.7 && git push origin v1.0.7`
 
-A tag with a suffix such as `v1.0.6-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.7-rc1` is published as a pre-release.
 
 </details>
 
