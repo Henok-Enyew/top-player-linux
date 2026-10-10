@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.0.7 packaging/rpm/build-rpm.sh
+#   VERSION=1.0.8 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.0.7
+Version:        1.0.8
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -77,6 +77,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Sat Oct 10 2026 Henok Enyew Andargie - 1.0.8-1
+- Flatpak: downloads, YouTube and Spotify streaming and the media cutter
+  work, using the system's yt-dlp and ffmpeg
+
 * Sat Oct 10 2026 Henok Enyew Andargie - 1.0.7-1
 - Fix video staying black on some Mesa drivers while the sound plays
 - Software (compatibility) video output; offered when OpenGL video stalls

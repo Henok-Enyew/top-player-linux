@@ -1,0 +1,13 @@
+#!/bin/sh
+# Installed in the Flatpak as /app/bin/yt-dlp and /app/bin/ffmpeg: runs the
+# system's own tool of that name outside the sandbox, so downloads and
+# streaming use the distribution's yt-dlp (kept up to date by its updates).
+# The tool's files land in the home folder, which the player can read.
+name=$(basename "$0")
+dir=$PWD
+case "$dir" in
+    "$HOME"|"$HOME"/*) ;;
+    *) dir=$HOME ;;
+esac
+# --watch-bus: the tool stops if the player quits.
+exec flatpak-spawn --host --watch-bus --directory="$dir" "$name" "$@"
