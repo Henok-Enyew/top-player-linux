@@ -30,6 +30,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QScreen>
 #include <QTest>
 #include <QTreeWidget>
 #include <QUrlQuery>
@@ -153,6 +154,7 @@ private Q_SLOTS:
     void plainLyricsOnlyScroll();
     void appearance();
     void smallWindowShowsFewerLines();
+    void backgroundOverVideo();
 
     // Sync editor.
     void syncLyricsByTapping();
@@ -835,6 +837,55 @@ void LyricsTest::appearance()
     m_mpv = m_window->findChild<MpvWidget *>();
     QCOMPARE(m_lyrics->view()->lyricsStyle().scale, 1.6);
     LyricsStyle().save();
+}
+
+void LyricsTest::backgroundOverVideo()
+{
+    // Lyrics beside a video show over it once turned on.
+    const QString lrc = QFileInfo(m_video).absolutePath() + QStringLiteral("/") + QFileInfo(m_video).completeBaseName()
+                        + QStringLiteral(".lrc");
+    QVERIFY(writeFile(lrc, kSongLrc));
+    open(m_video);
+    LyricsView *view = m_lyrics->view();
+    m_lyrics->setShown(true);
+    QTRY_VERIFY(view->isVisible());
+    m_mpv->command({QStringLiteral("seek"), QStringLiteral("30"), QStringLiteral("absolute+exact")});
+
+    // What reaches the screen in the top-left corner of the picture, away from the lyrics.
+    const auto brightness = [this] {
+        const QPoint corner = m_mpv->mapToGlobal(QPoint(m_mpv->width() / 10, m_mpv->height() / 10));
+        const QImage shot = m_mpv->screen()->grabWindow(0, corner.x(), corner.y(), 8, 8).toImage();
+        int sum = 0;
+        for (int y = 0; y < shot.height(); ++y) {
+            for (int x = 0; x < shot.width(); ++x)
+                sum += qGray(shot.pixel(x, y));
+        }
+        return sum / std::max(1, int(shot.width() * shot.height()));
+    };
+    LyricsStyle style = view->lyricsStyle();
+    style.dim = 0;
+    view->setLyricsStyle(style);
+    QTRY_VERIFY_WITH_TIMEOUT(brightness() > 60, 5000);
+    const int bright = brightness();
+    // Darken video: the picture behind the lyrics goes dark.
+    style.dim = 90;
+    view->setLyricsStyle(style);
+    QTRY_VERIFY(brightness() < bright / 3);
+
+    // Blur video: a filter on the video while the lyrics show over it.
+    const auto filters = [this] { return m_mpv->mpvPropertyString(QStringLiteral("vf")); };
+    QVERIFY(!filters().contains(QStringLiteral("lyricsblur")));
+    style.videoBlur = 50;
+    view->setLyricsStyle(style);
+    QTRY_VERIFY(filters().contains(QStringLiteral("lyricsblur")));
+    m_lyrics->setShown(false);
+    QTRY_VERIFY(!filters().contains(QStringLiteral("lyricsblur")));
+    m_lyrics->setShown(true);
+    QTRY_VERIFY(filters().contains(QStringLiteral("lyricsblur")));
+    style.videoBlur = 0;
+    view->setLyricsStyle(style);
+    QTRY_VERIFY(!filters().contains(QStringLiteral("lyricsblur")));
+    QFile::remove(lrc);
 }
 
 void LyricsTest::smallWindowShowsFewerLines()

@@ -70,6 +70,9 @@ LyricsStyle LyricsStyle::load()
     style.glow = settings.value(QStringLiteral("lyricsStyle/glow"), style.glow).toBool();
     style.bold = settings.value(QStringLiteral("lyricsStyle/bold"), style.bold).toBool();
     style.dim = std::clamp(settings.value(QStringLiteral("lyricsStyle/dim"), style.dim).toInt(), 0, 100);
+    style.videoBlur = std::clamp(settings.value(QStringLiteral("lyricsStyle/videoBlur"), style.videoBlur).toInt(), 0, 100);
+    style.blur = std::clamp(settings.value(QStringLiteral("lyricsStyle/blur"), style.blur).toInt(), 0, 100);
+    style.backdrop = std::clamp(settings.value(QStringLiteral("lyricsStyle/backdrop"), style.backdrop).toInt(), 0, 100);
     return style;
 }
 
@@ -86,13 +89,16 @@ void LyricsStyle::save() const
     settings.setValue(QStringLiteral("lyricsStyle/glow"), glow);
     settings.setValue(QStringLiteral("lyricsStyle/bold"), bold);
     settings.setValue(QStringLiteral("lyricsStyle/dim"), dim);
+    settings.setValue(QStringLiteral("lyricsStyle/videoBlur"), videoBlur);
+    settings.setValue(QStringLiteral("lyricsStyle/blur"), blur);
+    settings.setValue(QStringLiteral("lyricsStyle/backdrop"), backdrop);
 }
 
 bool LyricsStyle::operator==(const LyricsStyle &other) const
 {
     return family == other.family && std::abs(scale - other.scale) < 1e-6 && std::abs(spacing - other.spacing) < 1e-6
            && align == other.align && highlight == other.highlight && glow == other.glow && bold == other.bold
-           && dim == other.dim;
+           && dim == other.dim && videoBlur == other.videoBlur && blur == other.blur && backdrop == other.backdrop;
 }
 
 LyricsView::LyricsView(QWidget *parent)
@@ -162,15 +168,19 @@ void LyricsView::setPlaceholder(const QString &text)
 
 void LyricsView::setOpaque(bool opaque)
 {
+    const bool changed = opaque != m_opaque;
     m_opaque = opaque;
     setAttribute(Qt::WA_NoSystemBackground, !opaque);
     update();
+    if (changed)
+        Q_EMIT backgroundChanged();
 }
 
 void LyricsView::setArtwork(const QImage &image)
 {
     m_artwork = image;
     m_cover = {};
+    m_backdrop = {};
     m_tint = {};
     if (!image.isNull()) {
         const QColor average = image.scaled(1, 1, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).pixelColor(0, 0);
@@ -189,6 +199,7 @@ void LyricsView::setHeading(const QString &title, const QString &artist)
 
 void LyricsView::setLyricsStyle(const LyricsStyle &style)
 {
+    const bool background = style.videoBlur != m_style.videoBlur;
     m_style = style;
     m_style.scale = std::clamp(m_style.scale, LyricsStyle::kMinScale, LyricsStyle::kMaxScale);
     relayout();
@@ -197,6 +208,8 @@ void LyricsView::setLyricsStyle(const LyricsStyle &style)
     else
         m_scroll = clampScroll(m_scroll);
     update();
+    if (background)
+        Q_EMIT backgroundChanged();
 }
 
 void LyricsView::setPosition(double seconds, double duration)
@@ -547,9 +560,16 @@ void LyricsView::leaveEvent(QEvent *event)
     setHovered(-1);
 }
 
+void LyricsView::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    Q_EMIT backgroundChanged();
+}
+
 void LyricsView::hideEvent(QHideEvent *event)
 {
     QWidget::hideEvent(event);
+    Q_EMIT backgroundChanged();
     m_press.reset();
     m_hovered = -1;
     m_backHovered = false;
@@ -580,16 +600,28 @@ void LyricsView::paintEvent(QPaintEvent *)
     // Background: the cover's colors (blurred) for audio, a scrim over video.
     if (m_opaque) {
         p.fillRect(rect(), Theme::Surface);
-        if (!m_artwork.isNull()) {
-            // Scaling down to a few pixels and back up blurs it heavily.
-            const QImage tiny = m_artwork.scaled(12, 12, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-            p.setOpacity(0.35);
-            p.drawImage(rect(), tiny.scaled(size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        if (!m_artwork.isNull() && m_style.backdrop > 0) {
+            if (m_backdrop.isNull() || m_backdropSize != size() || m_backdropBlur != m_style.blur) {
+                // Scaling down and back up blurs: from the cover's own detail
+                // (no blur) down to a few pixels (heavy blur).
+                const double strength = m_style.blur / 100.0;
+                const int side = std::max(4, qRound(std::max(width(), height()) * std::pow(0.012, strength)));
+                const QImage small = m_artwork.scaled(side, side, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+                const QImage full = small.scaled(size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+                // Centered, cropped to the view.
+                m_backdrop = full.copy(QRect(QPoint((full.width() - width()) / 2, (full.height() - height()) / 2), size()));
+                m_backdropSize = size();
+                m_backdropBlur = m_style.blur;
+            }
+            p.setOpacity(m_style.backdrop / 100.0);
+            p.drawImage(rect(), m_backdrop);
             p.setOpacity(1);
         }
+        // A stronger backdrop than the default lets more of the cover through the shade.
+        const double through = m_artwork.isNull() ? 0.0 : std::max(0, m_style.backdrop - LyricsStyle().backdrop) / 65.0;
         QRadialGradient glow(rect().center(), std::max(width(), height()) * 0.7);
-        glow.setColorAt(0, withAlpha(m_tint.isValid() ? m_tint : QColor(0x1E, 0x24, 0x30), 0.55));
-        glow.setColorAt(1, withAlpha(Theme::Surface, 0.92));
+        glow.setColorAt(0, withAlpha(m_tint.isValid() ? m_tint : QColor(0x1E, 0x24, 0x30), 0.55 - 0.4 * through));
+        glow.setColorAt(1, withAlpha(Theme::Surface, 0.92 - 0.55 * through));
         p.fillRect(rect(), glow);
     } else {
         p.fillRect(rect(), QColor(0, 0, 0, std::clamp(m_style.dim * 255 / 100, 0, 255)));

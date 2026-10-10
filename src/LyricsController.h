@@ -70,12 +70,17 @@ Q_SIGNALS:
 private:
     void onFileLoaded();
     void refreshView();
+    // Blurs the video behind lyrics shown over it (a filter in mpv), or
+    // takes the blur off again.
+    void updateVideoBlur();
     bool canHaveLyrics() const;
 
     MpvWidget *m_mpv;
     AudioController *m_audio;
     QWidget *m_dialogParent;
     LyricsView *m_view;
+    // The blur put on the video (gblur sigma), 0 if none.
+    int m_videoBlur = 0;
     Lyrics::Document m_doc;
     QString m_lyricsPath;
     QString m_track;
