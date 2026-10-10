@@ -95,6 +95,7 @@ void ArtworkExtractor::request(const QString &path)
     }
     m_current = path;
     m_hasCover = false;
+    m_entry = -1;
     m_watchdog.start();
     mpvCommandAsync(m_mpv, {QStringLiteral("loadfile"), path, QStringLiteral("replace")});
 }
@@ -149,6 +150,10 @@ void ArtworkExtractor::processEvents()
             continue;
 
         switch (event->event_id) {
+        case MPV_EVENT_START_FILE:
+            // Requests run in order: the latest file to start is the one asked for.
+            m_entry = static_cast<const mpv_event_start_file *>(event->data)->playlist_entry_id;
+            break;
         case MPV_EVENT_FILE_LOADED: {
             char *path = mpv_get_property_string(m_mpv, "path");
             const bool isCurrent = path && QString::fromUtf8(path) == m_current;
@@ -170,6 +175,8 @@ void ArtworkExtractor::processEvents()
         case MPV_EVENT_END_FILE: {
             // Files without a cover end right away: nothing is selected to play.
             const auto *end = static_cast<mpv_event_end_file *>(event->data);
+            if (end->playlist_entry_id != m_entry)
+                break;
             if (end->reason == MPV_END_FILE_REASON_ERROR || (end->reason == MPV_END_FILE_REASON_EOF && !m_hasCover))
                 finish({});
             break;
