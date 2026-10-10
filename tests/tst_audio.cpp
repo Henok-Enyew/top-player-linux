@@ -447,7 +447,8 @@ void AudioTest::visualizationMenu()
     setVisualization(QStringLiteral("Off (Cover Only)"));
     QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
     QCOMPARE(m_audio->view()->mode(), AudioView::Mode::Artwork);
-    QVERIFY(!m_audio->view()->artwork().isNull());
+    // The cover is read in the background.
+    QTRY_VERIFY(!m_audio->view()->artwork().isNull());
     QTRY_COMPARE(propString("lavfi-complex"), QString());
     QTRY_COMPARE(propString("current-tracks/audio/id"), QStringLiteral("1"));
     // A song without one gets the minimal canvas.
