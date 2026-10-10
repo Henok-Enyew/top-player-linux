@@ -35,7 +35,8 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.0.7** · 🎬 **video that no longer stays black** on some graphics drivers, plus a **software video
+> **New in 1.0.8** · 📦 the **Flatpak downloads and streams** too (YouTube, Spotify), with the system's yt-dlp ·
+> **From 1.0.7** · 🎬 **video that no longer stays black** on some graphics drivers, plus a **software video
 > output** for the rest · ⬇️ **download streamed songs and videos** right from the playlist (video or MP3) ·
 > 📺 **YouTube playlists** (stream or save them all) · 🌫️ **lyrics background blur** and video blur · 🪟 drag the
 > mini player anywhere · 🎯 the playlist follows the song that plays
@@ -492,8 +493,10 @@ Countries** and **every other country** alphabetically. Then:
   **Tools › Download What's Playing** saves the stream that plays.
 
 > [!NOTE]
-> The tools use the system's `ffmpeg` and `yt-dlp`, so they are available in
-> the AppImage, the distro packages and source builds, not in the Flatpak.
+> The tools use the system's `ffmpeg` and `yt-dlp` (install them with your
+> package manager, e.g. `sudo dnf install yt-dlp`). That includes the Flatpak,
+> which runs the system's copies from inside its sandbox, so they stay as up to
+> date as your distribution keeps them.
 
 </details>
 
@@ -528,8 +531,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.7/Top_Player-1.0.7-x86_64.AppImage
-chmod +x Top_Player-1.0.7-x86_64.AppImage && ./Top_Player-1.0.7-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.8/Top_Player-1.0.8-x86_64.AppImage
+chmod +x Top_Player-1.0.8-x86_64.AppImage && ./Top_Player-1.0.8-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -722,11 +725,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.7 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.8 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.7 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.7 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.7 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.8 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.8 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.8 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -755,7 +758,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.7**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
+| [**1.0.8**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
+| [1.0.7](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
 | [1.0.6](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
 | [1.0.5](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
 | [1.0.4](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.4) | 2026-10-05 | Packages for Ubuntu 22.04 / 24.04 / 26.04, Debian 13, openSUSE Tumbleweed / Leap 16.0 and Arch Linux, next to the AppImage, Flatpak and Fedora RPM |
@@ -780,9 +784,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.7 && git push origin v1.0.7`
+2. `git tag v1.0.8 && git push origin v1.0.8`
 
-A tag with a suffix such as `v1.0.7-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.0.8-rc1` is published as a pre-release.
 
 </details>
 

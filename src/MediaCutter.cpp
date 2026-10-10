@@ -1,9 +1,9 @@
 #include "MediaCutter.h"
+#include "HostTools.h"
 
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
-#include <QStandardPaths>
 
 #include <algorithm>
 #include <cmath>
@@ -34,7 +34,7 @@ MediaCutter::~MediaCutter()
 
 QString MediaCutter::ffmpegPath()
 {
-    return QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    return HostTools::find(QStringLiteral("ffmpeg"));
 }
 
 QString MediaCutter::audioSuffix(AudioFormat format)

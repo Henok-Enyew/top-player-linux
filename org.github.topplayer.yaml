@@ -23,6 +23,10 @@ finish-args:
   - --share=network
   # mpv opens files by path and looks for subtitles next to the video.
   - --filesystem=host:ro
+  # Downloads, cut clips and lyrics are saved in the home folder.
+  - --filesystem=home
+  # yt-dlp and ffmpeg run from the system (packaging/flatpak/host-tool).
+  - --talk-name=org.freedesktop.Flatpak
   # Screenshots (Ctrl+E) are saved to ~/Pictures.
   - --filesystem=xdg-pictures
   # MPRIS, so the media keys and the desktop's media controls reach the player.
@@ -87,12 +91,28 @@ modules:
         tag: v7.360.1
         commit: 719cc95244a1f1d648dd72459822e026e6530f22
 
+  # mpv's YouTube support (its ytdl hook) is a Lua script.
+  - name: luajit
+    buildsystem: simple
+    build-commands:
+      - make -j${FLATPAK_BUILDER_N_JOBS} PREFIX=${FLATPAK_DEST}
+      - make install PREFIX=${FLATPAK_DEST}
+    cleanup:
+      - /bin
+      - /share/man
+    sources:
+      - type: git
+        url: https://github.com/LuaJIT/LuaJIT.git
+        # The version is read from the commit history.
+        disable-shallow-clone: true
+        commit: c6ffc141a8762b41703f9287d63d93622a13dd8f
+
   - name: libmpv
     buildsystem: meson
     config-opts:
       - -Dlibmpv=true
       - -Dcplayer=false
-      - -Dlua=disabled
+      - -Dlua=luajit
       - -Djavascript=disabled
       - -Dalsa=disabled
       - -Ddebug=false
@@ -108,6 +128,16 @@ modules:
       - type: archive
         url: https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz
         sha256: ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209
+
+  # yt-dlp and ffmpeg: the system's own, run outside the sandbox.
+  - name: host-tools
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 host-tool ${FLATPAK_DEST}/bin/yt-dlp
+      - install -Dm755 host-tool ${FLATPAK_DEST}/bin/ffmpeg
+    sources:
+      - type: file
+        path: packaging/flatpak/host-tool
 
   - name: top-player
     buildsystem: cmake-ninja
