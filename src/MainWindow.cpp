@@ -659,11 +659,12 @@ void MainWindow::openMediaDownloaderDialog()
         m_osd->showValue(tr("Downloaded:"), tr("%n song(s)", nullptr, int(paths.size())));
     });
     connect(dialog, &MediaDownloaderDialog::tracksStreamRequested, this,
-            [this](const QStringList &urls, const QStringList &titles) {
-                // Each entry is a YouTube search that mpv resolves through yt-dlp.
-                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), MediaDownloader::streamFormat(MediaDownloader::Format::AudioMp3));
+            [this](const QStringList &urls, const QStringList &titles, const QString &format) {
+                // Each entry is a page (or a YouTube search for a Spotify song)
+                // that mpv resolves through yt-dlp.
+                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
                 m_mpv->loadTitledFiles(urls, titles);
-                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n song(s)", nullptr, int(titles.size())));
+                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n entries", nullptr, int(titles.size())));
             });
     connect(dialog, &MediaDownloaderDialog::streamRequested, this, [this](const QString &url, const QString &format) {
         // mpv resolves the page through yt-dlp, picking streams with this format.

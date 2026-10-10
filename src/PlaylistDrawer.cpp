@@ -1,4 +1,5 @@
 #include "PlaylistDrawer.h"
+#include "DownloadQueue.h"
 #include "Icons.h"
 #include "LibraryPanel.h"
 #include "MpvWidget.h"
@@ -22,6 +23,7 @@
 #include <QSet>
 #include <QStackedWidget>
 #include <QStyledItemDelegate>
+#include <QToolTip>
 #include <QTabBar>
 #include <QTimer>
 #include <QToolButton>
@@ -48,6 +50,11 @@ constexpr int kDurationRole = Qt::UserRole + 1;
 constexpr int kPlayingRole = Qt::UserRole + 2;
 // mpv's id of the entry, which stays with it when the playlist is reordered.
 constexpr int kIdRole = Qt::UserRole + 3;
+// A download's state shown in place of the duration, and whether the entry
+// streams from the web and can be downloaded.
+constexpr int kDownloadRole = Qt::UserRole + 4;
+constexpr int kDownloadableRole = Qt::UserRole + 5;
+constexpr int kDownloadIconSize = 14;
 constexpr int kDurationGap = 8;
 constexpr int kPlayingBarWidth = 3;
 
@@ -76,7 +83,20 @@ QString durationText(double seconds)
     return minutes.startsWith(QLatin1Char('0')) ? minutes.mid(1) : minutes;
 }
 
-// Draws the entry's duration right-aligned, eliding the name before it.
+// Where an entry's download button is: a square at the right end of its row.
+QRect downloadButtonRect(const QRect &itemRect)
+{
+    const int side = itemRect.height();
+    return QRect(itemRect.right() - side - 2, itemRect.top(), side, side);
+}
+
+bool downloadInProgress(const QString &status)
+{
+    return !status.isEmpty() && status != DownloadQueue::tr("Saved") && status != DownloadQueue::tr("Failed");
+}
+
+// Draws the entry's duration (or download state) right-aligned, eliding the
+// name before it, and the download button on online entries under the pointer.
 class PlaylistItemDelegate : public QStyledItemDelegate
 {
 public:
@@ -86,25 +106,39 @@ public:
     {
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
-        const QString duration = index.data(kDurationRole).toString();
+        const QString download = index.data(kDownloadRole).toString();
+        const QString duration = download.isEmpty() ? index.data(kDurationRole).toString()
+                                                    : QStringLiteral("\u2193 ") + download;
+        const bool button = (opt.state & QStyle::State_MouseOver) && index.data(kDownloadableRole).toBool()
+                            && !downloadInProgress(download);
         const QWidget *widget = opt.widget;
         QStyle *style = widget ? widget->style() : QApplication::style();
         QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, widget);
+        const QRect buttonRect = downloadButtonRect(opt.rect);
+        if (button)
+            textRect.setRight(buttonRect.left() - 2);
         int durationWidth = 0;
-        if (!duration.isEmpty()) {
+        if (!duration.isEmpty())
             durationWidth = opt.fontMetrics.horizontalAdvance(duration) + kDurationGap;
+        if (!duration.isEmpty() || button)
             opt.text = opt.fontMetrics.elidedText(opt.text, opt.textElideMode, textRect.width() - durationWidth);
-        }
         style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
         if (index.data(kPlayingRole).toBool()) {
             // An accent bar along the left edge marks the entry that is playing.
             painter->fillRect(QRect(opt.rect.left(), opt.rect.top() + 3, kPlayingBarWidth, opt.rect.height() - 6), kPlayingColor);
         }
+        if (button) {
+            const QPixmap icon = skinIcon(IconType::Download).pixmap(QSize(kDownloadIconSize, kDownloadIconSize));
+            const QRect iconRect(QPoint(), QSize(kDownloadIconSize, kDownloadIconSize));
+            painter->drawPixmap(iconRect.translated(buttonRect.center() - iconRect.center()), icon);
+        }
         if (duration.isEmpty())
             return;
         painter->save();
         const bool selected = opt.state & QStyle::State_Selected;
-        painter->setPen(selected ? Theme::TextPrimary : kDurationColor);
+        painter->setPen(!download.isEmpty() ? (download == DownloadQueue::tr("Failed") ? QColor(0xFF, 0x6B, 0x5B) : Theme::Accent)
+                        : selected          ? Theme::TextPrimary
+                                            : kDurationColor);
         painter->setFont(opt.font);
         painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, duration);
         painter->restore();
@@ -182,6 +216,37 @@ PlaylistView::PlaylistView(QWidget *parent)
     setAcceptDrops(true);
     setTextElideMode(Qt::ElideMiddle);
     setUniformItemSizes(true);
+    // Rows under the pointer show their download button.
+    setMouseTracking(true);
+    viewport()->setAttribute(Qt::WA_Hover);
+}
+
+void PlaylistView::mousePressEvent(QMouseEvent *event)
+{
+    const QPoint pos = event->position().toPoint();
+    const QModelIndex index = indexAt(pos);
+    if (event->button() == Qt::LeftButton && index.isValid() && index.data(kDownloadableRole).toBool()
+        && !downloadInProgress(index.data(kDownloadRole).toString())
+        && downloadButtonRect(visualRect(index)).contains(pos)) {
+        Q_EMIT downloadButtonClicked(index.row(), viewport()->mapToGlobal(downloadButtonRect(visualRect(index)).bottomLeft()));
+        event->accept();
+        return;
+    }
+    QListWidget::mousePressEvent(event);
+}
+
+bool PlaylistView::viewportEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ToolTip) {
+        const auto *help = static_cast<QHelpEvent *>(event);
+        const QModelIndex index = indexAt(help->pos());
+        if (index.isValid() && index.data(kDownloadableRole).toBool()
+            && downloadButtonRect(visualRect(index)).contains(help->pos())) {
+            QToolTip::showText(help->globalPos(), PlaylistDrawer::tr("Download (video or audio)"), viewport());
+            return true;
+        }
+    }
+    return QListWidget::viewportEvent(event);
 }
 
 QList<int> PlaylistView::selectedVisibleRows() const
@@ -379,6 +444,16 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     connect(m_view, &PlaylistView::filesDropped, this, &PlaylistDrawer::filesDropped);
     connect(m_view, &PlaylistView::removeRequested, this, &PlaylistDrawer::removeRequested);
     connect(m_view, &QWidget::customContextMenuRequested, this, &PlaylistDrawer::showContextMenu);
+    connect(m_view, &PlaylistView::downloadButtonClicked, this, [this](int row, const QPoint &globalPos) {
+        QMenu menu(this);
+        menu.setObjectName(QStringLiteral("PlaylistDownloadMenu"));
+        // The selection if the row is part of it, else just the row.
+        QList<int> rows = m_view->selectedVisibleRows();
+        if (!rows.contains(row))
+            rows = {row};
+        addDownloadActions(&menu, rows);
+        menu.exec(globalPos);
+    });
     connect(m_filter, &QLineEdit::textChanged, this, &PlaylistDrawer::applyFilter);
     connect(shuffle, &QToolButton::clicked, this, &PlaylistDrawer::shuffleRequested);
 
@@ -526,6 +601,24 @@ void PlaylistDrawer::showContextMenu(const QPoint &pos)
         const int row = m_view->row(item);
         menu.addAction(skinIcon(IconType::Play), tr("Play"), this, [this, row] { Q_EMIT playRequested(row); });
     }
+    // Download: the selection if the clicked entry is part of it, else that entry.
+    QList<int> downloadRows = rows;
+    if (item && !rows.contains(m_view->row(item)))
+        downloadRows = {m_view->row(item)};
+    if (!downloadableRows(downloadRows).isEmpty()) {
+        QMenu *download = menu.addMenu(skinIcon(IconType::Download),
+                                       downloadRows.size() > 1 ? tr("Download Selected") : tr("Download"));
+        download->setObjectName(QStringLiteral("PlaylistContextDownloadMenu"));
+        addDownloadActions(download, downloadRows);
+    }
+    QList<int> all;
+    for (int row = 0; row < m_view->count(); ++row)
+        all.append(row);
+    if (const int online = int(downloadableRows(all).size()); online > 1) {
+        QMenu *downloadAll = menu.addMenu(tr("Download All Online Entries (%1)").arg(online));
+        downloadAll->setObjectName(QStringLiteral("PlaylistDownloadAllMenu"));
+        addDownloadActions(downloadAll, all);
+    }
     QAction *remove = menu.addAction(skinIcon(IconType::Remove), tr("Remove Selected"), this,
                                      [this, rows] { Q_EMIT removeRequested(rows); });
     remove->setShortcut(QKeySequence(Qt::Key_Delete));
@@ -547,6 +640,53 @@ void PlaylistDrawer::showContextMenu(const QPoint &pos)
         menu.addAction(action);
     syncOptions();
     menu.exec(m_view->viewport()->mapToGlobal(pos));
+}
+
+QList<int> PlaylistDrawer::downloadableRows(const QList<int> &rows) const
+{
+    QList<int> result;
+    for (int row : rows) {
+        if (QListWidgetItem *item = m_view->item(row); item && item->data(kDownloadableRole).toBool())
+            result.append(row);
+    }
+    return result;
+}
+
+void PlaylistDrawer::addDownloadActions(QMenu *menu, const QList<int> &rows)
+{
+    using Format = MediaDownloader::Format;
+    const QList<int> targets = downloadableRows(rows);
+    const QList<QPair<QString, Format>> formats{
+        {tr("Video (Best Quality, MP4)"), Format::Best},
+        {tr("Video (1080p, MP4)"), Format::Max1080},
+        {tr("Video (720p, MP4)"), Format::Max720},
+        {tr("Audio Only (MP3)"), Format::AudioMp3},
+    };
+    for (const auto &[label, format] : formats) {
+        QAction *action = menu->addAction(label, this, [this, targets, format = format] {
+            Q_EMIT downloadRequested(targets, format);
+        });
+        action->setEnabled(!targets.isEmpty() && !MediaDownloader::executable().isEmpty());
+        if (format == Format::AudioMp3)
+            menu->insertSeparator(action);
+    }
+    if (MediaDownloader::executable().isEmpty()) {
+        menu->addSeparator();
+        menu->addAction(tr("Install yt-dlp to download"))->setEnabled(false);
+    }
+}
+
+void PlaylistDrawer::setDownloadStatus(const QString &entry, const QString &status)
+{
+    if (status.isEmpty())
+        m_downloadStatus.remove(entry);
+    else
+        m_downloadStatus.insert(entry, status);
+    for (int row = 0; row < m_view->count(); ++row) {
+        QListWidgetItem *item = m_view->item(row);
+        if (item->data(kFilenameRole).toString() == entry && item->data(kDownloadRole).toString() != status)
+            item->setData(kDownloadRole, status);
+    }
 }
 
 bool PlaylistDrawer::eventFilter(QObject *watched, QEvent *event)
@@ -698,6 +838,10 @@ void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double
         item->setToolTip(filename);
         item->setData(kFilenameRole, filename);
         item->setData(kIdRole, entry.value(QStringLiteral("id")));
+        if (DownloadQueue::canDownload(filename))
+            item->setData(kDownloadableRole, true);
+        if (const QString status = m_downloadStatus.value(filename); !status.isEmpty())
+            item->setData(kDownloadRole, status);
         if (i < durations.size())
             item->setData(kDurationRole, durationText(durations[i]));
         if (entry.value(QStringLiteral("current")).toBool()) {

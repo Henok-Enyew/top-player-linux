@@ -1,6 +1,9 @@
 #pragma once
 
+#include "MediaDownloader.h"
 #include "PlaylistOps.h"
+
+#include <QHash>
 
 #include <QFrame>
 #include <QListWidget>
@@ -34,8 +37,12 @@ Q_SIGNALS:
     // Folders are not expanded yet.
     void filesDropped(const QStringList &files, int row);
     void removeRequested(const QList<int> &rows);
+    // The download button of entry `row` was clicked, at `globalPos`.
+    void downloadButtonClicked(int row, const QPoint &globalPos);
 
 protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    bool viewportEvent(QEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -68,6 +75,9 @@ public:
     // `durations` (seconds, negative if unknown) parallels `playlist` and may be empty.
     void setEntries(const QVariantList &playlist, const QList<double> &durations = {});
     void setDurations(const QList<double> &durations);
+    // Shows a download's state ("Queued", "45%", "Saved", "Failed"; empty
+    // for none) beside the entries with filename `entry`.
+    void setDownloadStatus(const QString &entry, const QString &status);
     // Marks entry `row` as the one playing (-1: none) and scrolls it into
     // view, unless the pointer is over the list. Follows mpv's playlist-pos,
     // which changes without the playlist itself being reported again.
@@ -114,6 +124,8 @@ Q_SIGNALS:
     void removeDuplicatesRequested();
     void openPlaylistRequested();
     void savePlaylistRequested();
+    // Save entries that stream from the web (see DownloadQueue).
+    void downloadRequested(const QList<int> &rows, MediaDownloader::Format format);
     void expandedChanged(bool expanded);
     void wideChanged(bool wide);
 
@@ -129,6 +141,9 @@ private:
     // Checks the session options to match the saved settings.
     void syncOptions();
     void showContextMenu(const QPoint &pos);
+    // The formats to download `rows` in.
+    void addDownloadActions(QMenu *menu, const QList<int> &rows);
+    QList<int> downloadableRows(const QList<int> &rows) const;
     void markPlaying(QListWidgetItem *item, bool playing);
     // Scrolls the playing entry into view if it moved since the last time.
     void revealPlaying();
@@ -157,4 +172,6 @@ private:
     bool m_wide = false;
     // mpv's id of the entry last scrolled into view.
     QVariant m_revealedId;
+    // Download states by entry filename, kept across rebuilds of the list.
+    QHash<QString, QString> m_downloadStatus;
 };

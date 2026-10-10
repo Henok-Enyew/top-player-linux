@@ -1,4 +1,5 @@
 #include "PlaylistController.h"
+#include "DownloadQueue.h"
 #include "MediaFiles.h"
 #include "MediaLibrary.h"
 #include "MediaProber.h"
@@ -37,6 +38,7 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
     , m_dialogParent(dialogParent)
     , m_prober(new MediaProber(this))
     , m_library(new MediaLibrary(MediaLibrary::defaultFile(), this))
+    , m_downloads(new DownloadQueue(this))
 {
     using PlaylistOps::SortKey;
     connect(m_drawer, &PlaylistDrawer::playRequested, this, [this](int index) {
@@ -58,6 +60,33 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
     connect(m_drawer, &PlaylistDrawer::removeMissingRequested, this, &PlaylistController::removeMissing);
     connect(m_drawer, &PlaylistDrawer::removeDuplicatesRequested, this, &PlaylistController::removeDuplicates);
     connect(m_drawer, &PlaylistDrawer::savePlaylistRequested, this, &PlaylistController::savePlaylistDialog);
+    connect(m_drawer, &PlaylistDrawer::downloadRequested, this, [this](const QList<int> &rows, MediaDownloader::Format format) {
+        refresh();
+        int queued = 0;
+        QString name;
+        for (int row : rows) {
+            if (row < 0 || row >= m_entries.size())
+                continue;
+            const PlaylistOps::Entry &entry = m_entries[row];
+            // Spotify songs and streams carry their name as the title.
+            if (m_downloads->enqueue(entry.filename, entry.title, format)) {
+                ++queued;
+                name = PlaylistOps::displayName(entry);
+            }
+        }
+        if (queued > 0)
+            Q_EMIT message(tr("Downloading"), queued == 1 ? name : tr("%n entries", nullptr, queued));
+        else if (MediaDownloader::executable().isEmpty())
+            Q_EMIT message(tr("Install yt-dlp to download"));
+    });
+    connect(m_downloads, &DownloadQueue::statusChanged, m_drawer, &PlaylistDrawer::setDownloadStatus);
+    connect(m_downloads, &DownloadQueue::finished, this,
+            [this](const QString &, bool ok, const QStringList &files, const QString &error) {
+                if (ok)
+                    Q_EMIT message(tr("Downloaded:"), QFileInfo(files.value(0)).fileName());
+                else
+                    Q_EMIT message(tr("Download failed"), error.section(QLatin1Char('\n'), 0, 0).left(120));
+            });
 
     m_playlistTimer.setSingleShot(true);
     m_playlistTimer.setInterval(kPlaylistRefreshMs);

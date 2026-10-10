@@ -57,6 +57,8 @@ add_library(top-player-core OBJECT
     src/AudioView.h
     src/ControlBar.cpp
     src/ControlBar.h
+    src/DownloadQueue.cpp
+    src/DownloadQueue.h
     src/EmptyStateWidget.cpp
     src/EmptyStateWidget.h
     src/Icons.cpp

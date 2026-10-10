@@ -46,13 +46,22 @@ public:
         QString type;
         QString id;
     };
+    // A video of a playlist read with yt-dlp.
+    struct PlaylistEntry {
+        QString url;
+        QString title;
+        double duration = 0; // seconds; 0 if unknown
+    };
 
     explicit MediaDownloader(QObject *parent = nullptr);
     ~MediaDownloader() override;
 
     // The yt-dlp found on $PATH, or empty.
     static QString executable();
-    static QStringList arguments(const QString &url, Format format, const QString &directory);
+    // yt-dlp arguments that save `url` in `format`, named after its title, or
+    // `name` (plus the extension) if given.
+    static QStringList arguments(const QString &url, Format format, const QString &directory,
+                                 const QString &name = QString());
     // mpv's ytdl-format for streaming in `format`.
     static QString streamFormat(Format format);
 
@@ -81,6 +90,30 @@ public:
     static QStringList spotifyArguments(const SpotifyTrack &track, const QString &directory, bool strict);
     // What mpv plays to stream `track`: a YouTube search through yt-dlp.
     static QString spotifyStreamUrl(const SpotifyTrack &track);
+    // What yt-dlp fetches for a playlist entry: a web page as it is, a
+    // "ytdl://" entry (a Spotify song's YouTube search) without the prefix;
+    // empty for local files and other things that can't be downloaded.
+    static QString downloadSource(const QString &entry);
+    // A YouTube playlist: ".../playlist?list=...", or a video in one ("&list=").
+    static bool isPlaylistUrl(const QString &url);
+    // A link to the playlist alone, not to a video in it.
+    static bool isPlaylistOnlyUrl(const QString &url);
+    // The videos in yt-dlp's --flat-playlist --dump-single-json output (a
+    // single video gives one); `title` gets the playlist's name.
+    static QList<PlaylistEntry> parsePlaylistJson(const QByteArray &json, QString *title = nullptr);
+    // yt-dlp arguments that save every video of a playlist, in order, into a
+    // folder named after the playlist.
+    static QStringList playlistArguments(const QString &url, Format format, const QString &directory);
+    // Reads the videos of a playlist link; playlistResolved() follows.
+    bool resolvePlaylist(const QString &url);
+    bool isResolving() const;
+    // Downloads a playlist entry (see downloadSource()). A Spotify song's
+    // search ("ytdl://ytsearch1:Artist - Title") saved as audio becomes a
+    // tagged "Artist - Title.mp3", as Spotify downloads are.
+    bool startEntry(const QString &entry, const QString &title, Format format, const QString &directory);
+    // Downloads every video of a playlist link (files() lists them).
+    bool startPlaylist(const QString &url, Format format, const QString &directory);
+
     // Where Spotify pages are read from (https://open.spotify.com); for tests.
     void setSpotifyBaseUrl(const QUrl &url) { m_spotifyBase = url; }
     // Reads the tracks of a Spotify link; spotifyResolved() follows.
@@ -105,6 +138,10 @@ Q_SIGNALS:
     // empty with an error if the link couldn't be read.
     void spotifyResolved(const QList<MediaDownloader::SpotifyTrack> &tracks, const QString &collection,
                          const QString &error);
+    // The videos of a playlist link (resolvePlaylist()); empty with an error
+    // if it couldn't be read.
+    void playlistResolved(const QList<MediaDownloader::PlaylistEntry> &entries, const QString &title,
+                          const QString &error);
 
 private:
     bool launch(const QStringList &args);
@@ -117,6 +154,13 @@ private:
     void onFinished(int exitCode, QProcess::ExitStatus status);
 
     QPointer<QProcess> m_process;
+    QPointer<QProcess> m_resolver;
+    // A whole playlist being saved: the files it printed, and which item of
+    // how many is downloading.
+    bool m_playlistDownload = false;
+    QStringList m_paths;
+    int m_item = 0;
+    int m_items = 0;
     QByteArray m_stdout;
     QByteArray m_stderr;
     QString m_path;
@@ -138,3 +182,4 @@ private:
 };
 
 Q_DECLARE_METATYPE(MediaDownloader::SpotifyTrack)
+Q_DECLARE_METATYPE(MediaDownloader::PlaylistEntry)
