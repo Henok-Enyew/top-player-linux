@@ -1,7 +1,9 @@
 #include "MpvWidget.h"
 #include "MpvHelpers.h"
+#include "PlaylistSession.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -9,13 +11,21 @@
 #include <QMetaObject>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QOpenGLWidget>
+#include <QPainter>
 #include <QPalette>
+#include <QRegularExpression>
+#include <QSettings>
 #include <QTemporaryDir>
+#include <QThread>
+#include <QWindow>
 
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -87,6 +97,21 @@ constexpr int kTimePosIntervalMs = 100;
 // Well below the ~1000 unanswered requests mpv accepts per client.
 constexpr int kMaxPendingReplies = 256;
 
+// The software output draws at most this many pixels per frame (1080p) and
+// scales the picture up from there: the CPU does all the work.
+constexpr qint64 kMaxSoftwarePixels = 1920LL * 1080LL;
+// A frame that takes this long to reach the screen while the window is in
+// front counts as slow; after kStallFrames of them renderStalled() goes out.
+constexpr int kStallMs = 1500;
+constexpr int kStallFrames = 3;
+
+std::optional<MpvWidget::VideoOutput> s_videoOutputOverride;
+
+QString settingsFile()
+{
+    return PlaylistSession::configDir() + QStringLiteral("/settings.ini");
+}
+
 const QStringList kSubtitleExtensions{
     QStringLiteral("srt"), QStringLiteral("ass"), QStringLiteral("ssa"), QStringLiteral("vtt"),
     QStringLiteral("sub"), QStringLiteral("idx"), QStringLiteral("sup"), QStringLiteral("smi"),
@@ -94,8 +119,63 @@ const QStringList kSubtitleExtensions{
 
 } // namespace
 
+// Draws the video with OpenGL, filling the MpvWidget it belongs to. Mouse
+// events go straight to the MpvWidget (and on to the window).
+class MpvGlSurface : public QOpenGLWidget
+{
+public:
+    explicit MpvGlSurface(MpvWidget *owner)
+        : QOpenGLWidget(owner)
+        , m_owner(owner)
+    {
+        setObjectName(QStringLiteral("MpvGlSurface"));
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+protected:
+    void initializeGL() override { m_owner->initializeGl(); }
+    void paintGL() override { m_owner->paintGl(); }
+
+private:
+    MpvWidget *m_owner;
+};
+
+std::optional<MpvWidget::VideoOutput> MpvWidget::parseVideoOutput(const QString &name)
+{
+    const QString value = name.trimmed().toLower();
+    if (value == QLatin1String("opengl") || value == QLatin1String("gl") || value == QLatin1String("gpu"))
+        return VideoOutput::OpenGL;
+    if (value == QLatin1String("software") || value == QLatin1String("sw") || value == QLatin1String("cpu"))
+        return VideoOutput::Software;
+    return std::nullopt;
+}
+
+MpvWidget::VideoOutput MpvWidget::configuredVideoOutput()
+{
+    if (s_videoOutputOverride)
+        return *s_videoOutputOverride;
+    if (const auto fromEnv = parseVideoOutput(qEnvironmentVariable("TOPPLAYER_VIDEO_OUTPUT")))
+        return *fromEnv;
+    const QString saved = QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("video/output")).toString();
+    return parseVideoOutput(saved).value_or(VideoOutput::OpenGL);
+}
+
+void MpvWidget::saveVideoOutput(VideoOutput output)
+{
+    QSettings(settingsFile(), QSettings::IniFormat)
+        .setValue(QStringLiteral("video/output"),
+                  output == VideoOutput::Software ? QStringLiteral("software") : QStringLiteral("opengl"));
+}
+
+void MpvWidget::overrideVideoOutput(std::optional<VideoOutput> output)
+{
+    s_videoOutputOverride = output;
+}
+
 MpvWidget::MpvWidget(QWidget *parent)
-    : QOpenGLWidget(parent)
+    : QWidget(parent)
+    , m_output(configuredVideoOutput())
 {
     m_mpv = mpv_create();
     if (!m_mpv)
@@ -103,7 +183,17 @@ MpvWidget::MpvWidget(QWidget *parent)
 
     // Rendering happens through the render API, and all input is handled by Qt.
     mpv_set_option_string(m_mpv, "vo", "libmpv");
-    mpv_set_option_string(m_mpv, "hwdec", "auto-safe");
+    // mpv's default chroma scaler (lanczos, drawn in two passes from a lookup
+    // texture) leaves the whole picture black on some Mesa drivers, at random
+    // from one start to the next, while the sound and the clock run on.
+    // Bilinear chroma is what mpv's "fast" profile uses; the difference is
+    // hard to see, as chroma is only upscaled by two.
+    mpv_set_option_string(m_mpv, "cscale", "bilinear");
+    // The software output has no GPU to hand decoded frames to: hardware
+    // decoders copy them back to memory.
+    mpv_set_option_string(m_mpv, "hwdec", m_output == VideoOutput::Software ? "auto-copy-safe" : "auto-safe");
+    if (m_output == VideoOutput::Software)
+        mpv_set_option_string(m_mpv, "sw-fast", "yes");
     mpv_set_option_string(m_mpv, "keep-open", "yes");
     mpv_set_option_string(m_mpv, "input-default-bindings", "no");
     mpv_set_option_string(m_mpv, "input-vo-keyboard", "no");
@@ -131,21 +221,53 @@ MpvWidget::MpvWidget(QWidget *parent)
         mpv_observe_property(m_mpv, 0, name, MPV_FORMAT_NODE);
     for (const char *name : kStateProperties)
         m_stateProperties.insert(QString::fromLatin1(name));
+    // Errors only: to explain a video that can't be shown (a missing codec).
+    mpv_request_log_messages(m_mpv, "error");
     mpv_set_wakeup_callback(m_mpv, &MpvWidget::onMpvWakeup, this);
 
     m_timePosTimer = new QTimer(this);
     m_timePosTimer->setSingleShot(true);
     m_timePosTimer->setInterval(kTimePosIntervalMs);
     connect(m_timePosTimer, &QTimer::timeout, this, &MpvWidget::flushTimePos);
+
+    if (m_output == VideoOutput::Software) {
+        // Painted by this widget alone: no OpenGL anywhere in the window.
+        setAttribute(Qt::WA_OpaquePaintEvent);
+        initializeSoftware();
+    } else {
+        m_surface = new MpvGlSurface(this);
+        m_surface->setGeometry(rect());
+        connect(m_surface, &QOpenGLWidget::frameSwapped, this, &MpvWidget::onFrameSwapped);
+        // A frame that never reaches the screen is noticed even if nothing else happens.
+        m_stallTimer = new QTimer(this);
+        m_stallTimer->setSingleShot(true);
+        m_stallTimer->setInterval(kStallMs + 100);
+        connect(m_stallTimer, &QTimer::timeout, this, [this] {
+            if (m_frameRequested.isValid())
+                noteFrameLatency(m_frameRequested.elapsed());
+        });
+    }
 }
 
 MpvWidget::~MpvWidget()
 {
     mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
-    makeCurrent();
     if (m_renderCtx)
-        mpv_render_context_free(m_renderCtx);
-    doneCurrent();
+        mpv_render_context_set_update_callback(m_renderCtx, nullptr, nullptr);
+    if (m_renderThread) {
+        // Let a frame being drawn finish before the context goes away.
+        m_renderThread->quit();
+        m_renderThread->wait();
+        delete m_renderWorker;
+        if (m_renderCtx)
+            mpv_render_context_free(m_renderCtx);
+    } else if (m_surface) {
+        m_surface->makeCurrent();
+        if (m_renderCtx)
+            mpv_render_context_free(m_renderCtx);
+        m_surface->doneCurrent();
+    }
+    m_renderCtx = nullptr;
     mpv_terminate_destroy(m_mpv);
 }
 
@@ -559,6 +681,16 @@ QString MpvWidget::trackLabel(const QVariantMap &track)
     return label;
 }
 
+QString MpvWidget::missingDecoderCodec(const QString &prefix, const QString &text)
+{
+    // "Failed to initialize a decoder for codec 'hevc'." from the video decoder.
+    static const QRegularExpression decoderFailed(QStringLiteral("decoder for codec '([^']+)'"));
+    if (prefix != QLatin1String("vd"))
+        return {};
+    const QRegularExpressionMatch m = decoderFailed.match(text);
+    return m.hasMatch() ? m.captured(1) : QString();
+}
+
 bool MpvWidget::isSubtitleFile(const QString &path)
 {
     return kSubtitleExtensions.contains(QFileInfo(path).suffix().toLower());
@@ -572,8 +704,10 @@ QString MpvWidget::subtitleFileFilter()
     return tr("Subtitles (%1);;All Files (*)").arg(patterns.join(QLatin1Char(' ')));
 }
 
-void MpvWidget::initializeGL()
+void MpvWidget::initializeGl()
 {
+    if (m_renderCtx)
+        return;
     mpv_opengl_init_params glInit{&getProcAddress, nullptr};
     std::vector<mpv_render_param> params{
         {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
@@ -595,10 +729,22 @@ void MpvWidget::initializeGL()
         throw std::runtime_error("failed to initialize mpv GL context");
 
     mpv_render_context_set_update_callback(m_renderCtx, &MpvWidget::onMpvRenderUpdate, this);
-    connect(this, &QOpenGLWidget::frameSwapped, this, &MpvWidget::onFrameSwapped, Qt::UniqueConnection);
 
-    m_glRenderer = QString::fromLatin1(reinterpret_cast<const char *>(context()->functions()->glGetString(GL_RENDERER)));
+    m_glRenderer = QString::fromLatin1(
+        reinterpret_cast<const char *>(m_surface->context()->functions()->glGetString(GL_RENDERER)));
+    // OpenGL drawn by the CPU (no GPU driver, a virtual machine): the cheap scalers.
+    static const QRegularExpression softwareGl(QStringLiteral("llvmpipe|softpipe|swrast|software"),
+                                               QRegularExpression::CaseInsensitiveOption);
+    if (softwareGl.match(m_glRenderer).hasMatch()) {
+        setMpvProperty(QStringLiteral("scale"), QStringLiteral("bilinear"));
+        setMpvProperty(QStringLiteral("dscale"), QStringLiteral("bilinear"));
+        setMpvProperty(QStringLiteral("dither"), QStringLiteral("no"));
+    }
+    runPendingLoads();
+}
 
+void MpvWidget::runPendingLoads()
+{
     for (const QueuedCommand &cmd : std::exchange(m_pendingLoads, {})) {
         if (cmd.named.isEmpty())
             command(cmd.args);
@@ -607,12 +753,147 @@ void MpvWidget::initializeGL()
     }
 }
 
-void MpvWidget::paintGL()
+void MpvWidget::initializeSoftware()
+{
+    std::vector<mpv_render_param> params{
+        {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_SW)},
+        {MPV_RENDER_PARAM_INVALID, nullptr},
+    };
+    if (mpv_render_context_create(&m_renderCtx, m_mpv, params.data()) < 0)
+        throw std::runtime_error("failed to initialize mpv software renderer");
+    mpv_render_context_set_update_callback(m_renderCtx, &MpvWidget::onMpvRenderUpdate, this);
+
+    // mpv waits for each frame's display time while drawing it: off the GUI thread.
+    m_renderThread = new QThread(this);
+    m_renderThread->setObjectName(QStringLiteral("mpv-sw-render"));
+    m_renderWorker = new QObject;
+    m_renderWorker->moveToThread(m_renderThread);
+    m_renderThread->start();
+    runPendingLoads();
+}
+
+void MpvWidget::requestSoftwareFrame()
+{
+    if (!m_renderCtx || m_idle || !isVisible()) {
+        update();
+        return;
+    }
+    if (m_frameBusy) {
+        m_frameDirty = true;
+        return;
+    }
+    m_frameBusy = true;
+    QSize size = (QSizeF(this->size()) * devicePixelRatioF()).toSize().expandedTo(QSize(16, 16));
+    const qint64 pixels = qint64(size.width()) * size.height();
+    if (pixels > kMaxSoftwarePixels)
+        size = (QSizeF(size) * std::sqrt(double(kMaxSoftwarePixels) / double(pixels))).toSize();
+    mpv_render_context *ctx = m_renderCtx;
+    QMetaObject::invokeMethod(m_renderWorker, [this, ctx, size] {
+        // Rows of a multiple of 64 bytes, as mpv prefers.
+        const int alignedWidth = (size.width() + 15) & ~15;
+        QImage image(alignedWidth, size.height(), QImage::Format_RGB32);
+        if (image.isNull())
+            return;
+        int surfaceSize[2] = {size.width(), size.height()};
+        size_t stride = static_cast<size_t>(image.bytesPerLine());
+        char format[] = "bgr0";
+        mpv_render_param params[]{
+            {MPV_RENDER_PARAM_SW_SIZE, surfaceSize},
+            {MPV_RENDER_PARAM_SW_FORMAT, format},
+            {MPV_RENDER_PARAM_SW_STRIDE, &stride},
+            {MPV_RENDER_PARAM_SW_POINTER, image.bits()},
+            {MPV_RENDER_PARAM_INVALID, nullptr},
+        };
+        mpv_render_context_render(ctx, params);
+        // The fourth byte is left undefined; Qt expects it opaque.
+        for (int y = 0; y < size.height(); ++y) {
+            auto *line = reinterpret_cast<quint32 *>(image.scanLine(y));
+            for (int x = 0; x < size.width(); ++x)
+                line[x] |= 0xFF000000u;
+        }
+        image = image.copy(0, 0, size.width(), size.height());
+        QMetaObject::invokeMethod(this, [this, image] { onSoftwareFrame(image); }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MpvWidget::onSoftwareFrame(const QImage &frame)
+{
+    m_frameBusy = false;
+    if (!m_idle)
+        m_frame = frame;
+    update();
+    if (std::exchange(m_frameDirty, false))
+        requestSoftwareFrame();
+}
+
+QImage MpvWidget::grabFrame()
+{
+    if (m_surface)
+        return m_surface->grabFramebuffer();
+    if (m_idle || m_frame.isNull()) {
+        QImage blank(size().expandedTo(QSize(1, 1)), QImage::Format_RGB32);
+        blank.fill(palette().color(QPalette::Window));
+        return blank;
+    }
+    return m_frame;
+}
+
+void MpvWidget::paintEvent(QPaintEvent *)
+{
+    if (m_surface)
+        return;
+    QPainter p(this);
+    if (m_idle || m_frame.isNull()) {
+        // Nothing is loaded: the skin's background instead of the last frame.
+        p.fillRect(rect(), palette().color(QPalette::Window));
+        return;
+    }
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.drawImage(rect(), m_frame);
+}
+
+void MpvWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (m_surface)
+        m_surface->setGeometry(rect());
+    else
+        requestSoftwareFrame();
+}
+
+void MpvWidget::repaintVideo()
+{
+    if (m_surface)
+        m_surface->update();
+    else
+        requestSoftwareFrame();
+}
+
+bool MpvWidget::windowInFront() const
+{
+    const QWidget *top = window();
+    const QWindow *handle = top->windowHandle();
+    return top->isActiveWindow() && !top->isMinimized() && handle && handle->isExposed();
+}
+
+void MpvWidget::noteFrameLatency(qint64 ms)
+{
+    m_frameRequested.invalidate();
+    m_stallTimer->stop();
+    if (ms < kStallMs || m_stallReported || m_idle || !windowInFront())
+        return;
+    if (++m_slowFrames >= kStallFrames) {
+        m_stallReported = true;
+        Q_EMIT renderStalled();
+    }
+}
+
+void MpvWidget::paintGl()
 {
     if (!m_renderCtx)
         return;
 
-    QOpenGLFunctions *gl = context()->functions();
+    QOpenGLFunctions *gl = m_surface->context()->functions();
     if (m_idle) {
         // Nothing is loaded: show the skin's background instead of the last frame.
         const QColor background = palette().color(QPalette::Window);
@@ -621,11 +902,11 @@ void MpvWidget::paintGL()
         return;
     }
 
-    const qreal dpr = devicePixelRatioF();
+    const qreal dpr = m_surface->devicePixelRatioF();
     mpv_opengl_fbo fbo{
-        static_cast<int>(defaultFramebufferObject()),
-        static_cast<int>(width() * dpr),
-        static_cast<int>(height() * dpr),
+        static_cast<int>(m_surface->defaultFramebufferObject()),
+        static_cast<int>(m_surface->width() * dpr),
+        static_cast<int>(m_surface->height() * dpr),
         0,
     };
     int flipY = 1;
@@ -651,6 +932,8 @@ void MpvWidget::onFrameSwapped()
     // Lets mpv time its frames against the real presentation.
     if (m_renderCtx && !m_idle)
         mpv_render_context_report_swap(m_renderCtx);
+    if (m_frameRequested.isValid())
+        noteFrameLatency(m_frameRequested.elapsed());
 }
 
 void MpvWidget::processMpvEvents()
@@ -675,7 +958,9 @@ void MpvWidget::processMpvEvents()
                     : QVariant();
                 if (name == QLatin1String("idle-active")) {
                     m_idle = value.toBool();
-                    update();
+                    if (m_idle)
+                        m_frame = {};
+                    repaintVideo();
                 } else if (name == QLatin1String("playlist-pos") && value.toInt() >= 0) {
                     m_lastPlaylistPos = value.toInt();
                 } else if (name == QLatin1String("time-pos")) {
@@ -755,6 +1040,15 @@ void MpvWidget::processMpvEvents()
             Q_EMIT fileLoaded();
             break;
         }
+        case MPV_EVENT_LOG_MESSAGE: {
+            const auto *msg = static_cast<const mpv_event_log_message *>(event->data);
+            const QString codec = missingDecoderCodec(QString::fromUtf8(msg->prefix), QString::fromUtf8(msg->text));
+            if (!codec.isEmpty() && !m_reportedCodecs.contains(codec)) {
+                m_reportedCodecs.insert(codec);
+                Q_EMIT videoDecodeFailed(codec, QString::fromUtf8(msg->text).trimmed());
+            }
+            break;
+        }
         case MPV_EVENT_SEEK:
             m_seeking = m_fileLoaded;
             break;
@@ -791,7 +1085,17 @@ void MpvWidget::flushTimePos()
 
 void MpvWidget::onRenderUpdate()
 {
-    update();
+
+    if (!m_surface) {
+        requestSoftwareFrame();
+        return;
+    }
+    // Watch for the frame to reach the screen (see renderStalled()).
+    if (!m_frameRequested.isValid() && !m_idle && !m_stallReported && windowInFront()) {
+        m_frameRequested.start();
+        m_stallTimer->start();
+    }
+    m_surface->update();
 }
 
 void MpvWidget::onMpvWakeup(void *ctx)

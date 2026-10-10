@@ -20,10 +20,15 @@
 #include "TestClip.h"
 
 #include <QApplication>
+#include <QScreen>
 #include <QDialog>
 #include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
 #include <QListWidget>
 #include <QSettings>
 #include <QSignalSpy>
@@ -89,6 +94,9 @@ private Q_SLOTS:
     void nextAndPreviousPlayFromPause();
     void playlistShortcut();
     void restartHandsOverSession();
+    void videoIsDrawn_data();
+    void videoIsDrawn();
+    void missingCodecIsReported();
 
 private:
     QVariant prop(const char *name) const { return m_mpv->mpvProperty(QString::fromLatin1(name)); }
@@ -208,7 +216,7 @@ void TransportTest::stopButton()
     QTRY_COMPARE(timeLabel->text().count(QStringLiteral("00:00:00")), 2);
     auto *playButton = m_window->findChild<QToolButton *>(QStringLiteral("PlayButton"));
     QTRY_COMPARE(iconImage(playButton->icon()), iconImage(skinIcon(IconType::Play)));
-    const QImage frame = m_mpv->grabFramebuffer();
+    const QImage frame = m_mpv->grabFrame();
     QCOMPARE(frame.pixelColor(frame.rect().center()).rgb(), m_mpv->palette().color(QPalette::Window).rgb());
 
     // Play starts the stopped entry again.
@@ -1085,6 +1093,75 @@ void TransportTest::restartHandsOverSession()
     QTRY_VERIFY(!prop("pause").toBool());
     // A normal start doesn't restore what remembering is off for.
     PlaylistSession::setRememberPlaylist(true);
+}
+
+void TransportTest::videoIsDrawn_data()
+{
+    QTest::addColumn<int>("output");
+    QTest::newRow("opengl") << int(MpvWidget::VideoOutput::OpenGL);
+    QTest::newRow("software") << int(MpvWidget::VideoOutput::Software);
+}
+
+void TransportTest::videoIsDrawn()
+{
+    QFETCH(int, output);
+    // A plain red picture, in a window of its own with the chosen output.
+    const QString red = m_dir.filePath(QStringLiteral("red.mkv"));
+    if (!QFileInfo::exists(red)) {
+        QProcess ffmpeg;
+        ffmpeg.start(QStandardPaths::findExecutable(QStringLiteral("ffmpeg")),
+                     {QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-y"), QStringLiteral("-f"),
+                      QStringLiteral("lavfi"), QStringLiteral("-i"), QStringLiteral("color=c=red:size=160x90:rate=10:duration=30"),
+                      QStringLiteral("-c:v"), QStringLiteral("mpeg4"), QStringLiteral("-q:v"), QStringLiteral("2"), red});
+        QVERIFY(ffmpeg.waitForFinished(60000) && ffmpeg.exitCode() == 0);
+    }
+    delete m_window;
+    m_window = nullptr;
+    MpvWidget::overrideVideoOutput(MpvWidget::VideoOutput(output));
+    {
+        MpvWidget video;
+        QCOMPARE(int(video.videoOutput()), output);
+        video.resize(320, 180);
+        video.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&video));
+        video.loadFile(red);
+        QTRY_VERIFY_WITH_TIMEOUT(video.mpvProperty(QStringLiteral("time-pos")).toDouble() > 0.3, 10000);
+        // What reaches the screen, not just the frame drawn.
+        const auto screenCenter = [&video] {
+            const QPoint center = video.mapToGlobal(video.rect().center());
+            const QImage shot = video.screen()->grabWindow(0, center.x() - 2, center.y() - 2, 4, 4).toImage();
+            return shot.isNull() ? QColor() : shot.pixelColor(1, 1);
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(
+            [&] {
+                const QColor center = screenCenter();
+                return center.red() > 200 && center.green() < 60 && center.blue() < 60;
+            }(),
+            10000);
+        // Stopping blanks the picture to the skin's background.
+        video.stop();
+        QTRY_VERIFY(video.isIdle());
+        QTRY_COMPARE(screenCenter().rgb(), video.palette().color(QPalette::Window).rgb());
+    }
+    MpvWidget::overrideVideoOutput(std::nullopt);
+}
+
+void TransportTest::missingCodecIsReported()
+{
+    QCOMPARE(MpvWidget::missingDecoderCodec(QStringLiteral("vd"),
+                                            QStringLiteral("Failed to initialize a decoder for codec 'hevc'.\n")),
+             QStringLiteral("hevc"));
+    QVERIFY(MpvWidget::missingDecoderCodec(QStringLiteral("ad"),
+                                           QStringLiteral("Failed to initialize a decoder for codec 'eac3'.")).isEmpty());
+    QVERIFY(MpvWidget::missingDecoderCodec(QStringLiteral("vd"), QStringLiteral("Using software decoding.")).isEmpty());
+
+    // The window explains it and how to get the codec.
+    Q_EMIT m_mpv->videoDecodeFailed(QStringLiteral("hevc"), QStringLiteral("Failed to initialize a decoder for codec 'hevc'."));
+    QMessageBox *box = nullptr;
+    QTRY_VERIFY((box = m_window->findChild<QMessageBox *>(QStringLiteral("CodecMissingMessage"))));
+    QVERIFY(box->text().contains(QStringLiteral("HEVC")));
+    QVERIFY(box->informativeText().contains(QStringLiteral("ffmpeg")));
+    box->close();
 }
 
 int main(int argc, char *argv[])

@@ -274,6 +274,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_emptyState, &EmptyStateWidget::urlsDropped, this, &MainWindow::openUrls);
     connect(m_mpv, &MpvWidget::fileStarted, m_emptyState, [this] { m_emptyState->setActive(false); });
     connect(m_mpv, &MpvWidget::fileFailed, this, &MainWindow::onFileFailed);
+    connect(m_mpv, &MpvWidget::renderStalled, this, &MainWindow::offerSoftwareVideo);
+    connect(m_mpv, &MpvWidget::videoDecodeFailed, this, &MainWindow::onVideoDecodeFailed);
     connect(m_controlBar, &ControlBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::pinToggled, this, [this](bool onTop) {
@@ -1191,6 +1193,63 @@ void MainWindow::offerX11Mode()
 void MainWindow::restartInX11Mode(bool x11)
 {
     PlaylistSession::setX11Mode(x11);
+    restartPlayer(x11);
+}
+
+void MainWindow::setVideoOutput(MpvWidget::VideoOutput output)
+{
+    MpvWidget::saveVideoOutput(output);
+    if (output != m_mpv->videoOutput())
+        restartPlayer();
+}
+
+void MainWindow::offerSoftwareVideo()
+{
+    if (m_mpv->videoOutput() == MpvWidget::VideoOutput::Software)
+        return;
+    auto *box = new QMessageBox(QMessageBox::Warning, tr("Video Isn't Showing Properly"),
+                                tr("The video picture isn't reaching the screen: it stays black, or the window "
+                                   "only updates while the pointer moves over it. This happens with some graphics "
+                                   "drivers and desktops."),
+                                QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("SoftwareVideoQuestion"));
+    box->setInformativeText(tr("Top Player can restart with the software video output, which draws the picture "
+                               "without OpenGL. It uses more CPU, but works everywhere. Playback continues "
+                               "from where it is.\n\nYou can switch back any time: Video \u203a Video Output."));
+    QPushButton *restart = box->addButton(tr("Use Software Video Output"), QMessageBox::AcceptRole);
+    box->addButton(tr("Keep OpenGL"), QMessageBox::RejectRole);
+    box->setDefaultButton(restart);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, restart](QAbstractButton *button) {
+        if (button == restart)
+            QTimer::singleShot(0, this, [this] { setVideoOutput(MpvWidget::VideoOutput::Software); });
+    });
+    box->open();
+}
+
+void MainWindow::onVideoDecodeFailed(const QString &codec, const QString &message)
+{
+    Q_UNUSED(message);
+    const QString name = codec.toUpper();
+    m_osd->showValue(tr("Can't decode the video"), tr("%1 codec missing").arg(name));
+    auto *box = new QMessageBox(QMessageBox::Warning, tr("Video Codec Missing"),
+                                tr("This video uses the %1 codec, which the FFmpeg installed on this system can't "
+                                   "decode, so only the sound plays.").arg(name),
+                                QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("CodecMissingMessage"));
+    box->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    box->setInformativeText(tr("Some distributions ship FFmpeg without patented codecs (H.264, HEVC, ...). "
+                               "Install the full FFmpeg to play them:\n\n"
+                               "Fedora: enable RPM Fusion, then\n"
+                               "    sudo dnf swap ffmpeg-free ffmpeg --allowerasing\n"
+                               "openSUSE: install ffmpeg from Packman\n\n"
+                               "The Flatpak and AppImage builds bring their own codecs."));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+void MainWindow::restartPlayer(std::optional<bool> x11)
+{
     const bool playing = !m_mpv->isIdle() && !m_mpv->mpvProperty(QStringLiteral("pause")).toBool();
     const bool mini = m_mini;
     QStringList args{QStringLiteral("--handoff")};
@@ -1205,7 +1264,8 @@ void MainWindow::restartInX11Mode(bool x11)
     process.setArguments(args);
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     // Falls back to Wayland if the X11 platform plugin is missing.
-    env.insert(QStringLiteral("QT_QPA_PLATFORM"), x11 ? QStringLiteral("xcb;wayland") : QStringLiteral("wayland;xcb"));
+    if (x11)
+        env.insert(QStringLiteral("QT_QPA_PLATFORM"), *x11 ? QStringLiteral("xcb;wayland") : QStringLiteral("wayland;xcb"));
     process.setProcessEnvironment(env);
 
     // Hand the queue and position over, then make way for the new instance.

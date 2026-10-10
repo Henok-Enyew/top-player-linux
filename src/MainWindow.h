@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MpvWidget.h"
 #include "StreamCatalog.h"
 
 #include <QMainWindow>
@@ -17,7 +18,6 @@ class ControlBar;
 class EmptyStateWidget;
 class LiveStreamDialog;
 class LyricsController;
-class MpvWidget;
 class OsdWidget;
 class PlayerMenu;
 class PlaylistController;
@@ -110,6 +110,11 @@ public:
     // Restarts the player in X11 mode (or back to native Wayland), keeping
     // the queue, the position, playback and the mini player.
     void restartInX11Mode(bool x11);
+    // Restarts the player like restartInX11Mode(), keeping the display mode
+    // unless `x11` says which one to use.
+    void restartPlayer(std::optional<bool> x11 = std::nullopt);
+    // Saves the video output and restarts the player in it, if it changed.
+    void setVideoOutput(MpvWidget::VideoOutput output);
     // Resizes the mini player to `width`, keeping the video's shape.
     void setMiniPlayerWidth(int width);
     // True while the control bar floats over the video (fullscreen, mini player).
@@ -226,6 +231,9 @@ private:
     bool m_restarting = false;
     bool m_askedAboutX11 = false;
     void offerX11Mode();
+    // The OpenGL video stalled: offers the software video output.
+    void offerSoftwareVideo();
+    void onVideoDecodeFailed(const QString &codec, const QString &message);
     QRect m_geometryBeforeMini;
     bool m_maximizedBeforeMini = false;
     bool m_onTopBeforeMini = false;

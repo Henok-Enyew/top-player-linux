@@ -11,6 +11,7 @@
 
 #include "MpvWidget.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include <clocale>
@@ -70,12 +71,24 @@ int main(int argc, char *argv[])
     QCommandLineOption mini(QStringLiteral("mini"), QStringLiteral("Start in the mini player."));
     QCommandLineOption nativeWayland(QStringLiteral("native-wayland"),
                                      QStringLiteral("Run as a Wayland app even if X11 mode is on."));
+    QCommandLineOption videoOutput(QStringLiteral("video-output"),
+                                   QStringLiteral("Draw the video with \"opengl\" (default) or \"software\" "
+                                                  "(for systems where the picture stays black), for this run."),
+                                   QStringLiteral("output"));
     for (QCommandLineOption *option : {&handoff, &play})
         option->setFlags(QCommandLineOption::HiddenFromHelp);
-    parser.addOptions({handoff, play, mini, nativeWayland});
+    parser.addOptions({handoff, play, mini, nativeWayland, videoOutput});
     parser.addPositionalArgument(QStringLiteral("files"), QStringLiteral("Media files or URLs to play; extra files are queued."),
                                  QStringLiteral("[files...]"));
     parser.process(app);
+    if (parser.isSet(videoOutput)) {
+        const auto output = MpvWidget::parseVideoOutput(parser.value(videoOutput));
+        if (!output) {
+            std::fprintf(stderr, "top-player: --video-output takes \"opengl\" or \"software\"\n");
+            return 2;
+        }
+        MpvWidget::overrideVideoOutput(*output);
+    }
 
     MainWindow window;
     window.resize(960, 540);
