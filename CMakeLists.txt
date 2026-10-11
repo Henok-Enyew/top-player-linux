@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(top-player
-    VERSION 1.0.7
+    VERSION 1.0.8
     DESCRIPTION "Top Player: a lightweight Qt6 + libmpv media player for Linux"
     LANGUAGES CXX)
 
@@ -61,6 +61,8 @@ add_library(top-player-core OBJECT
     src/DownloadQueue.h
     src/EmptyStateWidget.cpp
     src/EmptyStateWidget.h
+    src/HostTools.cpp
+    src/HostTools.h
     src/Icons.cpp
     src/Icons.h
     src/LibraryPanel.cpp

@@ -1,4 +1,5 @@
 #include "MediaDownloader.h"
+#include "HostTools.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -9,7 +10,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
-#include <QStandardPaths>
 #include <QUrlQuery>
 
 #include <algorithm>
@@ -212,7 +212,7 @@ MediaDownloader::~MediaDownloader()
 
 QString MediaDownloader::executable()
 {
-    return QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+    return HostTools::find(QStringLiteral("yt-dlp"));
 }
 
 QStringList MediaDownloader::arguments(const QString &url, Format format, const QString &directory, const QString &name)

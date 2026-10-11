@@ -42,6 +42,10 @@ private:
     mpv_render_context *m_renderCtx = nullptr;
     QString m_current;
     bool m_hasCover = false;
+    // mpv's playlist entry opened for m_current, once it started; -1 before.
+    // The end of an earlier file (reported after the next request) must not
+    // count as this one having no cover.
+    qint64 m_entry = -1;
     QCache<QString, QImage> m_cache;
     QTimer m_watchdog;
 };

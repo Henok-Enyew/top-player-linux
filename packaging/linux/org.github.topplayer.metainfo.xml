@@ -33,6 +33,13 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.8" date="2026-10-10">
+      <description>
+        <ul>
+          <li>Flatpak: Download from URL, downloads from the playlist, YouTube and Spotify streaming and Cut / Extract Media now work, using the yt-dlp and ffmpeg installed on the system</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.7" date="2026-10-10">
       <description>
         <ul>

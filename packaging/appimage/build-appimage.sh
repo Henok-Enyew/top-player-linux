@@ -2,7 +2,7 @@
 # Builds Top_Player-<version>-x86_64.AppImage with linuxdeploy and
 # linuxdeploy-plugin-qt. Run from the repository root:
 #
-#   VERSION=1.0.7 packaging/appimage/build-appimage.sh
+#   VERSION=1.0.8 packaging/appimage/build-appimage.sh
 #
 # Needs the same build dependencies as a normal build, plus qmake6
 # (so the Qt plugin can locate Qt) and, optionally, qt6-wayland.
