@@ -15,6 +15,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLinearGradient>
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
@@ -41,8 +42,6 @@ constexpr int kMinimumWidth = 200;
 constexpr int kMinimumVideoWidth = 160;
 constexpr int kHandleWidth = 5;
 constexpr int kAnimationMs = 180;
-const QColor kPlayingColor = Theme::Accent;
-const QColor kDurationColor = Theme::TextSecondary;
 // Item data: the entry's filename, and its duration text.
 constexpr int kFilenameRole = Qt::UserRole;
 constexpr int kDurationRole = Qt::UserRole + 1;
@@ -106,6 +105,10 @@ public:
     {
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
+        const bool playing = index.data(kPlayingRole).toBool();
+        // The playing entry is drawn in the accent, read when painting so it follows the theme.
+        if (playing)
+            opt.palette.setColor(QPalette::Text, Theme::Accent);
         const QString download = index.data(kDownloadRole).toString();
         const QString duration = download.isEmpty() ? index.data(kDurationRole).toString()
                                                     : QStringLiteral("\u2193 ") + download;
@@ -123,9 +126,12 @@ public:
         if (!duration.isEmpty() || button)
             opt.text = opt.fontMetrics.elidedText(opt.text, opt.textElideMode, textRect.width() - durationWidth);
         style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
-        if (index.data(kPlayingRole).toBool()) {
+        if (playing) {
             // An accent bar along the left edge marks the entry that is playing.
-            painter->fillRect(QRect(opt.rect.left(), opt.rect.top() + 3, kPlayingBarWidth, opt.rect.height() - 6), kPlayingColor);
+            QLinearGradient bar(0, opt.rect.top() + 3, 0, opt.rect.bottom() - 3);
+            bar.setColorAt(0, Theme::Accent);
+            bar.setColorAt(1, Theme::Accent2);
+            painter->fillRect(QRect(opt.rect.left(), opt.rect.top() + 3, kPlayingBarWidth, opt.rect.height() - 6), bar);
         }
         if (button) {
             const QPixmap icon = skinIcon(IconType::Download).pixmap(QSize(kDownloadIconSize, kDownloadIconSize));
@@ -138,7 +144,7 @@ public:
         const bool selected = opt.state & QStyle::State_Selected;
         painter->setPen(!download.isEmpty() ? (download == DownloadQueue::tr("Failed") ? QColor(0xFF, 0x6B, 0x5B) : Theme::Accent)
                         : selected          ? Theme::TextPrimary
-                                            : kDurationColor);
+                                            : Theme::TextSecondary);
         painter->setFont(opt.font);
         painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, duration);
         painter->restore();
@@ -767,7 +773,6 @@ void PlaylistDrawer::markPlaying(QListWidgetItem *item, bool playing)
     QFont font = m_view->font();
     font.setBold(playing);
     item->setFont(font);
-    item->setData(Qt::ForegroundRole, playing ? QVariant(kPlayingColor) : QVariant());
     item->setData(kPlayingRole, playing);
 }
 
@@ -846,7 +851,6 @@ void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double
             item->setData(kDurationRole, durationText(durations[i]));
         if (entry.value(QStringLiteral("current")).toBool()) {
             item->setFont(playingFont);
-            item->setForeground(kPlayingColor);
             item->setData(kPlayingRole, true);
         }
         m_view->addItem(item);

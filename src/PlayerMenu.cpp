@@ -1,4 +1,5 @@
 #include "PlayerMenu.h"
+#include "AppearanceDialog.h"
 #include "AudioController.h"
 #include "DownloadQueue.h"
 #include "Icons.h"
@@ -7,6 +8,7 @@
 #include "MpvWidget.h"
 #include "PlaylistController.h"
 #include "ResumeManager.h"
+#include "Theme.h"
 
 #include <QActionGroup>
 #include <QFileDialog>
@@ -58,6 +60,7 @@ PlayerMenu::PlayerMenu(MpvWidget *mpv, MainWindow *window)
     buildSubtitleMenu();
     buildLyricsMenu();
     buildToolsMenu();
+    buildAppearanceMenu();
     addSeparator();
     buildWindowMenu();
     buildHelpMenu();
@@ -413,6 +416,63 @@ void PlayerMenu::buildToolsMenu()
     connect(tools, &QMenu::aboutToShow, download, [this, download] {
         download->setEnabled(!m_mpv->isIdle() && DownloadQueue::canDownload(m_mpv->mpvPropertyString(QStringLiteral("path"))));
     });
+}
+
+void PlayerMenu::buildAppearanceMenu()
+{
+    QMenu *look = addMenu(tr("Appearance"));
+    look->setObjectName(QStringLiteral("AppearanceMenu"));
+    // Quick picks apply at once and are kept.
+    auto apply = [this](const Theme::Appearance &appearance, const QString &label, const QString &value) {
+        Theme::setAppearance(appearance, true);
+        Theme::saveAppearance(Theme::appearance());
+        Q_EMIT osdRequested(label, value);
+    };
+    // One exclusive submenu per part of the appearance, the `part` member.
+    auto addPart = [&](const QString &title, const char *objectName, const QList<QPair<QString, QString>> &items,
+                       QString Theme::Appearance::*part, std::function<QIcon(int)> swatch) {
+        QMenu *submenu = look->addMenu(title);
+        submenu->setObjectName(QString::fromLatin1(objectName));
+        auto *group = new QActionGroup(submenu);
+        for (int i = 0; i < items.size(); ++i) {
+            QAction *action = submenu->addAction(items[i].second);
+            action->setCheckable(true);
+            action->setData(items[i].first);
+            group->addAction(action);
+            connect(action, &QAction::triggered, this, [apply, title, part, id = items[i].first, name = items[i].second] {
+                Theme::Appearance next = Theme::appearance();
+                next.*part = id;
+                apply(next, title, name);
+            });
+        }
+        connect(submenu, &QMenu::aboutToShow, this, [group, part, swatch] {
+            const QList<QAction *> actions = group->actions();
+            for (int i = 0; i < actions.size(); ++i) {
+                actions[i]->setChecked(actions[i]->data().toString() == Theme::appearance().*part);
+                // Swatches show how each choice looks with the rest of the current appearance.
+                if (swatch)
+                    actions[i]->setIcon(swatch(i));
+            }
+        });
+    };
+
+    QList<QPair<QString, QString>> themes;
+    for (const Theme::Scheme &scheme : Theme::schemes())
+        themes.append({scheme.id, scheme.name});
+    addPart(tr("Theme"), "ThemeMenu", themes, &Theme::Appearance::theme,
+            [](int i) { return AppearanceDialog::themeSwatch(Theme::schemes()[i]); });
+    QList<QPair<QString, QString>> accents;
+    for (const Theme::AccentPalette &accent : Theme::accents())
+        accents.append({accent.id, accent.name});
+    addPart(tr("Accent Color"), "AccentMenu", accents, &Theme::Appearance::accent,
+            [](int i) { return AppearanceDialog::accentSwatch(Theme::accents()[i]); });
+    QList<QPair<QString, QString>> styles;
+    for (const Theme::Style &style : Theme::styles())
+        styles.append({style.id, style.name});
+    addPart(tr("Style"), "StyleMenu", styles, &Theme::Appearance::style, nullptr);
+    look->addSeparator();
+    addItem(look, tr("Appearance Settings..."), [this] { m_window->openAppearanceDialog(); },
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
 }
 
 void PlayerMenu::buildWindowMenu()

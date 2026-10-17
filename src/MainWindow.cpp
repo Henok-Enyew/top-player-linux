@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AboutDialog.h"
+#include "AppearanceDialog.h"
 #include "AudioControlDialog.h"
 #include "AudioController.h"
 #include "AudioEffects.h"
@@ -151,7 +152,7 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(18, 19, 22, 200));
+        p.setBrush(Theme::withAlpha(Theme::Surface, 0.78));
         p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 5, 5);
         // Lines across the corner the grip sits in.
         const bool left = m_corner & Qt::LeftEdge;
@@ -483,6 +484,15 @@ void MainWindow::openAudioControlDialog()
     m_audioControl->show();
     m_audioControl->raise();
     m_audioControl->activateWindow();
+}
+
+void MainWindow::openAppearanceDialog()
+{
+    if (!m_appearance)
+        m_appearance = new AppearanceDialog(this);
+    m_appearance->show();
+    m_appearance->raise();
+    m_appearance->activateWindow();
 }
 
 void MainWindow::openLiveStreamDialog()

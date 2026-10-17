@@ -63,11 +63,11 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
         const QRectF pill = QRectF(rect()).adjusted(3, 2, -3, -2);
-        QColor background = m_danger ? QColor(0xE5, 0x48, 0x4D) : QColor(255, 255, 255, 28);
+        QColor background = m_danger ? QColor(0xE5, 0x48, 0x4D) : Theme::withAlpha(Theme::TextPrimary, 0.11);
         const bool pressed = isDown();
         background.setAlphaF(background.alphaF() * (pressed ? 1.0 : m_hover) * (pressed && !m_danger ? 1.6 : 1.0));
         if (isChecked() && !m_danger)
-            background = QColor(Theme::Accent.red(), Theme::Accent.green(), Theme::Accent.blue(), 40 + int(30 * m_hover));
+            background = Theme::withAlpha(Theme::Accent, (40 + 30 * m_hover) / 255);
         if (background.alpha() > 0) {
             p.setPen(Qt::NoPen);
             p.setBrush(background);

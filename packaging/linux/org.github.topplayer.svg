@@ -1,27 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="0" y1="16" x2="0" y2="240">
-      <stop offset="0" stop-color="#1e2129"/>
-      <stop offset="1" stop-color="#0e0f12"/>
+    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="16" y1="16" x2="240" y2="240">
+      <stop offset="0" stop-color="#1c1633"/>
+      <stop offset="1" stop-color="#0b0914"/>
     </linearGradient>
-    <linearGradient id="cyan" gradientUnits="userSpaceOnUse" x1="84" y1="64" x2="196" y2="192">
-      <stop offset="0" stop-color="#33dcff"/>
-      <stop offset="1" stop-color="#0090c0"/>
+    <linearGradient id="brand" gradientUnits="userSpaceOnUse" x1="72" y1="64" x2="184" y2="192">
+      <stop offset="0" stop-color="#8f72ff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
     </linearGradient>
-    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="124" cy="128" r="96">
-      <stop offset="0" stop-color="#00d2ff" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#00d2ff" stop-opacity="0"/>
+    <linearGradient id="rim" gradientUnits="userSpaceOnUse" x1="16" y1="16" x2="240" y2="240">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity="0.5"/>
+    </linearGradient>
+    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="112" cy="128" r="104">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#7c5cff" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="sheen" gradientUnits="userSpaceOnUse" x1="0" y1="16" x2="0" y2="128">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect x="16.5" y="16.5" width="223" height="223" rx="56"/>
+    </clipPath>
   </defs>
-  <!-- Obsidian tile -->
-  <rect x="16.5" y="16.5" width="223" height="223" rx="47.5" fill="url(#bg)" stroke="#2a2d35"/>
-  <!-- Neon glow -->
-  <circle cx="124" cy="128" r="96" fill="url(#glow)"/>
-  <!-- Play triangle -->
-  <path d="M84 64 L196 128 L84 192 Z" fill="url(#cyan)" stroke="url(#cyan)" stroke-width="16" stroke-linejoin="round"/>
+  <!-- Night-violet squircle tile -->
+  <rect x="16.5" y="16.5" width="223" height="223" rx="56" fill="url(#bg)"/>
+  <!-- Neon glow and glassy sheen -->
+  <g clip-path="url(#tile)">
+    <rect x="16.5" y="16.5" width="223" height="223" fill="url(#glow)"/>
+    <rect x="16.5" y="16.5" width="223" height="223" fill="url(#sheen)"/>
+  </g>
+  <!-- Gradient rim -->
+  <rect x="16.5" y="16.5" width="223" height="223" rx="56" fill="none" stroke="url(#rim)" stroke-width="2"/>
+  <!-- Play triangle, violet into magenta -->
+  <path d="M72 64 L184 128 L72 192 Z" fill="url(#brand)" stroke="url(#brand)" stroke-width="16" stroke-linejoin="round"/>
   <!-- Geometric "T" cut out of the triangle -->
   <g fill="url(#bg)">
-    <rect x="93" y="100" width="60" height="18" rx="3"/>
-    <rect x="114" y="108" width="18" height="56" rx="3"/>
+    <rect x="81" y="100" width="60" height="18" rx="3"/>
+    <rect x="102" y="108" width="18" height="56" rx="3"/>
+  </g>
+  <!-- Sound waves from the tip -->
+  <g fill="none" stroke="#ff4fd8" stroke-width="9" stroke-linecap="round">
+    <path d="M200.49 111.99 A26 26 0 0 1 200.49 144.01"/>
+    <path d="M213.10 102.14 A42 42 0 0 1 213.10 153.86" stroke-opacity="0.55"/>
   </g>
 </svg>

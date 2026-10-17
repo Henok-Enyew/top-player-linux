@@ -18,6 +18,7 @@
 #include "SeekBar.h"
 #include "ThumbnailGenerator.h"
 #include "TestClip.h"
+#include "Theme.h"
 
 #include <QApplication>
 #include <QScreen>
@@ -641,7 +642,7 @@ void TransportTest::shuffleButton()
     bool accent = false;
     for (int y = 0; y < on.height() && !accent; ++y) {
         for (int x = 0; x < on.width() && !accent; ++x)
-            accent = on.pixelColor(x, y) == QColor(0x00, 0xD2, 0xFF);
+            accent = on.pixelColor(x, y) == Theme::Accent;
     }
     QVERIFY(accent);
 
