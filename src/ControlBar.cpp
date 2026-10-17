@@ -147,11 +147,19 @@ ControlBar::ControlBar(MpvWidget *mpv, QWidget *parent)
     m_volumeSlider->setValue(m_mpv->mpvProperty(QStringLiteral("volume")).toInt());
     updateTimeLabel();
     updateModeButtons();
+    updatePlayButton();
 
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(kSaveDelayMs);
     connect(&m_saveTimer, &QTimer::timeout, this, &ControlBar::saveState);
     restoreState();
+    // The time label bakes its colors into rich text, and the play button's
+    // hover color depends on the theme.
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
+        m_timeLabel->clear();
+        updateTimeLabel();
+        updatePlayButton();
+    });
 }
 
 ControlBar::~ControlBar()
@@ -364,7 +372,9 @@ void ControlBar::updatePlayButton()
 {
     // Nothing plays while idle, even though mpv's pause flag is off.
     const bool playing = !m_paused && !m_idle;
-    m_playButton->setIcon(skinIcon(playing ? IconType::Pause : IconType::Play));
+    // On a button filled with the accent, the hovered icon takes the color drawn on it.
+    const IconType icon = playing ? IconType::Pause : IconType::Play;
+    m_playButton->setIcon(Theme::solidAccentFill() ? skinIcon(icon, Theme::OnAccent) : skinIcon(icon));
 }
 
 void ControlBar::updateTimeLabel()

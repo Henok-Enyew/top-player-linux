@@ -12,6 +12,10 @@ class SeekBar : public QWidget
     Q_OBJECT
     Q_PROPERTY(QColor grooveColor MEMBER m_grooveColor DESIGNABLE true)
     Q_PROPERTY(QColor progressColor MEMBER m_progressColor DESIGNABLE true)
+    // The progress blends from progressColor into this across the groove.
+    Q_PROPERTY(QColor progressColor2 MEMBER m_progressColor2 DESIGNABLE true)
+    // A soft halo under the progress; transparent for none.
+    Q_PROPERTY(QColor glowColor MEMBER m_glowColor DESIGNABLE true)
     Q_PROPERTY(QColor hoverColor MEMBER m_hoverColor DESIGNABLE true)
     Q_PROPERTY(QColor handleColor MEMBER m_handleColor DESIGNABLE true)
     Q_PROPERTY(QColor chapterColor MEMBER m_chapterColor DESIGNABLE true)
@@ -61,10 +65,12 @@ private:
     qreal m_hoverX = 0;
 
     // Defaults; the skin sets these through the Q_PROPERTYs above.
-    QColor m_grooveColor{0x2A, 0x2D, 0x35};
-    QColor m_progressColor{0x00, 0xD2, 0xFF};
-    QColor m_hoverColor{0x33, 0xDC, 0xFF, 60};
+    QColor m_grooveColor{0x2C, 0x2F, 0x45};
+    QColor m_progressColor{0x7C, 0x5C, 0xFF};
+    QColor m_progressColor2{0xFF, 0x4F, 0xD8};
+    QColor m_glowColor{0x7C, 0x5C, 0xFF, 100};
+    QColor m_hoverColor{0x96, 0x7D, 0xFF, 60};
     QColor m_handleColor{0xFF, 0xFF, 0xFF};
-    QColor m_chapterColor{0x12, 0x13, 0x16};
-    QColor m_clipColor{0xA7, 0x8B, 0xFA};
+    QColor m_chapterColor{0x1A, 0x1B, 0x26};
+    QColor m_clipColor{0x38, 0xBD, 0xF8};
 };

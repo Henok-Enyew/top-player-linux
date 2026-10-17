@@ -12,12 +12,6 @@
 
 namespace {
 
-const QColor kBackground = Theme::Surface;
-const QColor kTitleColor = Theme::TextPrimary;
-const QColor kArtistColor = Theme::Accent;
-const QColor kAlbumColor = Theme::TextSecondary;
-const QColor kPlaceholderColor = Theme::Raised;
-
 constexpr int kMargin = 24;
 constexpr int kTextGap = 18;
 constexpr int kMinCover = 64;
@@ -162,19 +156,27 @@ void AudioView::paintEvent(QPaintEvent *)
     if (!l.cover.isEmpty())
         paintCover(p, l.cover);
     else if (m_mode == Mode::Canvas && height() > textBlockHeight() + 3 * kMargin + 48)
-        drawNote(p, QRectF(width() / 2.0 - 20, l.text.top() - 64, 40, 40), QColor(0x3A, 0x3A, 0x3A));
+        drawNote(p, QRectF(width() / 2.0 - 20, l.text.top() - 64, 40, 40), Theme::mix(Theme::Raised, Theme::TextDim, 0.35));
     paintText(p, l.text, Qt::AlignHCenter);
 }
 
 void AudioView::paintBackground(QPainter &p)
 {
-    p.fillRect(rect(), kBackground);
-    // A faint glow in the cover's color.
-    const QColor tint = m_mode == Mode::Artwork && m_tint.isValid() ? m_tint : QColor(0x22, 0x22, 0x22);
-    QRadialGradient glow(rect().center(), std::max(width(), height()) * 0.6);
-    glow.setColorAt(0, tint);
-    glow.setColorAt(1, kBackground);
+    const QColor background = Theme::Surface;
+    p.fillRect(rect(), background);
+    // A faint glow in the cover's color, or an ambient one in the accent's.
+    const bool cover = m_mode == Mode::Artwork && m_tint.isValid();
+    const qreal reach = std::max(width(), height());
+    QRadialGradient glow(rect().center(), reach * 0.6);
+    glow.setColorAt(0, cover ? m_tint : Theme::mix(background, Theme::Accent, 0.16));
+    glow.setColorAt(1, background);
     p.fillRect(rect(), glow);
+    if (!cover) {
+        QRadialGradient second(QPointF(width() * 0.85, height() * 0.9), reach * 0.5);
+        second.setColorAt(0, Theme::withAlpha(Theme::Accent2, 0.1));
+        second.setColorAt(1, Theme::withAlpha(Theme::Accent2, 0));
+        p.fillRect(rect(), second);
+    }
 }
 
 const QPixmap &AudioView::shadow(const QSize &coverSize)
@@ -208,9 +210,10 @@ void AudioView::paintCover(QPainter &p, const QRect &rect)
     p.save();
     p.setClipPath(clip);
     if (m_artwork.isNull()) {
-        p.fillRect(rect, kPlaceholderColor);
+        p.fillRect(rect, Theme::Raised);
         const qreal note = rect.width() * 0.4;
-        drawNote(p, QRectF(rect.center().x() - note / 2, rect.center().y() - note / 2, note, note), QColor(0x4A, 0x4A, 0x4A));
+        drawNote(p, QRectF(rect.center().x() - note / 2, rect.center().y() - note / 2, note, note),
+                 Theme::mix(Theme::Raised, Theme::TextDim, 0.5));
     } else {
         const qreal dpr = devicePixelRatioF();
         const QSize pixels = rect.size() * dpr;
@@ -242,9 +245,11 @@ void AudioView::paintText(QPainter &p, const QRect &rect, Qt::Alignment alignmen
                    metrics.elidedText(text, Qt::ElideRight, rect.width()));
         y += metrics.height();
     };
-    line(m_info.title, scaledFont(base, 1.5, true), kTitleColor, 0);
-    line(m_info.artist, scaledFont(base, 1.1, false), kArtistColor, 4);
-    line(m_info.album, base, kAlbumColor, 2);
+    // Over a visualization the caption sits on a dark scrim, whatever the theme.
+    const bool scrim = m_mode == Mode::Visualizer;
+    line(m_info.title, scaledFont(base, 1.5, true), scrim ? QColor(Qt::white) : Theme::TextPrimary, 0);
+    line(m_info.artist, scaledFont(base, 1.1, false), Theme::Accent, 4);
+    line(m_info.album, base, scrim ? QColor(0xC8, 0xCC, 0xD8) : Theme::TextSecondary, 2);
 }
 
 void AudioView::paintCaption(QPainter &p)

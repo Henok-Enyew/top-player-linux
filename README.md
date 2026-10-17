@@ -8,19 +8,19 @@
 
 ### Your music, videos, lyrics and live TV, in one fast native Linux player.
 
-Built on **Qt 6** and **libmpv**: plays everything mpv plays, looks sharp in an electric-cyan-on-obsidian skin,
+Built on **Qt 6** and **libmpv**: plays everything mpv plays, wears an electric-violet look with ten switchable themes,
 and stays light even on folders with thousands of files.
 
-[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
+[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=7C5CFF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=FF4FD8&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Henok-Enyew/top-player-linux/ci.yml?label=CI&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-1A1C22?style=for-the-badge)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1A1B26?style=for-the-badge)](LICENSE)
 
-![Linux](https://img.shields.io/badge/Linux-121316?style=flat-square&logo=linux&logoColor=00D2FF)
-![Qt 6](https://img.shields.io/badge/Qt%206-121316?style=flat-square&logo=qt&logoColor=00D2FF)
-![libmpv](https://img.shields.io/badge/libmpv-121316?style=flat-square&logo=mpv&logoColor=00D2FF)
-![C++17](https://img.shields.io/badge/C%2B%2B17-121316?style=flat-square&logo=cplusplus&logoColor=00D2FF)
-![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-121316?style=flat-square&logo=wayland&logoColor=00D2FF)
+![Linux](https://img.shields.io/badge/Linux-15161E?style=flat-square&logo=linux&logoColor=7C5CFF)
+![Qt 6](https://img.shields.io/badge/Qt%206-15161E?style=flat-square&logo=qt&logoColor=7C5CFF)
+![libmpv](https://img.shields.io/badge/libmpv-15161E?style=flat-square&logo=mpv&logoColor=7C5CFF)
+![C++17](https://img.shields.io/badge/C%2B%2B17-15161E?style=flat-square&logo=cplusplus&logoColor=7C5CFF)
+![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-15161E?style=flat-square&logo=wayland&logoColor=7C5CFF)
 
 <h3>
   <a href="https://github.com/Henok-Enyew/top-player-linux/releases/latest">⬇ Download</a>
@@ -205,10 +205,30 @@ Every feature in detail. Click a section to open it.
 <details>
 <summary><b>🎨 Interface</b></summary>
 
-A flat **electric cyan on obsidian** skin (accent `#00D2FF`, surface `#121316`,
-panels `#1A1C22`) defined in [`resources/skin/top-player.qss`](resources/skin/top-player.qss)
-on top of Qt's Fusion style; self-painted widgets share the palette in
-[`src/Theme.h`](src/Theme.h). All icons are drawn as vectors in code.
+The brand is **electric violet into hot magenta** (`#7C5CFF` → `#FF4FD8`), on the
+deep blue-black **Midnight** theme by default. The whole look can be changed live
+in **Appearance** (`Ctrl+Shift+T`, or right-click → Appearance), and is kept between runs:
+
+- **Themes**, after Omarchy's: Midnight, Obsidian (the original
+  look), Matte Black, Catppuccin Mocha, Nord, Gruvbox, Rosé Pine,
+  Everforest, Kanagawa and the light Catppuccin Latte.
+- **Accent colors**, independent of the theme: Brand Violet, the theme's own
+  accent, Electric Cyan, Neon Mint, Sunset Orange, Hot Pink, Acid Lime, Gold,
+  Crimson and Ocean Blue. Shades, gradients and the text drawn on the accent
+  are worked out from it, and it is lightened or darkened to stay readable.
+- **Styles**: **Neon Glass** (soft accent gradients, a glow on the seekbar,
+  rounded corners), **Tiling Minimal** (crisp 1 px accent borders, tight
+  corners, flat fills and monospace headings, as on a Hyprland desktop) and
+  **Soft** (large radii, pill buttons, quiet edges).
+- Changes **cross-fade** across the open windows in a quarter of a second. The
+  dialog draws each theme as a small preview of the player; the right-click
+  menu has quick Theme, Accent Color and Style lists.
+
+One skin, [`resources/skin/top-player.qss`](resources/skin/top-player.qss), is
+a template whose `@tokens@` are filled in for the chosen appearance on top of
+Qt's Fusion style; self-painted widgets read the same live colors from
+[`src/Theme.h`](src/Theme.h). All icons are drawn as vectors in code, in the
+current colors.
 
 - **Start screen** while nothing is loaded, with **Open File**, **Open
   Folder**, **Open URL / Stream**, **Open Playlist** and a drop zone. It fades
@@ -218,7 +238,7 @@ on top of Qt's Fusion style; self-painted widgets share the palette in
   close, with soft animated highlights (red for close). Drag it to move the
   window, double-click to maximize.
 - **Control bar** with open, previous, play/pause, stop and next; **shuffle**
-  (lit cyan while on) and **repeat** (the icon shows a "1" in Repeat One); the
+  (lit in the accent while on) and **repeat** (the icon shows a "1" in Repeat One); the
   time; volume; an **aspect** button (Fit to Window → 16:9 → 100%); and
   playlist and fullscreen toggles. The mode buttons follow the menu (e.g. Loop
   File) and step aside in narrow windows.
@@ -463,7 +483,7 @@ Countries** and **every other country** alphabetically. Then:
 <summary><b>🛠️ Tools</b></summary>
 
 - **Cut / Extract Media** (`Ctrl+X`): mark the range while playing with
-  `Ctrl+[` (A) and `Ctrl+]` (B); cyan brackets show it on the seekbar. Save it
+  `Ctrl+[` (A) and `Ctrl+]` (B); brackets in a color set apart from the accent show it on the seekbar. Save it
   as a **lossless stream copy** (instant) or **audio only** (MP3, AAC or FLAC)
   with `ffmpeg`, with progress, cancel, **Open in Player** and **Show in File
   Manager**. **Clear In/Out Points** resets the range.
@@ -625,6 +645,7 @@ mpv property or command, and check marks reflect mpv's live state.
 | `Ctrl+B` (or `F6`) | Show / hide the playlist |
 | `Ctrl+T` | Always on top |
 | `Ctrl+M` | Mini player |
+| `Ctrl+Shift+T` | Appearance: theme, accent color and style |
 | `Alt+1`..`Alt+4` | Window size 50–200% |
 | Drag video or title bar | Move window (sideways on the video seeks, except in the mini player, where any drag moves it) |
 | Drag window edge or corner | Resize window (the mini player also has a grip) |

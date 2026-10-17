@@ -43,6 +43,8 @@ add_library(top-player-core OBJECT
     resources/skin.qrc
     src/AboutDialog.cpp
     src/AboutDialog.h
+    src/AppearanceDialog.cpp
+    src/AppearanceDialog.h
     src/ArtworkExtractor.cpp
     src/ArtworkExtractor.h
     src/AudioArtwork.cpp

@@ -147,6 +147,8 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
         if (!m_mpv->isIdle())
             saveSession();
     });
+    // A new playlist may start at the same position, which doesn't change playlist-pos.
+    connect(m_mpv, &MpvWidget::fileStarted, this, &PlaylistController::followPlayingEntry);
     // The playing entry changes without the playlist changing.
     connect(m_mpv, &MpvWidget::propertyUpdated, this, [this](const QString &name, const QVariant &value) {
         if (name != QLatin1String("playlist-pos"))

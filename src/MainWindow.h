@@ -11,6 +11,7 @@
 #include <optional>
 
 class AboutDialog;
+class AppearanceDialog;
 class AudioControlDialog;
 class AudioController;
 class AudioEffectsController;
@@ -74,6 +75,9 @@ public:
     void openSubtitleSettingsDialog();
     // Help -> About Top Player (F1).
     void showAbout();
+    // Appearance -> Appearance Settings... (Ctrl+Shift+T); created on first use.
+    void openAppearanceDialog();
+    AppearanceDialog *appearanceDialog() const { return m_appearance; }
 
     // Download from URL... (yt-dlp).
     void openMediaDownloaderDialog();
@@ -205,6 +209,7 @@ private:
     LiveStreamDialog *m_liveStreams = nullptr;
     AudioEffectsController *m_audioEffects = nullptr;
     AudioControlDialog *m_audioControl = nullptr;
+    AppearanceDialog *m_appearance = nullptr;
     // The live stream played last, and its channel's untried other streams.
     StreamCatalog::Station m_stream;
     bool m_streamRadio = false;
