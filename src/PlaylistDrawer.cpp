@@ -387,6 +387,9 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     m_tabs->addTab(tr("Library"));
     m_tabs->setDrawBase(false);
     m_tabs->setExpanding(false);
+    // Three tabs fit a narrow drawer without scroll arrows.
+    m_tabs->setUsesScrollButtons(false);
+    m_tabs->setElideMode(Qt::ElideNone);
     m_tabs->setFocusPolicy(Qt::NoFocus);
     m_countLabel->setObjectName(QStringLiteral("PlaylistCount"));
     header->addWidget(m_tabs);

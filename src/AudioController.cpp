@@ -1,4 +1,5 @@
 #include "AudioController.h"
+#include "Theme.h"
 #include "ArtworkExtractor.h"
 #include "AudioView.h"
 #include "MediaFiles.h"
@@ -13,12 +14,25 @@
 
 namespace {
 
-// mpv's own audio visualization filters, in the skin's cyan.
-const QString kWaveformFilter = QStringLiteral(
-    "showwaves=s=1280x720:r=30:mode=cline:scale=sqrt:draw=full:colors=0x00D2FF,format=yuv420p");
-const QString kSpectrumFilter = QStringLiteral(
-    "showfreqs=s=1280x720:rate=30:mode=bar:ascale=log:fscale=log:win_size=1024:averaging=4:colors=0x00D2FF,"
-    "format=yuv420p");
+// mpv's own audio visualization filters, in the theme's accent (as it is
+// when a song starts: changing the graph mid-song would interrupt it).
+QString accentColor()
+{
+    return QStringLiteral("0x") + Theme::hex(Theme::Accent).mid(1).toUpper();
+}
+
+QString waveformFilter()
+{
+    return QStringLiteral("showwaves=s=1280x720:r=30:mode=cline:scale=sqrt:draw=full:colors=%1,format=yuv420p")
+        .arg(accentColor());
+}
+
+QString spectrumFilter()
+{
+    return QStringLiteral("showfreqs=s=1280x720:rate=30:mode=bar:ascale=log:fscale=log:win_size=1024:averaging=4:"
+                          "colors=%1,format=yuv420p")
+        .arg(accentColor());
+}
 
 QImage readImage(const QString &path)
 {
@@ -151,9 +165,9 @@ void AudioController::apply()
 
     QString filter;
     if (display == Display::Waveform)
-        filter = kWaveformFilter;
+        filter = waveformFilter();
     else if (display == Display::Spectrum)
-        filter = kSpectrumFilter;
+        filter = spectrumFilter();
     // Without an audio track there is nothing to visualize.
     if (m_audioId == QLatin1String("no"))
         filter.clear();

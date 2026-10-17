@@ -15,6 +15,7 @@
 #include "ControlBar.h"
 #include "PlayQueue.h"
 #include "TestClip.h"
+#include "Theme.h"
 
 #include <QApplication>
 #include <QDir>
@@ -640,6 +641,13 @@ void PlaylistTest::queuePage()
     QTRY_COMPARE(texts().value(1), QStringLiteral("track.wav"));
     QCOMPARE(texts().value(3), QStringLiteral("Episode 10.mkv"));
     QCOMPARE(mpvFiles(), m_expected);
+    if (const QString dir = qEnvironmentVariable("TOPPLAYER_SCREENSHOTS"); !dir.isEmpty()) {
+        applyDarkSkin(*qApp);
+        m_window->resize(1000, 560);
+        m_drawer->setPreferredWidth(320, false);
+        QTest::qWait(300);
+        m_window->grab().save(dir + QStringLiteral("/queue.png"));
+    }
 }
 
 void PlaylistTest::filterKeepsPlaylist()
