@@ -172,9 +172,11 @@ void ControlBar::restoreState()
     }
     if (settings.value(QStringLiteral("player/mute"), false).toBool())
         m_mpv->setMpvProperty(QStringLiteral("mute"), QStringLiteral("yes"));
-    // Only the mode: the queue restored from the last run keeps its order.
-    if (settings.value(QStringLiteral("player/shuffle"), false).toBool())
-        m_mpv->setMpvProperty(QStringLiteral("shuffle"), QStringLiteral("yes"));
+    // Only the mode: the playlist restored from the last run keeps its order.
+    if (settings.value(QStringLiteral("player/shuffle"), false).toBool()) {
+        m_shuffle = true;
+        updateModeButtons();
+    }
     const QString repeat = settings.value(QStringLiteral("player/repeat")).toString();
     if (repeat == QLatin1String("all"))
         m_mpv->setMpvProperty(QStringLiteral("loop-playlist"), QStringLiteral("inf"));
@@ -203,11 +205,13 @@ void ControlBar::saveState()
 
 void ControlBar::setShuffle(bool on)
 {
-    // The option is the mode the button shows; changing it doesn't reorder
-    // the playlist by itself. playlist-unshuffle restores the order from
-    // before playlist-shuffle, keeping entries added since.
-    m_mpv->setMpvProperty(QStringLiteral("shuffle"), on ? QStringLiteral("yes") : QStringLiteral("no"));
-    m_mpv->command({on ? QStringLiteral("playlist-shuffle") : QStringLiteral("playlist-unshuffle")});
+    // Shuffles the order songs play in; the playlist stays as it is.
+    if (on != m_shuffle) {
+        m_shuffle = on;
+        updateModeButtons();
+        scheduleSave();
+        Q_EMIT shuffleChanged(on);
+    }
     Q_EMIT message(tr("Shuffle"), on ? tr("On") : tr("Off"));
 }
 
@@ -333,10 +337,6 @@ void ControlBar::onPropertyUpdated(const QString &name, const QVariant &value)
         m_volume = value.toDouble();
         const QSignalBlocker blocker(m_volumeSlider);
         m_volumeSlider->setValue(qRound(m_volume));
-        scheduleSave();
-    } else if (name == QLatin1String("shuffle")) {
-        m_shuffle = isOn(value);
-        updateModeButtons();
         scheduleSave();
     } else if (name == QLatin1String("loop-file")) {
         m_loopFile = isOn(value);

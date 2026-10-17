@@ -17,6 +17,7 @@
 #endif
 #include "OsdWidget.h"
 #include "PlayerMenu.h"
+#include "PlayQueue.h"
 #include "PlaylistController.h"
 #include "PlaylistDrawer.h"
 #include "ResumeManager.h"
@@ -357,6 +358,15 @@ void MainWindow::setupPlaylist()
         if (!expanded && m_drawer->isAncestorOf(QApplication::focusWidget()))
             m_mpv->setFocus();
     });
+    // Shuffle play: the control bar's button (which keeps the setting), the
+    // drawer's, and the queue's order.
+    m_playlist->queue()->setShuffle(m_controlBar->isShuffle());
+    m_drawer->setShuffleChecked(m_controlBar->isShuffle());
+    connect(m_controlBar, &ControlBar::shuffleChanged, this, [this](bool on) {
+        m_playlist->queue()->setShuffle(on);
+        m_drawer->setShuffleChecked(on);
+    });
+    connect(m_drawer, &PlaylistDrawer::shuffleToggled, m_controlBar, &ControlBar::setShuffle);
 }
 
 void MainWindow::setupThumbnails()
@@ -593,6 +603,18 @@ void MainWindow::setPlaylistVisible(bool visible)
     m_drawer->setExpanded(visible);
     if (visible)
         m_drawer->raise();
+}
+
+void MainWindow::searchPlaylist()
+{
+    setPlaylistVisible(true);
+    m_drawer->focusSearch();
+}
+
+void MainWindow::showQueue()
+{
+    setPlaylistVisible(true);
+    m_drawer->setCurrentPage(PlaylistDrawer::QueuePage);
 }
 
 void MainWindow::loadSubtitle(const QString &path)

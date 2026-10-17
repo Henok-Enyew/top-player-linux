@@ -435,6 +435,8 @@ void PlayerMenu::buildWindowMenu()
     connect(legacyPlaylistKey, &QAction::triggered, m_playlistAction, &QAction::trigger);
     m_window->addAction(legacyPlaylistKey);
     m_playlistAction->setCheckable(true);
+    addItem(window, tr("Search Music"), [this] { m_window->searchPlaylist(); }, QKeySequence(Qt::CTRL | Qt::Key_F));
+    addItem(window, tr("Play Queue"), [this] { m_window->showQueue(); });
 
     m_miniPlayerAction = addItem(window, tr("Mini Player"), [this] { m_window->toggleMiniPlayer(); },
                                  QKeySequence(Qt::CTRL | Qt::Key_M));

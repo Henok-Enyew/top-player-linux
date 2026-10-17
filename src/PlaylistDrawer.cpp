@@ -4,6 +4,7 @@
 #include "LibraryPanel.h"
 #include "MpvWidget.h"
 #include "PlaylistSession.h"
+#include "QueuePanel.h"
 #include "Theme.h"
 #include "TimeFormat.h"
 
@@ -350,6 +351,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     , m_tabs(new QTabBar(this))
     , m_pages(new QStackedWidget(this))
     , m_library(new LibraryPanel(this))
+    , m_queuePanel(new QueuePanel(this))
     , m_animation(new QPropertyAnimation(this, "drawerWidth", this))
     , m_preferredWidth(std::max(kMinimumWidth, PlaylistSession::drawerWidth(kDefaultWidth)))
 {
@@ -375,6 +377,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     header->setSpacing(0);
     m_tabs->setObjectName(QStringLiteral("PlaylistTabs"));
     m_tabs->addTab(tr("Playlist"));
+    m_tabs->addTab(tr("Queue"));
     m_tabs->addTab(tr("Library"));
     m_tabs->setDrawBase(false);
     m_tabs->setExpanding(false);
@@ -392,18 +395,20 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     m_wideButton = makeButton(IconType::Expand, tr("Expand Playlist"), "PlaylistExpandButton");
     header->addWidget(m_wideButton);
 
-    // Search field, with shuffle beside it.
+    // Search field, with shuffle play beside it.
     auto *tools = new QHBoxLayout;
     tools->setContentsMargins(8, 4, 6, 6);
     tools->setSpacing(4);
     m_filter->setObjectName(QStringLiteral("PlaylistFilter"));
-    m_filter->setPlaceholderText(tr("Search playlist"));
+    m_filter->setPlaceholderText(tr("Search music (Ctrl+F)"));
+    m_filter->setToolTip(tr("Songs opened from the results play on through the results, until a song is opened from another search or without one"));
     m_filter->setClearButtonEnabled(true);
     m_filter->addAction(skinIcon(IconType::Search), QLineEdit::LeadingPosition);
     m_filter->installEventFilter(this);
-    QToolButton *shuffle = makeButton(IconType::Shuffle, tr("Shuffle"), "PlaylistShuffleButton");
+    m_shuffleButton = makeButton(IconType::Shuffle, tr("Shuffle Play: Off"), "PlaylistShuffleButton");
+    m_shuffleButton->setCheckable(true);
     tools->addWidget(m_filter, 1);
-    tools->addWidget(shuffle);
+    tools->addWidget(m_shuffleButton);
 
     auto *playlistPage = new QWidget(this);
     auto *playlistLayout = new QVBoxLayout(playlistPage);
@@ -413,6 +418,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     playlistLayout->addWidget(m_view, 1);
     playlistLayout->addWidget(buildActionBar());
     m_pages->addWidget(playlistPage);
+    m_pages->addWidget(m_queuePanel);
     m_pages->addWidget(m_library);
 
     auto *content = new QVBoxLayout;
@@ -455,7 +461,11 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
         menu.exec(globalPos);
     });
     connect(m_filter, &QLineEdit::textChanged, this, &PlaylistDrawer::applyFilter);
-    connect(shuffle, &QToolButton::clicked, this, &PlaylistDrawer::shuffleRequested);
+    connect(m_shuffleButton, &QToolButton::clicked, this, [this](bool on) {
+        setShuffleChecked(on);
+        Q_EMIT shuffleToggled(on);
+    });
+    connect(m_queuePanel, &QueuePanel::playRequested, this, &PlaylistDrawer::queuedPlayRequested);
 
     m_animation->setDuration(kAnimationMs);
     m_animation->setEasingCurve(QEasingCurve::OutCubic);
@@ -488,7 +498,7 @@ void PlaylistDrawer::buildMenus()
     addSort(tr("By File Size (Largest First)"), SortKey::Size, false);
     m_sortMenu->addSeparator();
     m_sortMenu->addAction(tr("Reverse Order"), this, &PlaylistDrawer::reverseRequested);
-    m_sortMenu->addAction(skinIcon(IconType::Shuffle), tr("Shuffle"), this, &PlaylistDrawer::shuffleRequested);
+    m_sortMenu->addAction(skinIcon(IconType::Shuffle), tr("Randomize Order"), this, &PlaylistDrawer::shuffleRequested);
 
     m_addMenu = new QMenu(tr("Add"), this);
     m_addMenu->setObjectName(QStringLiteral("PlaylistAddMenu"));
@@ -600,6 +610,15 @@ void PlaylistDrawer::showContextMenu(const QPoint &pos)
     if (item) {
         const int row = m_view->row(item);
         menu.addAction(skinIcon(IconType::Play), tr("Play"), this, [this, row] { Q_EMIT playRequested(row); });
+    }
+    // Queue: the selection if the clicked entry is part of it, else that entry.
+    QList<int> queueRows = rows;
+    if (item && !rows.contains(m_view->row(item)))
+        queueRows = {m_view->row(item)};
+    if (!queueRows.isEmpty()) {
+        menu.addAction(tr("Play Next"), this, [this, queueRows] { Q_EMIT playNextRequested(queueRows); });
+        menu.addAction(tr("Add to Queue"), this, [this, queueRows] { Q_EMIT enqueueRequested(queueRows); });
+        menu.addSeparator();
     }
     // Download: the selection if the clicked entry is part of it, else that entry.
     QList<int> downloadRows = rows;
@@ -897,6 +916,34 @@ void PlaylistDrawer::setFilterText(const QString &text)
 QString PlaylistDrawer::filterText() const
 {
     return m_filter->text();
+}
+
+QList<int> PlaylistDrawer::visibleRows() const
+{
+    QList<int> rows;
+    for (int row = 0; row < m_view->count(); ++row) {
+        if (!m_view->isRowHidden(row))
+            rows.append(row);
+    }
+    return rows;
+}
+
+void PlaylistDrawer::focusSearch()
+{
+    setCurrentPage(PlaylistPage);
+    m_filter->setFocus(Qt::ShortcutFocusReason);
+    m_filter->selectAll();
+}
+
+void PlaylistDrawer::setShuffleChecked(bool on)
+{
+    m_shuffleButton->setChecked(on);
+    m_shuffleButton->setToolTip(on ? tr("Shuffle Play: On") : tr("Shuffle Play: Off"));
+}
+
+void PlaylistDrawer::setQueue(PlayQueue *queue)
+{
+    m_queuePanel->setQueue(queue);
 }
 
 void PlaylistDrawer::applyFilter()

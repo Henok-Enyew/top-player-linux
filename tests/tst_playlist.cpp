@@ -12,6 +12,8 @@
 #include "PlaylistDrawer.h"
 #include "PlaylistOps.h"
 #include "PlaylistSession.h"
+#include "ControlBar.h"
+#include "PlayQueue.h"
 #include "TestClip.h"
 
 #include <QApplication>
@@ -25,6 +27,7 @@
 #include <QMenu>
 #include <QProcess>
 #include <QRandomGenerator>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -88,6 +91,11 @@ private Q_SLOTS:
     void sortByPathAndSize();
     void reverseOrder();
     void shuffle();
+    void shufflePlayKeepsPlaylist();
+    void searchPlaysThroughResults();
+    void searchShortcut();
+    void playNextAndEndOfFile();
+    void queuePage();
     void shiftOrder();
     void moveButtons();
     void playingEntryUpdatesInPlace();
@@ -163,6 +171,8 @@ void PlaylistTest::createWindow()
     m_drawer = m_window->findChild<PlaylistDrawer *>();
     m_view = m_window->findChild<QListWidget *>(QStringLiteral("PlaylistView"));
     QVERIFY(m_mpv && m_drawer && m_view);
+    // Test machines may have no sound card; songs must still play (to their end).
+    m_mpv->setMpvProperty(QStringLiteral("ao"), QStringLiteral("null"));
     // Without the slide-in animation, so the drawer's buttons can be clicked right away.
     m_drawer->setExpanded(true, false);
 }
@@ -180,6 +190,9 @@ void PlaylistTest::cleanup()
     m_drawer = nullptr;
     m_view = nullptr;
     QFile::remove(PlaylistSession::sessionFile());
+    // Shuffle play is kept in the settings; each test starts without it.
+    QSettings settings(PlaylistSession::configDir() + QStringLiteral("/settings.ini"), QSettings::IniFormat);
+    settings.remove(QStringLiteral("player"));
 }
 
 QStringList PlaylistTest::mpvFiles() const
@@ -446,13 +459,11 @@ void PlaylistTest::reverseOrder()
 void PlaylistTest::shuffle()
 {
     load(m_expected);
-    auto *button = m_drawer->findChild<QToolButton *>(QStringLiteral("PlaylistShuffleButton"));
-    QVERIFY(button);
     // A shuffle may keep the order by chance; it won't keep it every time.
     bool changed = false;
     for (int attempt = 0; attempt < 20 && !changed; ++attempt) {
         const QStringList before = mpvFiles();
-        QTest::mouseClick(button, Qt::LeftButton);
+        triggerMenuAction("PlaylistSortMenu", QStringLiteral("Randomize Order"));
         QTest::qWait(50);
         QTRY_COMPARE(viewFiles(), mpvFiles());
         changed = mpvFiles() != before;
@@ -463,6 +474,172 @@ void PlaylistTest::shuffle()
     QStringList expected = m_expected;
     expected.sort();
     QCOMPARE(sorted, expected);
+}
+
+void PlaylistTest::shufflePlayKeepsPlaylist()
+{
+    load(m_expected);
+    PlayQueue *queue = m_window->playlist()->queue();
+    auto *button = m_drawer->findChild<QToolButton *>(QStringLiteral("PlaylistShuffleButton"));
+    auto *bar = m_window->findChild<ControlBar *>();
+    QVERIFY(button && bar && button->isCheckable());
+    QTRY_COMPARE(queue->current(), prop("playlist/0/id").toLongLong());
+    const auto rest = [this] {
+        QList<qint64> ids;
+        for (int row = 1; row < m_expected.size(); ++row)
+            ids.append(prop(QStringLiteral("playlist/%1/id").arg(row).toLatin1().constData()).toLongLong());
+        return ids;
+    };
+
+    // Shuffle play shuffles what plays next; the playlist keeps its order.
+    QTest::mouseClick(button, Qt::LeftButton);
+    QVERIFY(button->isChecked());
+    QVERIFY(bar->isShuffle());
+    QVERIFY(queue->isShuffled());
+    QTest::qWait(100);
+    QCOMPARE(mpvFiles(), m_expected);
+    QCOMPARE(viewFiles(), m_expected);
+    QList<qint64> upcoming = queue->upcoming();
+    std::sort(upcoming.begin(), upcoming.end());
+    QCOMPARE(upcoming, rest());
+
+    // Next plays the queue's choice.
+    const qint64 next = queue->upcoming().first();
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-playing-pos").toInt(), queue->rowOf(next));
+    QCOMPARE(mpvFiles(), m_expected);
+
+    // The control bar's button turns it off again (and the drawer's follows).
+    bar->setShuffle(false);
+    QVERIFY(!button->isChecked());
+    QVERIFY(!queue->isShuffled());
+    QList<qint64> following;
+    for (int row = queue->rowOf(next) + 1; row < m_expected.size(); ++row)
+        following.append(prop(QStringLiteral("playlist/%1/id").arg(row).toLatin1().constData()).toLongLong());
+    QCOMPARE(queue->upcoming(), following);
+}
+
+void PlaylistTest::searchPlaysThroughResults()
+{
+    load(m_expected);
+    PlayQueue *queue = m_window->playlist()->queue();
+    // "episode" finds the first three; the second is opened from the results.
+    m_drawer->setFilterText(QStringLiteral("episode"));
+    Q_EMIT m_view->itemActivated(m_view->item(1));
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    QCOMPARE(queue->source(), PlayQueue::Source::Search);
+    QCOMPARE(queue->contextSize(), 3);
+
+    // Clearing the search keeps playing through its results.
+    m_drawer->setFilterText(QString());
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 2);
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+    // The last result: nothing to skip to (track.wav is not one of them)...
+    m_mpv->playlistNext();
+    QTest::qWait(300);
+    QCOMPARE(prop("playlist-pos").toInt(), 2);
+    // ...unless the playlist repeats, round the results.
+    m_mpv->setMpvProperty(QStringLiteral("loop-playlist"), QStringLiteral("inf"));
+    QTRY_COMPARE(m_mpv->mpvPropertyString(QStringLiteral("loop-playlist")), QStringLiteral("inf"));
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 0);
+    m_mpv->playlistPrev();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 2);
+    m_mpv->setMpvProperty(QStringLiteral("loop-playlist"), QStringLiteral("no"));
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+
+    // Opened without a search, the whole playlist plays on.
+    Q_EMIT m_view->itemActivated(m_view->item(3));
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 3);
+    QCOMPARE(queue->source(), PlayQueue::Source::Playlist);
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 4);
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+
+    // Another search replaces the context; a search without results opens nothing.
+    m_drawer->setFilterText(QStringLiteral("bonus"));
+    QCOMPARE(m_drawer->visibleRows(), QList<int>{4});
+    Q_EMIT m_view->itemActivated(m_view->item(4));
+    QTRY_COMPARE(queue->contextSize(), 1);
+    QCOMPARE(queue->query(), QStringLiteral("bonus"));
+    m_drawer->setFilterText(QStringLiteral("no such song"));
+    QVERIFY(m_drawer->visibleRows().isEmpty());
+}
+
+void PlaylistTest::searchShortcut()
+{
+    load(m_expected);
+    m_drawer->setExpanded(false, false);
+    auto *filter = m_drawer->findChild<QLineEdit *>(QStringLiteral("PlaylistFilter"));
+    m_window->activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(m_window));
+    m_mpv->setFocus();
+    QTest::keyClick(m_mpv, Qt::Key_F, Qt::ControlModifier);
+    QTRY_VERIFY(m_drawer->isExpanded());
+    QTRY_VERIFY(filter->hasFocus());
+    QCOMPARE(m_drawer->currentPage(), PlaylistDrawer::PlaylistPage);
+    // Typing searches; it doesn't trigger the player's hotkeys.
+    QTest::keyClicks(filter, QStringLiteral("track"));
+    QCOMPARE(m_drawer->visibleRows(), QList<int>{3});
+    // From the Queue page too.
+    m_drawer->setCurrentPage(PlaylistDrawer::QueuePage);
+    m_mpv->setFocus();
+    QTest::keyClick(m_mpv, Qt::Key_F, Qt::ControlModifier);
+    QTRY_COMPARE(m_drawer->currentPage(), PlaylistDrawer::PlaylistPage);
+    QTRY_VERIFY(filter->hasFocus());
+    QCOMPARE(filter->selectedText(), QStringLiteral("track"));
+}
+
+void PlaylistTest::playNextAndEndOfFile()
+{
+    load(m_expected);
+    PlayQueue *queue = m_window->playlist()->queue();
+    // Queued entries play first, in the order queued...
+    m_window->playlist()->enqueueRows({4});
+    m_window->playlist()->playRowsNext({3});
+    QTRY_COMPARE(queue->queued().size(), 2);
+    QCOMPARE(mpvFiles(), m_expected);
+    // ...also when a file plays to its end (episode 1 is 2 seconds long).
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
+    QTRY_COMPARE_WITH_TIMEOUT(prop("playlist-pos").toInt(), 3, 10000);
+    QTRY_VERIFY(!prop("pause").toBool());
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 4);
+    // Then the playlist carries on where it was.
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+    m_mpv->playlistNext();
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 1);
+    QVERIFY(queue->queued().isEmpty());
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+}
+
+void PlaylistTest::queuePage()
+{
+    load(m_expected);
+    m_window->playlist()->enqueueRows({2});
+    m_drawer->setCurrentPage(PlaylistDrawer::QueuePage);
+    auto *view = m_drawer->findChild<QListWidget *>(QStringLiteral("QueueView"));
+    QVERIFY(view);
+    const auto texts = [view] {
+        QStringList result;
+        for (int row = 0; row < view->count(); ++row)
+            result.append(view->item(row)->text());
+        return result;
+    };
+    QTRY_COMPARE(texts(), (QStringList{QStringLiteral("Now Playing"), QStringLiteral("episode 1.mkv"),
+                                       QStringLiteral("Next in Queue"), QStringLiteral("Episode 10.mkv"),
+                                       QStringLiteral("Next from Playlist"), QStringLiteral("Episode 2.mkv"),
+                                       QStringLiteral("track.wav"), QStringLiteral("Bonus 1.mkv")}));
+    // Activating an entry plays it; the playlist doesn't change.
+    Q_EMIT view->itemActivated(view->item(6));
+    QTRY_COMPARE(prop("playlist-pos").toInt(), 3);
+    m_mpv->setMpvProperty(QStringLiteral("pause"), QStringLiteral("yes"));
+    QTRY_COMPARE(texts().value(1), QStringLiteral("track.wav"));
+    QCOMPARE(texts().value(3), QStringLiteral("Episode 10.mkv"));
+    QCOMPARE(mpvFiles(), m_expected);
 }
 
 void PlaylistTest::filterKeepsPlaylist()

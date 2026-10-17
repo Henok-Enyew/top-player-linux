@@ -134,6 +134,10 @@ public:
 
     bool isPlaylistVisible() const;
     void setPlaylistVisible(bool visible);
+    // Opens the playlist with the keyboard in its search field (Ctrl+F).
+    void searchPlaylist();
+    // Opens the drawer on the play queue.
+    void showQueue();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

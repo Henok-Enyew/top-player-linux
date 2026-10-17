@@ -43,3 +43,7 @@ add_test(NAME tst_lyrics COMMAND tst_lyrics)
 add_executable(tst_resume tst_resume.cpp)
 target_link_libraries(tst_resume PRIVATE top-player-core Qt6::Test)
 add_test(NAME tst_resume COMMAND tst_resume)
+
+add_executable(tst_queue tst_queue.cpp)
+target_link_libraries(tst_queue PRIVATE top-player-core Qt6::Test)
+add_test(NAME tst_queue COMMAND tst_queue)

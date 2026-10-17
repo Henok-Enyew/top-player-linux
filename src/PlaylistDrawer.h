@@ -10,6 +10,8 @@
 #include <QVariant>
 
 class LibraryPanel;
+class PlayQueue;
+class QueuePanel;
 class QLabel;
 class QLineEdit;
 class QMenu;
@@ -52,9 +54,10 @@ private:
     int dropRow(QDropEvent *event) const;
 };
 
-// Collapsible right-hand panel with two pages: the playlist, mirroring mpv's
-// "playlist" property, with a search filter and the playlist management
-// actions; and the library of stored folders and playlists. Its left edge can
+// Collapsible right-hand panel with three pages: the playlist, mirroring
+// mpv's "playlist" property, with a search filter and the playlist management
+// actions; the play queue, what plays next in which order; and the library of
+// stored folders and playlists. Its left edge can
 // be dragged to resize it, and it can be expanded over most of the video.
 class PlaylistDrawer : public QFrame
 {
@@ -62,13 +65,16 @@ class PlaylistDrawer : public QFrame
     Q_PROPERTY(int drawerWidth READ drawerWidth WRITE setDrawerWidth)
 
 public:
-    enum Page { PlaylistPage, LibraryPage };
+    enum Page { PlaylistPage, QueuePage, LibraryPage };
 
     // `parent` is the widget the drawer shares with the video; expanding it
     // fills most of its width.
     explicit PlaylistDrawer(QWidget *parent = nullptr);
 
     LibraryPanel *libraryPanel() const { return m_library; }
+    QueuePanel *queuePanel() const { return m_queuePanel; }
+    // The queue the Queue page shows.
+    void setQueue(PlayQueue *queue);
     Page currentPage() const;
     void setCurrentPage(Page page);
 
@@ -88,6 +94,12 @@ public:
     // The playlist itself is not changed.
     void setFilterText(const QString &text);
     QString filterText() const;
+    // Rows the filter shows, ascending (all of them without a filter).
+    QList<int> visibleRows() const;
+    // Shows the playlist page with the keyboard in its search field (Ctrl+F).
+    void focusSearch();
+    // Checks the shuffle play button.
+    void setShuffleChecked(bool on);
 
     bool isExpanded() const { return m_expanded; }
     void setExpanded(bool expanded, bool animate = true);
@@ -106,7 +118,16 @@ public:
     int maximumDrawerWidth() const;
 
 Q_SIGNALS:
+    // Play entry `index` as opened by the user: from the search results if
+    // the playlist is filtered (see filterText() and visibleRows()).
     void playRequested(int index);
+    // Queue the entries at `rows` to play next, or after the queue.
+    void playNextRequested(const QList<int> &rows);
+    void enqueueRequested(const QList<int> &rows);
+    // Play queue entry `id` now (the Queue page).
+    void queuedPlayRequested(qint64 id);
+    // The shuffle play button was toggled.
+    void shuffleToggled(bool on);
     void moveRequested(int from, int to);
     void filesDropped(const QStringList &files, int row);
     void removeRequested(const QList<int> &rows);
@@ -119,6 +140,7 @@ Q_SIGNALS:
     void clearRequested();
     void sortRequested(PlaylistOps::SortKey key, bool ascending);
     void reverseRequested();
+    // Put the playlist itself in a random order.
     void shuffleRequested();
     void removeMissingRequested();
     void removeDuplicatesRequested();
@@ -165,6 +187,8 @@ private:
     QTabBar *m_tabs;
     QStackedWidget *m_pages;
     LibraryPanel *m_library;
+    QueuePanel *m_queuePanel;
+    QToolButton *m_shuffleButton = nullptr;
     QToolButton *m_wideButton = nullptr;
     QPropertyAnimation *m_animation;
     int m_preferredWidth;

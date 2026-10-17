@@ -104,6 +104,8 @@ add_library(top-player-core OBJECT
     src/OsdWidget.h
     src/PlayerMenu.cpp
     src/PlayerMenu.h
+    src/PlayQueue.cpp
+    src/PlayQueue.h
     src/PlaylistController.cpp
     src/PodnapisiClient.cpp
     src/PodnapisiClient.h
@@ -114,6 +116,8 @@ add_library(top-player-core OBJECT
     src/PlaylistOps.h
     src/PlaylistSession.cpp
     src/PlaylistSession.h
+    src/QueuePanel.cpp
+    src/QueuePanel.h
     src/ResumeManager.cpp
     src/ResumeManager.h
     src/ResumePrompt.cpp
