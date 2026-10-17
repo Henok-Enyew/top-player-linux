@@ -104,8 +104,9 @@ Preamp, bass, treble, a 10-band equalizer with presets, and night mode.
 <td valign="top">
 
 ### 📂 Playlist & Library
-Natural sorting, search, shuffle and repeat, M3U save and open, saved folders and playlists.
-Volume, shuffle and repeat are remembered.
+Natural sorting, search that plays through its results, a separate play queue with
+Play Next, shuffle that never scrambles your playlist, M3U save and open, saved folders and
+playlists. Volume, shuffle and repeat are remembered.
 
 </td>
 <td valign="top">
@@ -170,7 +171,7 @@ Every feature in detail. Click a section to open it.
 - **Hardware decoding**: Auto (Safe), Auto (Copy-back), VA-API, NVDEC, Vulkan
   or Off (Software).
 - **Speed** from 0.25x to 2.0x, in 0.1 steps (`C` / `X` / `Z`), **Loop File**,
-  **Shuffle** and **Repeat** (Off → All → One).
+  **Shuffle** (the play order, not the playlist) and **Repeat** (Off → All → One).
 - **Video**: track selection, **aspect ratio** (Default, 4:3, 16:9, 1.85:1,
   2.35:1), quick **Fit to Window / 16:9 / 100%** button, **rotate** (0°, 90°,
   180°, 270°), **deinterlace**, and **screenshots** (`Ctrl+E`, saved to
@@ -376,11 +377,26 @@ mpv's playlist. Each entry shows its duration, read in the background.
 - **Add Files...**, **Add Folder...** ("Added 24 items from Season 1") and
   **Add URL...**.
 - **Sort** by name, duration, file path or file size, **Reverse Order**, and
-  **Shuffle**; the playing file keeps playing.
+  **Randomize Order**; the playing file keeps playing.
 - **Remove Missing/Inaccessible Files**, **Remove Duplicates** (keeps the
   playing copy) and **Clear Playlist**.
-- A **search field** that filters as you type, matching every word against
-  names and paths, without changing the playlist.
+- A **search field** (`Ctrl+F`) that filters as you type, matching every word
+  against names and paths, without changing the playlist. A song opened from
+  the results plays on through the results: search "love", open one of the ten
+  songs found, and the next nine follow. Clearing the search doesn't change
+  that; opening a song from another search, or without one, does.
+- **Play Next** and **Add to Queue** in the right-click menu.
+- **Shuffle play** (the shuffle buttons) shuffles the order songs play in,
+  never the playlist itself, and keeps what is playing.
+
+The **Queue** tab shows what plays next, in order: **Now Playing**, the songs
+**queued** with Play Next / Add to Queue, then the rest of what it plays from
+(the playlist, or a search's results, shown on top with a button back to the
+whole playlist). Drag songs to reorder them, double-click to skip to one, or
+use **NEXT**, **DEL** (take out of the queue, not the playlist), **CLEAR** and
+the move buttons. A song from the queue plays once: the playlist carries on
+after it. Next, Previous, the media keys and songs ending all follow the queue,
+and Repeat All goes round it (reshuffled each round with shuffle on).
 - **Save Playlist...** (`Ctrl+S`): extended M3U in UTF-8 with titles and
   durations, as `.m3u8` or `.m3u`.
 - **Open Playlist...**: reads `.m3u` / `.m3u8` / `.pls` in the background,
@@ -643,6 +659,7 @@ mpv property or command, and check marks reflect mpv's live state.
 | Double-click video, `Enter` | Toggle fullscreen |
 | `Esc` | Leave fullscreen or the mini player |
 | `Ctrl+B` (or `F6`) | Show / hide the playlist |
+| `Ctrl+F` | Search the playlist (opens it) |
 | `Ctrl+T` | Always on top |
 | `Ctrl+M` | Mini player |
 | `Ctrl+Shift+T` | Appearance: theme, accent color and style |
