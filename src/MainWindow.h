@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MediaSearch.h"
 #include "MpvWidget.h"
 #include "StreamCatalog.h"
 
@@ -18,6 +19,7 @@ class ControlBar;
 class EmptyStateWidget;
 class LiveStreamDialog;
 class LyricsController;
+class MediaSearchDialog;
 class OsdWidget;
 class PlayerMenu;
 class PlaylistController;
@@ -77,6 +79,10 @@ public:
 
     // Download from URL... (yt-dlp).
     void openMediaDownloaderDialog();
+    // Search YouTube... / Search Spotify...: one window each, kept (with its
+    // results and downloads) while the player runs.
+    void openMediaSearchDialog(MediaSearch::Source source);
+    MediaSearchDialog *mediaSearchDialog(MediaSearch::Source source) const;
 
     // The cutter's In (A) and Out (B) points: set to the playback position,
     // shown on the seekbar, and cleared when another file opens. -1 if unset.
@@ -150,6 +156,12 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 private:
+    // What the download and search dialogs ask for: play or queue a saved
+    // file (or songs), stream entries in place of the playlist, or append them.
+    void onDownloaded(const QString &path, bool play);
+    void onDownloadedMany(const QStringList &paths, bool play);
+    void streamEntries(const QStringList &urls, const QStringList &titles, const QString &format);
+    void queueEntries(const QStringList &urls, const QStringList &titles, const QString &format);
     void startStream(const StreamCatalog::Station &station);
     void onFileFailed(const QString &path, const QString &error);
     void setupPlaylist();
@@ -199,6 +211,8 @@ private:
     ThumbnailGenerator *m_thumbnails = nullptr;
     ThumbnailPopup *m_thumbnailPopup = nullptr;
     LiveStreamDialog *m_liveStreams = nullptr;
+    MediaSearchDialog *m_youtubeSearch = nullptr;
+    MediaSearchDialog *m_spotifySearch = nullptr;
     AudioEffectsController *m_audioEffects = nullptr;
     AudioControlDialog *m_audioControl = nullptr;
     // The live stream played last, and its channel's untried other streams.

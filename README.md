@@ -76,8 +76,9 @@ controls and lyrics that shrink to fit. Drag it anywhere, resize it any way.
 
 ### ⬇️ Downloads
 YouTube (videos and whole playlists), TikTok, Instagram, X and 1000+ sites through yt-dlp, and
-**Spotify songs, albums and playlists** saved as tagged MP3s. Or stream them, and save any streamed
-entry from the playlist later.
+**Spotify songs, albums and playlists** saved as tagged MP3s. **Search YouTube or Spotify by name**
+and play, queue or download what you find. Or stream them, and save any streamed entry from the
+playlist later.
 
 </td>
 <td valign="top">
@@ -484,6 +485,28 @@ Countries** and **every other country** alphabetically. Then:
   tick **Whole playlist**). **Stream Playlist** queues every video as a titled
   playlist entry; **Download Playlist** saves them all, in order, into a
   folder named after the playlist.
+- **Search YouTube...** (`Ctrl+F`, also on the start screen): type a song or
+  video name and press `Enter`. The results list each video's thumbnail,
+  title, channel, length and views; **Load More** fetches the next 20. Select
+  one or more (`Ctrl`/`Shift`+click) and **Play Now** (or double-click),
+  **Add to Playlist** (appended without interrupting what plays), **Download
+  Video** (in the **Video quality** chosen: best, 4K, 1080p or 720p MP4) or
+  **Download MP3**. Searches run through `yt-dlp` (`ytsearch`), so no account
+  or key is needed.
+- **Search Spotify...** (`Ctrl+Shift+S`, also on the start screen): songs,
+  albums and playlists in their own tabs, with cover art, artists, album and
+  length. **Download MP3** saves songs the way Spotify links are saved (found
+  on YouTube by artist, title and length, tagged with Spotify's names); for an
+  album or playlist it saves every song. **Play Now** and **Add to Playlist**
+  stream songs (and every song of an album or playlist) through their YouTube
+  match, titled "Artist - Title".
+- Downloads from both searches run one after another in the background, each
+  row showing its state (Queued, 45%, Saved, Failed, with the reason in its
+  tooltip), with an overall progress bar and **Cancel Downloads**. They use
+  the same folder and **Play immediately upon download** choice as Download
+  from URL (the first song saved plays, the rest are queued). Closing the
+  window while downloads run asks whether to keep them going in the
+  background; the window keeps its results for next time.
 - **Download from the playlist**: entries that stream from the web (YouTube
   videos, Spotify songs, ...) show a ⬇ button when the pointer is over them,
   and the playlist's right-click menu has **Download**, **Download Selected**
@@ -491,6 +514,23 @@ Countries** and **every other country** alphabetically. Then:
   MP4) or **Audio Only (MP3)**. Downloads run one after another into the
   download folder, and each entry shows its state (Queued, 45%, Saved).
   **Tools › Download What's Playing** saves the stream that plays.
+
+> [!TIP]
+> **Spotify search needs your own (free) Spotify API keys.** Spotify only
+> answers searches from registered apps:
+> 1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+>    and click **Create app**.
+> 2. Enter any name and description, a Redirect URI such as
+>    `http://127.0.0.1:8888/callback` (it isn't used), tick **Web API**, and save.
+> 3. Open the app's **Settings** and copy its **Client ID** and **Client
+>    Secret** (View client secret).
+> 4. In Top Player open **Search Spotify...**, expand **Spotify API access** and
+>    paste them. They are stored in `~/.config/top-player/settings.ini` and
+>    only used to ask Spotify for search tokens (Client Credentials flow).
+>
+> If Spotify refuses them, is rate-limiting (it says how long to wait) or
+> can't be reached, the dialog says so. Downloads and streams still come from
+> YouTube, as with Spotify links.
 
 > [!NOTE]
 > The tools use the system's `ffmpeg` and `yt-dlp` (install them with your
@@ -673,6 +713,8 @@ mpv property or command, and check marks reflect mpv's live state.
 | `Ctrl+[` / `Ctrl+]` | Set cut In / Out point |
 | `Ctrl+X` | Cut / extract media |
 | `Ctrl+Shift+D` | Download from URL |
+| `Ctrl+F` | Search YouTube |
+| `Ctrl+Shift+S` | Search Spotify |
 | `Ctrl+E` | Screenshot |
 | `Ctrl+D` | Deinterlace |
 

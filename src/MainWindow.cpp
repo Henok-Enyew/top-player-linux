@@ -10,6 +10,7 @@
 #include "LyricsView.h"
 #include "MediaCutterDialog.h"
 #include "MediaDownloaderDialog.h"
+#include "MediaSearchDialog.h"
 #include "MediaFiles.h"
 #include "MpvWidget.h"
 #ifdef TOPPLAYER_HAVE_DBUS
@@ -272,6 +273,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_emptyState, &EmptyStateWidget::openFolderRequested, this, &MainWindow::openFolderDialog);
     connect(m_emptyState, &EmptyStateWidget::openUrlRequested, this, &MainWindow::openUrlDialog);
     connect(m_emptyState, &EmptyStateWidget::openPlaylistRequested, this, &MainWindow::openPlaylistDialog);
+    connect(m_emptyState, &EmptyStateWidget::searchYouTubeRequested, this,
+            [this] { openMediaSearchDialog(MediaSearch::Source::YouTube); });
+    connect(m_emptyState, &EmptyStateWidget::searchSpotifyRequested, this,
+            [this] { openMediaSearchDialog(MediaSearch::Source::Spotify); });
     connect(m_emptyState, &EmptyStateWidget::urlsDropped, this, &MainWindow::openUrls);
     connect(m_mpv, &MpvWidget::fileStarted, m_emptyState, [this] { m_emptyState->setActive(false); });
     connect(m_mpv, &MpvWidget::fileFailed, this, &MainWindow::onFileFailed);
@@ -640,32 +645,49 @@ void MainWindow::openSubtitleSettingsDialog()
     dialog.exec();
 }
 
+void MainWindow::onDownloaded(const QString &path, bool play)
+{
+    if (play)
+        openFile(path);
+    else
+        m_mpv->insertFiles({path});
+    m_osd->showValue(tr("Downloaded:"), QFileInfo(path).fileName());
+}
+
+void MainWindow::onDownloadedMany(const QStringList &paths, bool play)
+{
+    if (play)
+        openFiles(paths);
+    else
+        m_mpv->insertFiles(paths);
+    m_osd->showValue(tr("Downloaded:"), tr("%n song(s)", nullptr, int(paths.size())));
+}
+
+void MainWindow::streamEntries(const QStringList &urls, const QStringList &titles, const QString &format)
+{
+    // Each entry is a page (or a YouTube search for a Spotify song)
+    // that mpv resolves through yt-dlp.
+    m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
+    m_mpv->loadTitledFiles(urls, titles);
+    m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n entries", nullptr, int(titles.size())));
+}
+
+void MainWindow::queueEntries(const QStringList &urls, const QStringList &titles, const QString &format)
+{
+    // The format applies to every stream mpv opens; leave the one playing alone.
+    if (m_mpv->isIdle())
+        m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
+    m_mpv->appendTitledFiles(urls, titles);
+    m_osd->showValue(tr("Added to playlist:"), titles.size() == 1 ? titles.first() : tr("%n entries", nullptr, int(titles.size())));
+}
+
 void MainWindow::openMediaDownloaderDialog()
 {
     auto *dialog = new MediaDownloaderDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(dialog, &MediaDownloaderDialog::downloaded, this, [this](const QString &path, bool play) {
-        if (play)
-            openFile(path);
-        else
-            m_mpv->insertFiles({path});
-        m_osd->showValue(tr("Downloaded:"), QFileInfo(path).fileName());
-    });
-    connect(dialog, &MediaDownloaderDialog::downloadedMany, this, [this](const QStringList &paths, bool play) {
-        if (play)
-            openFiles(paths);
-        else
-            m_mpv->insertFiles(paths);
-        m_osd->showValue(tr("Downloaded:"), tr("%n song(s)", nullptr, int(paths.size())));
-    });
-    connect(dialog, &MediaDownloaderDialog::tracksStreamRequested, this,
-            [this](const QStringList &urls, const QStringList &titles, const QString &format) {
-                // Each entry is a page (or a YouTube search for a Spotify song)
-                // that mpv resolves through yt-dlp.
-                m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
-                m_mpv->loadTitledFiles(urls, titles);
-                m_osd->showValue(tr("Streaming"), titles.size() == 1 ? titles.first() : tr("%n entries", nullptr, int(titles.size())));
-            });
+    connect(dialog, &MediaDownloaderDialog::downloaded, this, &MainWindow::onDownloaded);
+    connect(dialog, &MediaDownloaderDialog::downloadedMany, this, &MainWindow::onDownloadedMany);
+    connect(dialog, &MediaDownloaderDialog::tracksStreamRequested, this, &MainWindow::streamEntries);
     connect(dialog, &MediaDownloaderDialog::streamRequested, this, [this](const QString &url, const QString &format) {
         // mpv resolves the page through yt-dlp, picking streams with this format.
         m_mpv->setMpvProperty(QStringLiteral("ytdl-format"), format);
@@ -673,6 +695,26 @@ void MainWindow::openMediaDownloaderDialog()
         m_osd->showValue(tr("Streaming"), url);
     });
     dialog->open();
+}
+
+MediaSearchDialog *MainWindow::mediaSearchDialog(MediaSearch::Source source) const
+{
+    return source == MediaSearch::Source::Spotify ? m_spotifySearch : m_youtubeSearch;
+}
+
+void MainWindow::openMediaSearchDialog(MediaSearch::Source source)
+{
+    MediaSearchDialog *&dialog = source == MediaSearch::Source::Spotify ? m_spotifySearch : m_youtubeSearch;
+    if (!dialog) {
+        dialog = new MediaSearchDialog(source, this);
+        connect(dialog, &MediaSearchDialog::downloaded, this, &MainWindow::onDownloaded);
+        connect(dialog, &MediaSearchDialog::downloadedMany, this, &MainWindow::onDownloadedMany);
+        connect(dialog, &MediaSearchDialog::tracksStreamRequested, this, &MainWindow::streamEntries);
+        connect(dialog, &MediaSearchDialog::tracksQueueRequested, this, &MainWindow::queueEntries);
+    }
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 void MainWindow::setClipIn()
