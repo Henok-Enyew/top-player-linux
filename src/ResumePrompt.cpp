@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -47,23 +48,28 @@ ResumePrompt::ResumePrompt(QWidget *parent)
     hide();
     parent->installEventFilter(this);
 
-    m_heading->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 11pt;").arg(Theme::hex(Theme::TextPrimary)));
-    m_title->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::TextSecondary)));
-    m_detail->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent)));
-    m_countdown->setStyleSheet(QStringLiteral("color: %1; font-size: 8pt;").arg(Theme::hex(Theme::TextDim)));
     m_resume->setObjectName(QStringLiteral("ResumeButton"));
     m_startOver->setObjectName(QStringLiteral("StartOverButton"));
     m_resume->setDefault(true);
     m_resume->setCursor(Qt::PointingHandCursor);
     m_startOver->setCursor(Qt::PointingHandCursor);
-    m_resume->setStyleSheet(QStringLiteral(
-        "QPushButton { background: %1; color: #0B0C0F; border: none; border-radius: 6px; padding: 7px 14px; font-weight: bold; }"
-        "QPushButton:hover { background: %2; }").arg(Theme::hex(Theme::Accent), Theme::hex(Theme::AccentHover)));
-    m_startOver->setStyleSheet(QStringLiteral(
-        "QPushButton { background: %1; color: %2; border: 1px solid %3; border-radius: 6px; padding: 7px 14px; }"
-        "QPushButton:hover { border-color: %4; color: %5; }")
-                                   .arg(Theme::hex(Theme::Raised), Theme::hex(Theme::TextSecondary), Theme::hex(Theme::Border),
-                                        Theme::hex(Theme::Accent), Theme::hex(Theme::TextPrimary)));
+    Theme::bind(this, [this] {
+        m_heading->setStyleSheet(QStringLiteral("color: %1; font-weight: bold; font-size: 11pt;").arg(Theme::hex(Theme::TextPrimary)));
+        m_title->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::TextSecondary)));
+        m_detail->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent)));
+        m_countdown->setStyleSheet(QStringLiteral("color: %1; font-size: 8pt;").arg(Theme::hex(Theme::TextDim)));
+        m_resume->setStyleSheet(QStringLiteral(
+            "QPushButton { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 %1, stop: 1 %2); color: %3; "
+            "border: none; border-radius: 6px; padding: 7px 14px; font-weight: bold; }"
+            "QPushButton:hover { background: %4; }")
+                                    .arg(Theme::hex(Theme::Accent), Theme::hex(Theme::Accent2), Theme::hex(Theme::OnAccent),
+                                         Theme::hex(Theme::AccentHover)));
+        m_startOver->setStyleSheet(QStringLiteral(
+            "QPushButton { background: %1; color: %2; border: 1px solid %3; border-radius: 6px; padding: 7px 14px; }"
+            "QPushButton:hover { border-color: %4; color: %5; }")
+                                       .arg(Theme::hex(Theme::Raised), Theme::hex(Theme::TextSecondary), Theme::hex(Theme::Border),
+                                            Theme::hex(Theme::Accent), Theme::hex(Theme::TextPrimary)));
+    });
     m_title->setMaximumWidth(kCardWidth - 40);
 
     auto *buttons = new QHBoxLayout;
@@ -213,6 +219,9 @@ void ResumePrompt::paintEvent(QPaintEvent *)
     p.setClipPath(path);
     const QRectF track(card.left(), card.bottom() - 4, card.width(), 4);
     p.fillRect(track, Theme::Raised);
-    p.fillRect(QRectF(track.left(), track.top(), track.width() * m_progress, track.height()), Theme::Accent);
+    QLinearGradient fill(track.topLeft(), track.topRight());
+    fill.setColorAt(0, Theme::Accent);
+    fill.setColorAt(1, Theme::Accent2);
+    p.fillRect(QRectF(track.left(), track.top(), track.width() * m_progress, track.height()), fill);
     p.restore();
 }

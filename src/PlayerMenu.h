@@ -43,6 +43,8 @@ private:
     void buildLyricsMenu();
     void buildPlaybackMenu();
     void buildToolsMenu();
+    // Theme, accent and style, and the Appearance dialog.
+    void buildAppearanceMenu();
     void buildWindowMenu();
     void buildHelpMenu();
 

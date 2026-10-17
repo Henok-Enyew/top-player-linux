@@ -34,14 +34,22 @@ constexpr int kStoredRole = Qt::UserRole + 3;
 // Set on the rows that run an action when clicked (the hints in an empty section).
 constexpr int kActionRole = Qt::UserRole + 4;
 enum class RowAction { AddFolder = 1, SaveQueue };
+// The theme color a row's text takes, so it can follow appearance changes.
+constexpr int kToneRole = Qt::UserRole + 5;
+enum class Tone { Accent = 1, Muted };
 // Section headers remember whether they were folded under these keys.
 const QString kFoldersKey = QStringLiteral("section:folders");
 const QString kPlaylistsKey = QStringLiteral("section:playlists");
 
-const QColor kMutedColor(0x8A, 0x8F, 0x9C);
 const QColor kMissingColor(0x8A, 0x5A, 0x5A);
 
 using EntryType = LibraryPanel::EntryType;
+
+void setTone(QTreeWidgetItem *item, Tone tone)
+{
+    item->setData(0, kToneRole, static_cast<int>(tone));
+    item->setForeground(0, tone == Tone::Accent ? Theme::Accent : Theme::mix(Theme::TextSecondary, Theme::TextDim, 0.4));
+}
 
 bool hasType(const QTreeWidgetItem *item)
 {
@@ -75,7 +83,7 @@ QTreeWidgetItem *addActionRow(QTreeWidgetItem *parent, const QString &text, RowA
     item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     item->setData(0, kActionRole, static_cast<int>(action));
     item->setIcon(0, skinIcon(IconType::Add));
-    item->setForeground(0, Theme::Accent);
+    setTone(item, Tone::Accent);
     item->setToolTip(0, text);
     return item;
 }
@@ -84,7 +92,7 @@ QTreeWidgetItem *addPlaceholder(QTreeWidgetItem *parent, const QString &text)
 {
     auto *item = new QTreeWidgetItem(parent, {text});
     item->setFlags(Qt::ItemIsEnabled);
-    item->setForeground(0, kMutedColor);
+    setTone(item, Tone::Muted);
     QFont font = item->font(0);
     font.setItalic(true);
     item->setFont(0, font);
@@ -255,6 +263,12 @@ LibraryPanel::LibraryPanel(QWidget *parent)
     connect(addPlaylist, &QToolButton::clicked, this, &LibraryPanel::addPlaylistFileRequested);
     connect(saveQueue, &QToolButton::clicked, this, &LibraryPanel::saveQueueRequested);
     connect(m_removeButton, &QToolButton::clicked, this, [this] { removeItem(m_view->currentItem()); });
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
+        for (QTreeWidgetItemIterator it(m_view); *it; ++it) {
+            if (const int tone = (*it)->data(0, kToneRole).toInt())
+                setTone(*it, static_cast<Tone>(tone));
+        }
+    });
 
     rebuild();
 }

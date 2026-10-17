@@ -11,12 +11,15 @@ enum class IconType {
     MoveTop, MoveUp, MoveDown, MoveBottom, Pin, MiniPlayer, Download,
 };
 
-// Checkable buttons show the icon in the accent color while checked.
+// Icons are drawn when shown, in the current appearance's colors, so they
+// follow theme changes by themselves. Checkable buttons show the icon in the
+// accent color while checked.
 QIcon skinIcon(IconType type);
 // Like skinIcon(), with `hoverColor` under the mouse (e.g. white on the red
 // hover of a close button).
 QIcon skinIcon(IconType type, const QColor &hoverColor);
 
-// The application logo (same artwork as the desktop icon), `size` logical
+// The application logo in the brand colors (same artwork as the desktop
+// icon), `size` logical
 // pixels square, rendered for `devicePixelRatio`.
 QPixmap appLogo(int size, qreal devicePixelRatio);

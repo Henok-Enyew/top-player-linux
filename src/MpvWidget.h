@@ -10,6 +10,7 @@
 #include <QVariant>
 #include <QWidget>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -93,6 +94,11 @@ public:
     bool isAudioOnly() const { return m_audioOnly; }
     // The entry that is playing, or played last before a stop; -1 if none.
     int lastPlaylistPos() const { return m_lastPlaylistPos; }
+    // Picks the playlist entry that Next (`step` 1) and Previous (-1) play,
+    // and the one that follows when a file ends or fails to open: its index,
+    // or -1 for none. Without a handler the playlist plays in its order.
+    using StepHandler = std::function<int(int step)>;
+    void setStepHandler(StepHandler handler) { m_stepHandler = std::move(handler); }
 
     // Changes whenever the playlist is replaced (loadFiles(), loadStream(), ...)
     // or a replacement is reserved. Work that finishes later, such as a folder
@@ -207,6 +213,11 @@ private:
     void runOrDefer(const QVariantMap &command);
     // Plays playlist entry `index`, clamped to the playlist. Returns false if it is empty.
     bool playIndex(int index);
+    // The entry `step` away, as the step handler or the playlist's order has
+    // it (wrapping around if the playlist repeats); -1 if there is none.
+    int stepTarget(int step);
+    // A file played to its end or failed to open: plays the next entry, if any.
+    void advance();
     // Commands that add `files` to the playlist like loadfile with `flag`
     // ("replace", "append" or "append-play"). Runs of several files are
     // written to a temporary playlist and added with a single loadlist, so a
@@ -261,6 +272,12 @@ private:
     bool m_idle = true;
     // Playlist entry that played last; mpv forgets it on stop.
     int m_lastPlaylistPos = -1;
+    StepHandler m_stepHandler;
+    // Files that failed to open one after another: once every entry has, the
+    // player stops moving on.
+    int m_failedInARow = 0;
+    // playIndex() asked for an entry that hasn't started yet.
+    bool m_switchPending = false;
     // Temporary playlists from writeBatch(): not yet sent, and sent awaiting
     // their command reply (by reply id).
     std::unique_ptr<QTemporaryDir> m_batchDir;

@@ -9,6 +9,7 @@
 #include "PlaylistSession.h"
 #include "ResumeManager.h"
 #include "MpvWidget.h"
+#include "PlayQueue.h"
 #include "PlaylistController.h"
 #ifdef TOPPLAYER_HAVE_DBUS
 #include "MprisService.h"
@@ -18,6 +19,7 @@
 #include "SeekBar.h"
 #include "ThumbnailGenerator.h"
 #include "TestClip.h"
+#include "Theme.h"
 
 #include <QApplication>
 #include <QScreen>
@@ -631,25 +633,36 @@ void TransportTest::shuffleButton()
     m_window->resize(800, 450);
     QTRY_VERIFY(button->isVisible());
     QVERIFY(!button->isChecked());
+    auto *bar = m_window->findChild<ControlBar *>();
+    PlayQueue *queue = m_window->playlist()->queue();
     click("ShuffleButton");
-    QTRY_VERIFY(prop("shuffle").toBool());
+    QVERIFY(bar->isShuffle());
+    QVERIFY(queue->isShuffled());
     QTRY_VERIFY(button->isChecked());
-    QTRY_VERIFY(order() != files);
+    // Shuffle play changes the order songs play in, not the playlist.
+    QTest::qWait(200);
+    QCOMPARE(order(), files);
     QCOMPARE(prop("playlist-count").toInt(), files.size());
+    QTRY_COMPARE(queue->upcoming().size(), files.size() - 1);
+    // The drawer's shuffle button follows.
+    auto *drawerButton = m_window->findChild<QToolButton *>(QStringLiteral("PlaylistShuffleButton"));
+    QVERIFY(drawerButton && drawerButton->isChecked());
     // The accent-colored icon marks it on.
     const QImage on = button->icon().pixmap(QSize(20, 20), QIcon::Normal, QIcon::On).toImage();
     bool accent = false;
     for (int y = 0; y < on.height() && !accent; ++y) {
         for (int x = 0; x < on.width() && !accent; ++x)
-            accent = on.pixelColor(x, y) == QColor(0x00, 0xD2, 0xFF);
+            accent = on.pixelColor(x, y) == Theme::Accent;
     }
     QVERIFY(accent);
 
-    // Off restores the order.
+    // Off plays on in the playlist's order.
     click("ShuffleButton");
-    QTRY_VERIFY(!prop("shuffle").toBool());
-    QTRY_COMPARE(order(), files);
+    QVERIFY(!bar->isShuffle());
+    QVERIFY(!queue->isShuffled());
     QTRY_VERIFY(!button->isChecked());
+    QVERIFY(!drawerButton->isChecked());
+    QCOMPARE(order(), files);
 }
 
 void TransportTest::repeatButton()
@@ -733,8 +746,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.0.8"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.0.8")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.1.0"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.1.0")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -790,7 +803,7 @@ void TransportTest::controlsRememberState()
     click("ShuffleButton");
     click("RepeatButton"); // Off -> All
     QTRY_COMPARE(prop("volume").toDouble(), 37.0);
-    QTRY_VERIFY(prop("shuffle").toBool());
+    QTRY_VERIFY(m_window->findChild<ControlBar *>()->isShuffle());
     QTRY_COMPARE(m_window->findChild<ControlBar *>()->repeat(), ControlBar::Repeat::All);
 
     // Saved shortly after the changes, and set again in the next window.
@@ -803,8 +816,8 @@ void TransportTest::controlsRememberState()
     auto *bar = m_window->findChild<ControlBar *>();
     QTRY_COMPARE(prop("volume").toDouble(), 37.0);
     QTRY_VERIFY(prop("mute").toBool());
-    QTRY_VERIFY(prop("shuffle").toBool());
     QTRY_VERIFY(bar->isShuffle());
+    QVERIFY(m_window->playlist()->queue()->isShuffled());
     QTRY_COMPARE(bar->repeat(), ControlBar::Repeat::All);
     QCOMPARE(m_window->findChild<QSlider *>(QStringLiteral("VolumeSlider"))->value(), 37);
 

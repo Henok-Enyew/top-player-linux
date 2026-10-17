@@ -12,7 +12,6 @@
 
 namespace {
 
-const QColor kAccentColor = Theme::Accent;
 const QColor kTextColor(0xFF, 0xFF, 0xFF);
 const QColor kOutlineColor(0, 0, 0, 200);
 
@@ -138,7 +137,7 @@ void OsdWidget::paintEvent(QPaintEvent *)
     painter.strokePath(plainPath, outline);
     painter.strokePath(accentPath, outline);
     painter.fillPath(plainPath, kTextColor);
-    painter.fillPath(accentPath, kAccentColor);
+    painter.fillPath(accentPath, Theme::Accent);
 
     if (m_progress >= 0) {
         const qreal barHeight = std::max(4.0, fontSize / 5);
@@ -148,7 +147,7 @@ void OsdWidget::paintEvent(QPaintEvent *)
         painter.setBrush(QColor(255, 255, 255, 70));
         painter.drawRect(track);
         painter.setPen(Qt::NoPen);
-        painter.setBrush(kAccentColor);
+        painter.setBrush(Theme::Accent);
         painter.drawRect(QRectF(track.topLeft(), QSizeF(track.width() * m_progress, track.height())));
     }
 }

@@ -1,6 +1,8 @@
 #include "Icons.h"
 #include "Theme.h"
 
+#include <QHash>
+#include <QIconEngine>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
@@ -9,12 +11,7 @@
 
 namespace {
 
-const QColor kNormalColor(0xD8, 0xDB, 0xE4);
-const QColor kActiveColor = Theme::AccentHover;
-const QColor kDisabledColor = Theme::TextDim;
-
 constexpr int kLogicalSize = 20;
-constexpr qreal kScale = 2.0; // rendered at 2x so icons stay sharp on HiDPI screens
 
 QPainterPath polygon(std::initializer_list<QPointF> points)
 {
@@ -252,36 +249,104 @@ void drawIcon(QPainter &p, IconType type)
     }
 }
 
-QPixmap renderIcon(IconType type, const QColor &color)
+// Draws `type` in `color` on a `pixels` square, at `devicePixelRatio`.
+QPixmap renderIcon(IconType type, const QColor &color, const QSize &pixels, qreal devicePixelRatio)
 {
-    QPixmap pixmap(QSize(kLogicalSize, kLogicalSize) * kScale);
-    pixmap.setDevicePixelRatio(kScale);
+    QPixmap pixmap(pixels);
+    pixmap.setDevicePixelRatio(devicePixelRatio);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
+    const QSizeF logical = QSizeF(pixels) / devicePixelRatio;
+    painter.scale(logical.width() / kLogicalSize, logical.height() / kLogicalSize);
     painter.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.setBrush(Qt::NoBrush);
     drawIcon(painter, type);
     return pixmap;
 }
 
+// Bumped by every appearance change.
+int &iconGeneration()
+{
+    static int value = [] {
+        QObject::connect(Theme::notifier(), &Theme::Notifier::changed, [] { ++iconGeneration(); });
+        return 0;
+    }();
+    return value;
+}
+
+// Draws the icon on demand in the current theme's colors, so icons follow
+// appearance changes without being set again. Pixmaps are kept until the
+// appearance changes.
+class SkinIconEngine : public QIconEngine
+{
+public:
+    SkinIconEngine(IconType type, const QColor &hoverColor)
+        : m_type(type)
+        , m_hoverColor(hoverColor)
+    {
+    }
+
+    void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        const qreal dpr = painter->device() ? painter->device()->devicePixelRatioF() : 1.0;
+        painter->drawPixmap(rect, scaledPixmap(rect.size(), mode, state, dpr));
+    }
+
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state) override
+    {
+        return scaledPixmap(size, mode, state, 1.0);
+    }
+
+    QPixmap scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state, qreal scale) override
+    {
+        const QSize pixels = size * scale;
+        if (pixels.isEmpty())
+            return {};
+        if (m_generation != iconGeneration()) {
+            m_cache.clear();
+            m_generation = iconGeneration();
+        }
+        const quint64 key = (quint64(pixels.width()) << 40) | (quint64(pixels.height()) << 16)
+                            | (quint64(qRound(scale * 100)) << 4) | (quint64(mode) << 1) | quint64(state);
+        if (const auto cached = m_cache.constFind(key); cached != m_cache.constEnd())
+            return *cached;
+        const QPixmap result = renderIcon(m_type, color(mode, state), pixels, scale);
+        m_cache.insert(key, result);
+        return result;
+    }
+
+    QIconEngine *clone() const override { return new SkinIconEngine(m_type, m_hoverColor); }
+    QString key() const override { return QStringLiteral("TopPlayerSkinIcon"); }
+
+private:
+    QColor color(QIcon::Mode mode, QIcon::State state) const
+    {
+        if (mode == QIcon::Disabled)
+            return Theme::TextDim;
+        if (state == QIcon::On)
+            return Theme::Accent;
+        if (mode == QIcon::Active || mode == QIcon::Selected)
+            return m_hoverColor.isValid() ? m_hoverColor : Theme::AccentHover;
+        return Theme::mix(Theme::TextPrimary, Theme::TextSecondary, 0.2);
+    }
+
+    IconType m_type;
+    QColor m_hoverColor; // invalid: the theme's
+    QHash<quint64, QPixmap> m_cache;
+    int m_generation = -1;
+};
+
 } // namespace
 
 QIcon skinIcon(IconType type)
 {
-    return skinIcon(type, kActiveColor);
+    return QIcon(new SkinIconEngine(type, QColor()));
 }
 
 QIcon skinIcon(IconType type, const QColor &hoverColor)
 {
-    QIcon icon;
-    icon.addPixmap(renderIcon(type, kNormalColor), QIcon::Normal);
-    icon.addPixmap(renderIcon(type, hoverColor), QIcon::Active);
-    icon.addPixmap(renderIcon(type, kDisabledColor), QIcon::Disabled);
-    const QPixmap on = renderIcon(type, Theme::Accent);
-    icon.addPixmap(on, QIcon::Normal, QIcon::On);
-    icon.addPixmap(on, QIcon::Active, QIcon::On);
-    return icon;
+    return QIcon(new SkinIconEngine(type, hoverColor));
 }
 
 QPixmap appLogo(int size, qreal devicePixelRatio)
@@ -291,39 +356,63 @@ QPixmap appLogo(int size, qreal devicePixelRatio)
     pixmap.fill(Qt::transparent);
     QPainter p(&pixmap);
     p.setRenderHint(QPainter::Antialiasing);
-    // Drawn on the 256x256 grid of packaging/linux/org.github.topplayer.svg.
+    // Drawn on the 256x256 grid of packaging/linux/org.github.topplayer.svg,
+    // in the brand colors whatever the theme.
     p.scale(size / 256.0, size / 256.0);
+    const QColor violet = Theme::BrandViolet;
+    const QColor magenta = Theme::BrandMagenta;
+    const QRectF tileRect(16.5, 16.5, 223, 223);
+    QPainterPath tile;
+    tile.addRoundedRect(tileRect, 56, 56);
 
-    // Obsidian tile.
-    QLinearGradient background(0, 16, 0, 240);
-    background.setColorAt(0, QColor(0x1E, 0x21, 0x29));
-    background.setColorAt(1, QColor(0x0E, 0x0F, 0x12));
-    p.setPen(QPen(Theme::Border, 1));
-    p.setBrush(background);
-    p.drawRoundedRect(QRectF(16.5, 16.5, 223, 223), 47.5, 47.5);
+    // Night-violet squircle tile.
+    QLinearGradient background(16, 16, 240, 240);
+    background.setColorAt(0, QColor(0x1C, 0x16, 0x33));
+    background.setColorAt(1, QColor(0x0B, 0x09, 0x14));
+    p.fillPath(tile, background);
 
-    // Neon glow behind the play triangle.
-    QRadialGradient glow(QPointF(124, 128), 96);
-    glow.setColorAt(0, QColor(0x00, 0xD2, 0xFF, 90));
-    glow.setColorAt(1, QColor(0x00, 0xD2, 0xFF, 0));
-    p.setPen(Qt::NoPen);
-    p.setBrush(glow);
-    p.drawEllipse(QPointF(124, 128), 96, 96);
+    // Neon glow behind the play glyph, and a glassy sheen across the top.
+    p.save();
+    p.setClipPath(tile);
+    QRadialGradient glow(QPointF(112, 128), 104);
+    glow.setColorAt(0, Theme::withAlpha(violet, 0.45));
+    glow.setColorAt(1, Theme::withAlpha(violet, 0));
+    p.fillRect(tileRect, glow);
+    QLinearGradient sheen(0, 16, 0, 128);
+    sheen.setColorAt(0, QColor(255, 255, 255, 26));
+    sheen.setColorAt(1, QColor(255, 255, 255, 0));
+    p.fillRect(tileRect, sheen);
+    p.restore();
 
-    // Play triangle with rounded corners.
-    QLinearGradient cyan(84, 64, 196, 192);
-    cyan.setColorAt(0, Theme::AccentHover);
-    cyan.setColorAt(1, Theme::AccentDeep);
-    p.setPen(QPen(QBrush(cyan), 16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(cyan);
-    p.drawPath(polygon({{84, 64}, {196, 128}, {84, 192}}));
+    // Gradient rim.
+    QLinearGradient rim(16, 16, 240, 240);
+    rim.setColorAt(0, Theme::withAlpha(violet, 0.7));
+    rim.setColorAt(1, Theme::withAlpha(magenta, 0.5));
+    p.setPen(QPen(QBrush(rim), 2));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(tile);
+
+    // Play triangle with rounded corners, violet into magenta.
+    QLinearGradient brand(72, 64, 184, 192);
+    brand.setColorAt(0, QColor(0x8F, 0x72, 0xFF));
+    brand.setColorAt(1, magenta);
+    p.setPen(QPen(QBrush(brand), 16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(brand);
+    p.drawPath(polygon({{72, 64}, {184, 128}, {72, 192}}));
 
     // A geometric "T" cut out of the triangle, showing the tile through it.
     QPainterPath letter;
-    letter.addRoundedRect(QRectF(93, 100, 60, 18), 3, 3);
-    letter.addRoundedRect(QRectF(114, 108, 18, 56), 3, 3);
+    letter.addRoundedRect(QRectF(81, 100, 60, 18), 3, 3);
+    letter.addRoundedRect(QRectF(102, 108, 18, 56), 3, 3);
     p.setPen(Qt::NoPen);
     p.setBrush(background);
     p.drawPath(letter.simplified());
+
+    // Sound waves from the tip.
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(magenta, 9, Qt::SolidLine, Qt::RoundCap));
+    p.drawArc(QRectF(180 - 26, 128 - 26, 52, 52), -38 * 16, 76 * 16);
+    p.setPen(QPen(Theme::withAlpha(magenta, 0.55), 9, Qt::SolidLine, Qt::RoundCap));
+    p.drawArc(QRectF(180 - 42, 128 - 42, 84, 84), -38 * 16, 76 * 16);
     return pixmap;
 }

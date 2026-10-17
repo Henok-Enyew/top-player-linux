@@ -74,7 +74,7 @@ SyncEditorDialog::SyncEditorDialog(MpvWidget *mpv, Mode mode, QWidget *parent)
     timeFont.setPointSizeF(timeFont.pointSizeF() * 1.3);
     timeFont.setBold(true);
     m_time->setFont(timeFont);
-    m_time->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent)));
+    Theme::bind(m_time, [this] { m_time->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent))); });
     m_time->setText(stamp(0));
     auto *transport = new QHBoxLayout;
     transport->addWidget(back);
@@ -99,9 +99,11 @@ SyncEditorDialog::SyncEditorDialog(MpvWidget *mpv, Mode mode, QWidget *parent)
     // Editing.
     auto *tapButton = new QPushButton(tr("Tap  (Space)"), this);
     tapButton->setObjectName(QStringLiteral("TapButton"));
-    tapButton->setStyleSheet(QStringLiteral("QPushButton { background: %1; color: #0B0C0F; font-weight: bold; "
-                                            "border-radius: 5px; padding: 6px 16px; }")
-                                 .arg(Theme::hex(Theme::Accent)));
+    Theme::bind(tapButton, [tapButton] {
+        tapButton->setStyleSheet(QStringLiteral("QPushButton { background: %1; color: %2; font-weight: bold; "
+                                                "border-radius: 5px; padding: 6px 16px; }")
+                                     .arg(Theme::hex(Theme::Accent), Theme::hex(Theme::OnAccent)));
+    });
     auto *undoButton = new QPushButton(tr("Undo"), this);
     auto *earlier = new QPushButton(tr("-0.1s"), this);
     auto *later = new QPushButton(tr("+0.1s"), this);
@@ -400,7 +402,7 @@ void SyncEditorDialog::updatePlaying(double seconds)
             QFont f = item->font(TextColumn);
             f.setBold(bold);
             item->setFont(TextColumn, f);
-            item->setBackground(TextColumn, bold ? QBrush(QColor(0x00, 0xD2, 0xFF, 40)) : QBrush());
+            item->setBackground(TextColumn, bold ? QBrush(Theme::withAlpha(Theme::Accent, 0.16)) : QBrush());
         }
     };
     setBold(m_playing, false);

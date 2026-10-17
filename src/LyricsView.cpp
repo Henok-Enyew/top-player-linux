@@ -620,12 +620,18 @@ void LyricsView::paintEvent(QPaintEvent *)
         // A stronger backdrop than the default lets more of the cover through the shade.
         const double through = m_artwork.isNull() ? 0.0 : std::max(0, m_style.backdrop - LyricsStyle().backdrop) / 65.0;
         QRadialGradient glow(rect().center(), std::max(width(), height()) * 0.7);
-        glow.setColorAt(0, withAlpha(m_tint.isValid() ? m_tint : QColor(0x1E, 0x24, 0x30), 0.55 - 0.4 * through));
+        glow.setColorAt(0, withAlpha(m_tint.isValid() ? m_tint : Theme::mix(Theme::Raised, Theme::Accent, 0.12), 0.55 - 0.4 * through));
         glow.setColorAt(1, withAlpha(Theme::Surface, 0.92 - 0.55 * through));
         p.fillRect(rect(), glow);
     } else {
         p.fillRect(rect(), QColor(0, 0, 0, std::clamp(m_style.dim * 255 / 100, 0, 255)));
     }
+
+    // Over a light theme's background the light lyric colors turn dark.
+    const bool onLight = m_opaque && Theme::isLight();
+    const QColor upcoming = onLight ? Theme::mix(Theme::TextPrimary, Theme::TextSecondary, 0.3) : kUpcomingColor;
+    const QColor past = onLight ? Theme::TextDim : kPastColor;
+    const QColor highlight = onLight && m_style.highlight.lightnessF() > 0.75 ? Theme::TextPrimary : m_style.highlight;
 
     const int width = textWidth();
     const int left = textLeft();
@@ -638,7 +644,7 @@ void LyricsView::paintEvent(QPaintEvent *)
         QFont f = font();
         f.setPointSizeF(font().pointSizeF() * (isCompact() ? 1.0 : 1.2));
         p.setFont(f);
-        p.setPen(Theme::TextSecondary);
+        p.setPen(m_opaque ? Theme::TextSecondary : kUpcomingColor);
         p.drawText(QRect(left, 0, width, height() - heading), Qt::AlignCenter | Qt::TextWordWrap, m_placeholder);
     } else {
         const bool synced = m_doc.isSynced();
@@ -666,14 +672,14 @@ void LyricsView::paintEvent(QPaintEvent *)
             QColor color;
             double alpha;
             if (isActive) {
-                color = m_style.highlight;
+                color = highlight;
                 alpha = 1.0;
             } else if (synced) {
                 const int distance = m_active < 0 ? i + 1 : std::abs(i - m_active);
-                color = i < m_active ? kPastColor : kUpcomingColor;
+                color = i < m_active ? past : upcoming;
                 alpha = std::max(0.18, 0.62 - 0.11 * (distance - 1));
             } else {
-                color = kUpcomingColor;
+                color = upcoming;
                 alpha = 0.85;
             }
             // Browsing lifts the lines a little, so they are easy to pick.
@@ -707,7 +713,7 @@ void LyricsView::paintEvent(QPaintEvent *)
                 p.setBrush(withAlpha(Theme::Accent, 0.9));
                 p.drawRoundedRect(pillRect, pill.height() / 2.0, pill.height() / 2.0);
                 p.setFont(timeFont);
-                p.setPen(Theme::Surface);
+                p.setPen(Theme::OnAccent);
                 p.drawText(pillRect, Qt::AlignCenter, label);
                 p.setFont(f);
                 alpha = std::max(alpha, 0.95);
@@ -771,7 +777,7 @@ void LyricsView::paintEvent(QPaintEvent *)
     titleFont.setBold(true);
     titleFont.setPointSizeF(font().pointSizeF() * 1.05);
     p.setFont(titleFont);
-    p.setPen(Theme::TextPrimary);
+    p.setPen(m_opaque ? Theme::TextPrimary : QColor(Qt::white));
     const int stripTextWidth = this->width() - textLeft - 16;
     p.drawText(QRect(textLeft, stripTop + 12, stripTextWidth, 22), Qt::AlignLeft | Qt::AlignVCenter,
                QFontMetrics(titleFont).elidedText(m_title, Qt::ElideRight, stripTextWidth));

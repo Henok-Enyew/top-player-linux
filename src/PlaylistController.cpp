@@ -4,6 +4,7 @@
 #include "MediaLibrary.h"
 #include "MediaProber.h"
 #include "MpvWidget.h"
+#include "PlayQueue.h"
 #include "PlaylistDrawer.h"
 #include "PlaylistSession.h"
 
@@ -28,6 +29,8 @@ constexpr int kPlaylistRefreshMs = 30;
 constexpr int kSaveDelayMs = 1000;
 // While playing, the position is saved this often in case the player is killed.
 constexpr int kPositionSaveMs = 30000;
+// How long an entry sent to mpv is waited for before others count again.
+constexpr int kExpectedEntryMs = 10000;
 
 } // namespace
 
@@ -39,10 +42,26 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
     , m_prober(new MediaProber(this))
     , m_library(new MediaLibrary(MediaLibrary::defaultFile(), this))
     , m_downloads(new DownloadQueue(this))
+    , m_queue(new PlayQueue(this))
 {
     using PlaylistOps::SortKey;
-    connect(m_drawer, &PlaylistDrawer::playRequested, this, [this](int index) {
-        m_mpv->command({QStringLiteral("playlist-play-index"), QString::number(index)});
+    connect(m_drawer, &PlaylistDrawer::playRequested, this, &PlaylistController::playRow);
+    connect(m_drawer, &PlaylistDrawer::playNextRequested, this, &PlaylistController::playRowsNext);
+    connect(m_drawer, &PlaylistDrawer::enqueueRequested, this, &PlaylistController::enqueueRows);
+    m_drawer->setQueue(m_queue);
+    connect(m_drawer, &PlaylistDrawer::queuedPlayRequested, this, &PlaylistController::playQueued);
+    // Next, Previous and the end of a file go by the queue.
+    m_mpv->setStepHandler([this](int step) {
+        // The queue goes on from the entry mpv is at, unless one it sent is still on its way.
+        if (m_expectedId < 0)
+            followPlayingEntry();
+        const QString loop = m_mpv->mpvPropertyString(QStringLiteral("loop-playlist"));
+        const bool wrap = !loop.isEmpty() && loop != QLatin1String("no");
+        const std::optional<qint64> id = step > 0 ? m_queue->next(wrap) : m_queue->previous(wrap);
+        if (!id)
+            return -1;
+        expect(*id);
+        return m_queue->rowOf(*id);
     });
     connect(m_drawer, &PlaylistDrawer::moveRequested, this, [this](int from, int to) {
         m_mpv->command({QStringLiteral("playlist-move"), QString::number(from), QString::number(to)});
@@ -128,16 +147,124 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
         if (!m_mpv->isIdle())
             saveSession();
     });
+    // A new playlist may start at the same position, which doesn't change playlist-pos.
+    connect(m_mpv, &MpvWidget::fileStarted, this, &PlaylistController::followPlayingEntry);
     // The playing entry changes without the playlist changing.
     connect(m_mpv, &MpvWidget::propertyUpdated, this, [this](const QString &name, const QVariant &value) {
         if (name != QLatin1String("playlist-pos"))
             return;
         // The highlight follows at once: mpv doesn't always report the
         // playlist again when only the playing entry changes.
-        if (value.isValid() && value.toInt() >= 0)
+        if (value.isValid() && value.toInt() >= 0) {
             m_drawer->setPlayingRow(value.toInt());
+            followPlayingEntry();
+        }
         scheduleSave();
     });
+}
+
+void PlaylistController::syncQueue()
+{
+    QList<PlayQueue::Item> items;
+    items.reserve(m_playlist.size());
+    for (const QVariant &value : std::as_const(m_playlist)) {
+        const QVariantMap entry = value.toMap();
+        items.append({entry.value(QStringLiteral("id")).toLongLong(), entry.value(QStringLiteral("filename")).toString(),
+                      entry.value(QStringLiteral("title")).toString()});
+    }
+    m_queue->setPlaylist(items);
+}
+
+void PlaylistController::followPlayingEntry()
+{
+    refresh();
+    syncQueue();
+    qint64 id = -1;
+    for (const QVariant &value : std::as_const(m_playlist)) {
+        const QVariantMap entry = value.toMap();
+        if (entry.value(QStringLiteral("current")).toBool()) {
+            id = entry.value(QStringLiteral("id")).toLongLong();
+            break;
+        }
+    }
+    if (id < 0)
+        return;
+    if (m_expectedId >= 0) {
+        // mpv moving on by itself before the queue's choice arrives.
+        if (id != m_expectedId && m_queue->contains(m_expectedId) && m_expectedSince.elapsed() < kExpectedEntryMs)
+            return;
+        m_expectedId = -1;
+    }
+    m_queue->setCurrent(id);
+}
+
+void PlaylistController::expect(qint64 id)
+{
+    m_expectedId = id;
+    m_expectedSince.start();
+}
+
+void PlaylistController::playId(qint64 id)
+{
+    const int row = m_queue->rowOf(id);
+    if (row < 0)
+        return;
+    expect(id);
+    m_mpv->command({QStringLiteral("playlist-play-index"), QString::number(row)});
+}
+
+QList<qint64> PlaylistController::idsOf(const QList<int> &rows)
+{
+    refresh();
+    syncQueue();
+    QList<qint64> ids;
+    for (int row : rows) {
+        if (row >= 0 && row < m_playlist.size())
+            ids.append(m_playlist[row].toMap().value(QStringLiteral("id")).toLongLong());
+    }
+    return ids;
+}
+
+void PlaylistController::playRow(int row)
+{
+    const QList<qint64> ids = idsOf({row});
+    if (ids.isEmpty())
+        return;
+    // With a search, its results are what plays next; without, the playlist.
+    const QString query = m_drawer->filterText().trimmed();
+    const QList<qint64> scope = query.isEmpty() ? QList<qint64>() : idsOf(m_drawer->visibleRows());
+    m_queue->start(ids.first(), scope, query);
+    playId(ids.first());
+}
+
+void PlaylistController::playQueued(qint64 id)
+{
+    refresh();
+    syncQueue();
+    if (!m_queue->contains(id))
+        return;
+    m_queue->jumpTo(id);
+    playId(id);
+}
+
+void PlaylistController::playRowsNext(const QList<int> &rows)
+{
+    const QList<qint64> ids = idsOf(rows);
+    if (ids.isEmpty())
+        return;
+    m_queue->playNext(ids);
+    Q_EMIT message(tr("Playing Next"), ids.size() == 1 ? PlaylistOps::displayName(m_entries.value(rows.first()))
+                                                         : tr("%n entries", nullptr, int(ids.size())));
+}
+
+void PlaylistController::enqueueRows(const QList<int> &rows)
+{
+    const QList<qint64> ids = idsOf(rows);
+    if (ids.isEmpty())
+        return;
+    m_queue->enqueue(ids);
+    Q_EMIT message(tr("Added to Queue"), ids.size() == 1 ? PlaylistOps::displayName(m_entries.value(rows.first()))
+                                                           : tr("%n entries", nullptr, int(ids.size())));
 }
 
 void PlaylistController::setPlaylist(const QVariantList &playlist)
@@ -150,6 +277,7 @@ void PlaylistController::setPlaylist(const QVariantList &playlist)
 
 void PlaylistController::updateDrawer()
 {
+    syncQueue();
     m_drawer->setEntries(m_playlist, durations());
     QStringList files;
     files.reserve(m_entries.size());

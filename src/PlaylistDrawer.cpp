@@ -4,6 +4,7 @@
 #include "LibraryPanel.h"
 #include "MpvWidget.h"
 #include "PlaylistSession.h"
+#include "QueuePanel.h"
 #include "Theme.h"
 #include "TimeFormat.h"
 
@@ -15,6 +16,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLinearGradient>
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
@@ -41,8 +43,6 @@ constexpr int kMinimumWidth = 200;
 constexpr int kMinimumVideoWidth = 160;
 constexpr int kHandleWidth = 5;
 constexpr int kAnimationMs = 180;
-const QColor kPlayingColor = Theme::Accent;
-const QColor kDurationColor = Theme::TextSecondary;
 // Item data: the entry's filename, and its duration text.
 constexpr int kFilenameRole = Qt::UserRole;
 constexpr int kDurationRole = Qt::UserRole + 1;
@@ -106,6 +106,10 @@ public:
     {
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
+        const bool playing = index.data(kPlayingRole).toBool();
+        // The playing entry is drawn in the accent, read when painting so it follows the theme.
+        if (playing)
+            opt.palette.setColor(QPalette::Text, Theme::Accent);
         const QString download = index.data(kDownloadRole).toString();
         const QString duration = download.isEmpty() ? index.data(kDurationRole).toString()
                                                     : QStringLiteral("\u2193 ") + download;
@@ -123,9 +127,12 @@ public:
         if (!duration.isEmpty() || button)
             opt.text = opt.fontMetrics.elidedText(opt.text, opt.textElideMode, textRect.width() - durationWidth);
         style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
-        if (index.data(kPlayingRole).toBool()) {
+        if (playing) {
             // An accent bar along the left edge marks the entry that is playing.
-            painter->fillRect(QRect(opt.rect.left(), opt.rect.top() + 3, kPlayingBarWidth, opt.rect.height() - 6), kPlayingColor);
+            QLinearGradient bar(0, opt.rect.top() + 3, 0, opt.rect.bottom() - 3);
+            bar.setColorAt(0, Theme::Accent);
+            bar.setColorAt(1, Theme::Accent2);
+            painter->fillRect(QRect(opt.rect.left(), opt.rect.top() + 3, kPlayingBarWidth, opt.rect.height() - 6), bar);
         }
         if (button) {
             const QPixmap icon = skinIcon(IconType::Download).pixmap(QSize(kDownloadIconSize, kDownloadIconSize));
@@ -138,7 +145,7 @@ public:
         const bool selected = opt.state & QStyle::State_Selected;
         painter->setPen(!download.isEmpty() ? (download == DownloadQueue::tr("Failed") ? QColor(0xFF, 0x6B, 0x5B) : Theme::Accent)
                         : selected          ? Theme::TextPrimary
-                                            : kDurationColor);
+                                            : Theme::TextSecondary);
         painter->setFont(opt.font);
         painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, duration);
         painter->restore();
@@ -350,6 +357,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     , m_tabs(new QTabBar(this))
     , m_pages(new QStackedWidget(this))
     , m_library(new LibraryPanel(this))
+    , m_queuePanel(new QueuePanel(this))
     , m_animation(new QPropertyAnimation(this, "drawerWidth", this))
     , m_preferredWidth(std::max(kMinimumWidth, PlaylistSession::drawerWidth(kDefaultWidth)))
 {
@@ -375,9 +383,13 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     header->setSpacing(0);
     m_tabs->setObjectName(QStringLiteral("PlaylistTabs"));
     m_tabs->addTab(tr("Playlist"));
+    m_tabs->addTab(tr("Queue"));
     m_tabs->addTab(tr("Library"));
     m_tabs->setDrawBase(false);
     m_tabs->setExpanding(false);
+    // Three tabs fit a narrow drawer without scroll arrows.
+    m_tabs->setUsesScrollButtons(false);
+    m_tabs->setElideMode(Qt::ElideNone);
     m_tabs->setFocusPolicy(Qt::NoFocus);
     m_countLabel->setObjectName(QStringLiteral("PlaylistCount"));
     header->addWidget(m_tabs);
@@ -392,18 +404,20 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     m_wideButton = makeButton(IconType::Expand, tr("Expand Playlist"), "PlaylistExpandButton");
     header->addWidget(m_wideButton);
 
-    // Search field, with shuffle beside it.
+    // Search field, with shuffle play beside it.
     auto *tools = new QHBoxLayout;
     tools->setContentsMargins(8, 4, 6, 6);
     tools->setSpacing(4);
     m_filter->setObjectName(QStringLiteral("PlaylistFilter"));
-    m_filter->setPlaceholderText(tr("Search playlist"));
+    m_filter->setPlaceholderText(tr("Search music (Ctrl+F)"));
+    m_filter->setToolTip(tr("Songs opened from the results play on through the results, until a song is opened from another search or without one"));
     m_filter->setClearButtonEnabled(true);
     m_filter->addAction(skinIcon(IconType::Search), QLineEdit::LeadingPosition);
     m_filter->installEventFilter(this);
-    QToolButton *shuffle = makeButton(IconType::Shuffle, tr("Shuffle"), "PlaylistShuffleButton");
+    m_shuffleButton = makeButton(IconType::Shuffle, tr("Shuffle Play: Off"), "PlaylistShuffleButton");
+    m_shuffleButton->setCheckable(true);
     tools->addWidget(m_filter, 1);
-    tools->addWidget(shuffle);
+    tools->addWidget(m_shuffleButton);
 
     auto *playlistPage = new QWidget(this);
     auto *playlistLayout = new QVBoxLayout(playlistPage);
@@ -413,6 +427,7 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
     playlistLayout->addWidget(m_view, 1);
     playlistLayout->addWidget(buildActionBar());
     m_pages->addWidget(playlistPage);
+    m_pages->addWidget(m_queuePanel);
     m_pages->addWidget(m_library);
 
     auto *content = new QVBoxLayout;
@@ -455,7 +470,11 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
         menu.exec(globalPos);
     });
     connect(m_filter, &QLineEdit::textChanged, this, &PlaylistDrawer::applyFilter);
-    connect(shuffle, &QToolButton::clicked, this, &PlaylistDrawer::shuffleRequested);
+    connect(m_shuffleButton, &QToolButton::clicked, this, [this](bool on) {
+        setShuffleChecked(on);
+        Q_EMIT shuffleToggled(on);
+    });
+    connect(m_queuePanel, &QueuePanel::playRequested, this, &PlaylistDrawer::queuedPlayRequested);
 
     m_animation->setDuration(kAnimationMs);
     m_animation->setEasingCurve(QEasingCurve::OutCubic);
@@ -488,7 +507,7 @@ void PlaylistDrawer::buildMenus()
     addSort(tr("By File Size (Largest First)"), SortKey::Size, false);
     m_sortMenu->addSeparator();
     m_sortMenu->addAction(tr("Reverse Order"), this, &PlaylistDrawer::reverseRequested);
-    m_sortMenu->addAction(skinIcon(IconType::Shuffle), tr("Shuffle"), this, &PlaylistDrawer::shuffleRequested);
+    m_sortMenu->addAction(skinIcon(IconType::Shuffle), tr("Randomize Order"), this, &PlaylistDrawer::shuffleRequested);
 
     m_addMenu = new QMenu(tr("Add"), this);
     m_addMenu->setObjectName(QStringLiteral("PlaylistAddMenu"));
@@ -600,6 +619,15 @@ void PlaylistDrawer::showContextMenu(const QPoint &pos)
     if (item) {
         const int row = m_view->row(item);
         menu.addAction(skinIcon(IconType::Play), tr("Play"), this, [this, row] { Q_EMIT playRequested(row); });
+    }
+    // Queue: the selection if the clicked entry is part of it, else that entry.
+    QList<int> queueRows = rows;
+    if (item && !rows.contains(m_view->row(item)))
+        queueRows = {m_view->row(item)};
+    if (!queueRows.isEmpty()) {
+        menu.addAction(tr("Play Next"), this, [this, queueRows] { Q_EMIT playNextRequested(queueRows); });
+        menu.addAction(tr("Add to Queue"), this, [this, queueRows] { Q_EMIT enqueueRequested(queueRows); });
+        menu.addSeparator();
     }
     // Download: the selection if the clicked entry is part of it, else that entry.
     QList<int> downloadRows = rows;
@@ -767,7 +795,6 @@ void PlaylistDrawer::markPlaying(QListWidgetItem *item, bool playing)
     QFont font = m_view->font();
     font.setBold(playing);
     item->setFont(font);
-    item->setData(Qt::ForegroundRole, playing ? QVariant(kPlayingColor) : QVariant());
     item->setData(kPlayingRole, playing);
 }
 
@@ -846,7 +873,6 @@ void PlaylistDrawer::setEntries(const QVariantList &playlist, const QList<double
             item->setData(kDurationRole, durationText(durations[i]));
         if (entry.value(QStringLiteral("current")).toBool()) {
             item->setFont(playingFont);
-            item->setForeground(kPlayingColor);
             item->setData(kPlayingRole, true);
         }
         m_view->addItem(item);
@@ -897,6 +923,34 @@ void PlaylistDrawer::setFilterText(const QString &text)
 QString PlaylistDrawer::filterText() const
 {
     return m_filter->text();
+}
+
+QList<int> PlaylistDrawer::visibleRows() const
+{
+    QList<int> rows;
+    for (int row = 0; row < m_view->count(); ++row) {
+        if (!m_view->isRowHidden(row))
+            rows.append(row);
+    }
+    return rows;
+}
+
+void PlaylistDrawer::focusSearch()
+{
+    setCurrentPage(PlaylistPage);
+    m_filter->setFocus(Qt::ShortcutFocusReason);
+    m_filter->selectAll();
+}
+
+void PlaylistDrawer::setShuffleChecked(bool on)
+{
+    m_shuffleButton->setChecked(on);
+    m_shuffleButton->setToolTip(on ? tr("Shuffle Play: On") : tr("Shuffle Play: Off"));
+}
+
+void PlaylistDrawer::setQueue(PlayQueue *queue)
+{
+    m_queuePanel->setQueue(queue);
 }
 
 void PlaylistDrawer::applyFilter()
