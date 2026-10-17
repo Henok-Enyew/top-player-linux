@@ -598,6 +598,22 @@ bool MediaDownloader::startEntry(const QString &entry, const QString &title, For
     return launch(arguments(source, format, directory, title));
 }
 
+bool MediaDownloader::startTracks(const QList<SpotifyTrack> &tracks, const QString &directory)
+{
+    if (tracks.isEmpty() || isRunning() || executable().isEmpty())
+        return false;
+    QDir().mkpath(directory);
+    m_files.clear();
+    m_failed.clear();
+    m_spotifyDownload = true;
+    m_directory = directory;
+    m_tracks = tracks;
+    m_track = 0;
+    m_strict = true;
+    startSpotifyTrack();
+    return true;
+}
+
 bool MediaDownloader::startPlaylist(const QString &url, Format format, const QString &directory)
 {
     if (isRunning() || executable().isEmpty())

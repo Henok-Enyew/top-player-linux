@@ -28,9 +28,15 @@ public:
     // Overrides the folder (for tests).
     void setDirectory(const QString &directory) { m_directory = directory; }
 
-    // Queues `entry`, named `title` if given. Returns false if it can't be
-    // downloaded, yt-dlp is missing, or it is queued already.
-    bool enqueue(const QString &entry, const QString &title, MediaDownloader::Format format);
+    // Queues `entry`, named `title` if given, saved to `directory` (else
+    // directory()). Returns false if it can't be downloaded, yt-dlp is
+    // missing, or it is queued already.
+    bool enqueue(const QString &entry, const QString &title, MediaDownloader::Format format,
+                 const QString &directory = QString());
+    // Queues a Spotify song, found on YouTube and saved as a tagged MP3;
+    // `entry` (e.g. its Spotify link) names it in status() and the signals.
+    bool enqueueTrack(const QString &entry, const MediaDownloader::SpotifyTrack &track,
+                      const QString &directory = QString());
     // "Queued", "45%", "Saved" or "Failed" for an entry the queue has seen, else empty.
     QString status(const QString &entry) const { return m_status.value(entry); }
     // Entries waiting or downloading.
@@ -47,7 +53,10 @@ private:
         QString entry;
         QString title;
         MediaDownloader::Format format;
+        QString directory;
+        std::optional<MediaDownloader::SpotifyTrack> track;
     };
+    bool add(const Job &job);
     void startNext();
     void setStatus(const QString &entry, const QString &status);
 
