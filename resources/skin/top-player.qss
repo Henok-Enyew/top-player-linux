@@ -700,3 +700,41 @@ QLabel[role="section"] {
     letter-spacing: 1px;
     @headingFont@
 }
+
+/* ---- Artwork gallery ------------------------------------------------------- */
+
+QListWidget#ArtworkGalleryList {
+    background: @surface@;
+    border: @line@ solid @border@;
+    border-radius: @radius@;
+    outline: none;
+    padding: 6px;
+}
+
+QListWidget#ArtworkGalleryList::item {
+    color: @text2@;
+    border: 2px solid transparent;
+    border-radius: @radius@;
+    padding: 4px;
+}
+
+QListWidget#ArtworkGalleryList::item:hover {
+    background: @raised@;
+    color: @text@;
+}
+
+QListWidget#ArtworkGalleryList::item:selected {
+    background: @accentTint@;
+    border-color: @accent@;
+    color: @text@;
+}
+
+#ArtworkGalleryHint,
+#ArtworkGalleryOwnImage {
+    color: @text2@;
+}
+
+#ArtworkGalleryPreviewName {
+    color: @text@;
+    font-weight: bold;
+}

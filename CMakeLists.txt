@@ -47,6 +47,10 @@ add_library(top-player-core OBJECT
     src/AppearanceDialog.h
     src/ArtworkExtractor.cpp
     src/ArtworkExtractor.h
+    src/ArtworkGallery.cpp
+    src/ArtworkGallery.h
+    src/ArtworkGalleryDialog.cpp
+    src/ArtworkGalleryDialog.h
     src/AudioArtwork.cpp
     src/AudioArtwork.h
     src/AudioControlDialog.cpp

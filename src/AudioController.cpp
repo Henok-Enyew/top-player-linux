@@ -1,10 +1,14 @@
 #include "AudioController.h"
-#include "Theme.h"
 #include "ArtworkExtractor.h"
+#include "ArtworkGallery.h"
+#include "ArtworkGalleryDialog.h"
 #include "AudioView.h"
 #include "MediaFiles.h"
 #include "MpvWidget.h"
+#include "PlaylistSession.h"
+#include "Theme.h"
 
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImageReader>
@@ -109,6 +113,47 @@ void AudioController::useDefaultArtwork()
     const QString image = AudioArtwork::defaultArtwork();
     m_artwork = image.isEmpty() ? QImage() : readImage(image);
     m_source = m_artwork.isNull() ? ArtworkSource::None : ArtworkSource::Default;
+    if (m_artwork.isNull()) {
+        m_artwork = ArtworkGallery::artworkFor(m_path);
+        m_source = m_artwork.isNull() ? ArtworkSource::None : ArtworkSource::Builtin;
+    }
+}
+
+void AudioController::refreshFallbackArtwork()
+{
+    if (!m_active || m_extracting
+        || (m_source != ArtworkSource::None && m_source != ArtworkSource::Default && m_source != ArtworkSource::Builtin))
+        return;
+    m_artwork = {};
+    useDefaultArtwork();
+    apply();
+}
+
+void AudioController::showArtworkGallery()
+{
+    auto *dialog = new ArtworkGalleryDialog(this, m_dialogParent);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+}
+
+void AudioController::setGalleryChoice(const QString &choice)
+{
+    ArtworkGallery::setChoice(choice);
+    refreshFallbackArtwork();
+}
+
+bool AudioController::setGalleryArtworkForSong(const QString &style)
+{
+    const QString local = MediaFiles::localPath(m_path);
+    if (!m_active || local.isEmpty() || !ArtworkGallery::isStyle(style))
+        return false;
+    // Kept as a file, like any image the user assigns.
+    const QString dir = PlaylistSession::configDir() + QStringLiteral("/gallery-artwork");
+    QDir().mkpath(dir);
+    const QString file = dir + QStringLiteral("/%1-%2.png").arg(style).arg(ArtworkGallery::seedFor(local), 8, 16, QLatin1Char('0'));
+    if (!QFileInfo::exists(file) && !ArtworkGallery::render(style, 1024, ArtworkGallery::seedFor(local)).save(file))
+        return false;
+    return setCustomArtwork(file);
 }
 
 void AudioController::onArtworkReady(const QString &path, const QImage &image)
@@ -293,11 +338,7 @@ bool AudioController::setDefaultArtwork(const QString &imagePath)
     if (readImage(imagePath).isNull() || !AudioArtwork::setDefaultArtwork(imagePath))
         return false;
     // The playing song shows it at once if it has no cover of its own.
-    if (m_active && !m_extracting && (m_source == ArtworkSource::None || m_source == ArtworkSource::Default)) {
-        m_artwork = {};
-        useDefaultArtwork();
-        apply();
-    }
+    refreshFallbackArtwork();
     Q_EMIT message(tr("Default Artwork Set"), QFileInfo(imagePath).fileName());
     return true;
 }
@@ -305,11 +346,8 @@ bool AudioController::setDefaultArtwork(const QString &imagePath)
 void AudioController::clearDefaultArtwork()
 {
     AudioArtwork::clearDefaultArtwork();
-    if (m_active && m_source == ArtworkSource::Default) {
-        m_artwork = {};
-        m_source = ArtworkSource::None;
-        apply();
-    }
+    // Back to the built-in artwork, if one is chosen.
+    refreshFallbackArtwork();
     Q_EMIT message(tr("Default Artwork Cleared"));
 }
 

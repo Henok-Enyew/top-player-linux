@@ -177,6 +177,9 @@ void PlayerMenu::buildVisualizationMenu(QMenu *audio)
     connect(setArtwork, &QAction::triggered, controller, &AudioController::setCustomArtworkDialog);
     QAction *clearArtwork = audio->addAction(tr("Clear Custom Audio Artwork"));
     connect(clearArtwork, &QAction::triggered, controller, &AudioController::clearCustomArtwork);
+    QAction *gallery = audio->addAction(tr("Artwork Gallery..."));
+    gallery->setObjectName(QStringLiteral("ArtworkGalleryAction"));
+    connect(gallery, &QAction::triggered, controller, &AudioController::showArtworkGallery);
     QAction *setDefault = audio->addAction(tr("Set Default Artwork for Songs Without One..."));
     setDefault->setObjectName(QStringLiteral("SetDefaultArtworkAction"));
     connect(setDefault, &QAction::triggered, controller, &AudioController::setDefaultArtworkDialog);

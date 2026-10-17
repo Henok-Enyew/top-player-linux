@@ -93,6 +93,7 @@ void AudioView::setArtwork(const QImage &image)
     m_artwork = image;
     m_tint = tintOf(image);
     m_scaledArtwork = {};
+    m_backdrop = {};
     update();
 }
 
@@ -160,10 +161,41 @@ void AudioView::paintEvent(QPaintEvent *)
     paintText(p, l.text, Qt::AlignHCenter);
 }
 
+const QPixmap &AudioView::backdrop()
+{
+    const QSize pixels = size() * devicePixelRatioF();
+    if (pixels == m_backdropSize && !m_backdrop.isNull())
+        return m_backdrop;
+    m_backdropSize = pixels;
+    // Shrunk to a few pixels and scaled back up smoothly: a strong, cheap blur.
+    // Cropped to the view's shape first, so it fills it without stretching.
+    const QSize crop = pixels.scaled(m_artwork.size(), Qt::KeepAspectRatio);
+    const QImage cropped = m_artwork.copy(QRect(QPoint((m_artwork.width() - crop.width()) / 2,
+                                                       (m_artwork.height() - crop.height()) / 2), crop));
+    QImage soft = cropped.scaled(cropped.size().scaled(10, 10, Qt::KeepAspectRatioByExpanding),
+                                 Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    // Doubling in steps keeps the blocks of the tiny image from showing.
+    while (soft.width() * 2 < pixels.width())
+        soft = soft.scaled(soft.size() * 2, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    m_backdrop = QPixmap::fromImage(soft.scaled(pixels, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+    m_backdrop.setDevicePixelRatio(devicePixelRatioF());
+    return m_backdrop;
+}
+
 void AudioView::paintBackground(QPainter &p)
 {
     const QColor background = Theme::Surface;
     p.fillRect(rect(), background);
+    if (m_mode == Mode::Artwork && !m_artwork.isNull()) {
+        // The cover's colors fill the view, blurred and dimmed under it.
+        p.drawPixmap(0, 0, backdrop());
+        p.fillRect(rect(), Theme::withAlpha(background, Theme::isLight() ? 0.62 : 0.58));
+        QRadialGradient shade(rect().center(), std::max(width(), height()) * 0.75);
+        shade.setColorAt(0.4, Theme::withAlpha(background, 0));
+        shade.setColorAt(1, Theme::withAlpha(background, 0.75));
+        p.fillRect(rect(), shade);
+        return;
+    }
     // A faint glow in the cover's color, or an ambient one in the accent's.
     const bool cover = m_mode == Mode::Artwork && m_tint.isValid();
     const qreal reach = std::max(width(), height());

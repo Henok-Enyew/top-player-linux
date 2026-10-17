@@ -290,7 +290,17 @@ black screen; seeking, volume and track switching work as for video.
   atoms), a `cover` / `folder` / `front` / `album` image next to the track, or
   the **default artwork** (**Audio → Set Default Artwork for Songs Without
   One...**), an image of your choice for every song that has none of its own,
-  streams and radio included.
+  streams and radio included, and otherwise the **built-in artwork**.
+- **Built-in artwork** (**Audio → Artwork Gallery...**): 18 original
+  generative pieces painted by the player itself (Aurora, Synthwave Sunset,
+  Vinyl, Nebula, Liquid Gradient, Bauhaus, Sound Waves, Equalizer Skyline,
+  Topographic, Bokeh Night, Mixtape, Ocean Dusk, Neon Rings, Paper Hills,
+  Halftone Pop, Prism, Memphis, Orbit), sharp at any size. By default every
+  song without a cover gets its own (**Mix: One per Song**, the same picture
+  each time it plays); pick one style for all, keep one for the playing song
+  only (**Use for This Song Only**), or **None** for the visualizer. Clicks
+  apply at once.
+- Behind the cover, its colors fill the whole view as a soft blurred backdrop.
 - **Audio → Visualizations**: **Album Art Mode** (falls back to the spectrum
   without a cover), **Waveform Visualizer**, **Frequency Spectrum** (mpv's
   `showwaves` / `showfreqs` through `lavfi-complex`), or **Off (Cover Only)**:

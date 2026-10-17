@@ -51,3 +51,7 @@ add_test(NAME tst_queue COMMAND tst_queue)
 add_executable(tst_theme tst_theme.cpp)
 target_link_libraries(tst_theme PRIVATE top-player-core Qt6::Test)
 add_test(NAME tst_theme COMMAND tst_theme)
+
+add_executable(tst_artwork tst_artwork.cpp)
+target_link_libraries(tst_artwork PRIVATE top-player-core Qt6::Test)
+add_test(NAME tst_artwork COMMAND tst_artwork)
