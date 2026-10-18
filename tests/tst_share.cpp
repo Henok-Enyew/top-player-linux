@@ -3,6 +3,7 @@
 // for Telegram and email (fakes on $PATH that note their arguments).
 
 #include "FileShare.h"
+#include "HostTools.h"
 
 #include <QAction>
 #include <QDir>
@@ -97,6 +98,12 @@ void ShareTest::entries()
              QStringLiteral("https://www.youtube.com/results?search_query=Artist%20-%20Song%20%26%20Co"));
     QVERIFY(FileShare::webLink(m_song).isEmpty());
     QVERIFY(FileShare::webLink(QStringLiteral("rtsp://camera/stream")).isEmpty());
+
+    // Paths that aren't the Flatpak portal's come back as they are, and so
+    // do portal paths it can't resolve.
+    QCOMPARE(HostTools::realPath(m_song), m_song);
+    QCOMPARE(HostTools::realPath(QStringLiteral("/run/user/1000/doc/77eab690/Music")),
+             QStringLiteral("/run/user/1000/doc/77eab690/Music"));
 }
 
 void ShareTest::shareLinks()

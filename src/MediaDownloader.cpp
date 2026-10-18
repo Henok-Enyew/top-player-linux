@@ -1,5 +1,6 @@
 #include "MediaDownloader.h"
 #include "HostTools.h"
+#include "YtDlpOptions.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -46,6 +47,7 @@ const Site kSites[] = {
     {"spotify.com", "Spotify"},
     {"spotify.link", "Spotify"},
     {"spotify.app.link", "Spotify"},
+    {"deezer.com", "Deezer"},
 };
 
 // Spotify serves its pages only to browsers.
@@ -198,6 +200,7 @@ QStringList formatArguments(MediaDownloader::Format format)
 MediaDownloader::MediaDownloader(QObject *parent)
     : QObject(parent)
     , m_spotifyBase(QStringLiteral("https://open.spotify.com"))
+    , m_deezerBase(QStringLiteral("https://api.deezer.com"))
 {
     qRegisterMetaType<MediaDownloader::SpotifyTrack>();
     qRegisterMetaType<QList<MediaDownloader::SpotifyTrack>>();
@@ -398,6 +401,67 @@ QList<MediaDownloader::SpotifyTrack> MediaDownloader::parseSpotifyPage(const QBy
     return tracks;
 }
 
+bool MediaDownloader::isDeezerUrl(const QString &url)
+{
+    return parseDeezerLink(url).has_value();
+}
+
+std::optional<MediaDownloader::SpotifyLink> MediaDownloader::parseDeezerLink(const QString &url)
+{
+    const QString normalized = normalizeUrl(url);
+    if (normalized.isEmpty())
+        return std::nullopt;
+    const QUrl parsed(normalized);
+    const QString host = parsed.host().toLower();
+    if (host != QLatin1String("deezer.com") && !host.endsWith(QLatin1String(".deezer.com")))
+        return std::nullopt;
+    QStringList parts = parsed.path().split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    // www.deezer.com/en/album/<id>
+    static const QRegularExpression language(QStringLiteral("^[a-z]{2}(-[a-z]{2})?$"));
+    if (!parts.isEmpty() && language.match(parts.first()).hasMatch())
+        parts.removeFirst();
+    static const QRegularExpression id(QStringLiteral("^[0-9]+$"));
+    static const QStringList types{QStringLiteral("track"), QStringLiteral("album"), QStringLiteral("playlist")};
+    if (parts.size() < 2 || !types.contains(parts[0]) || !id.match(parts[1]).hasMatch())
+        return std::nullopt;
+    return SpotifyLink{parts[0], parts[1]};
+}
+
+QList<MediaDownloader::SpotifyTrack> MediaDownloader::parseDeezerJson(const QByteArray &json, QString *collection)
+{
+    QList<SpotifyTrack> tracks;
+    const QJsonObject root = QJsonDocument::fromJson(json).object();
+    if (root.isEmpty() || root.contains(QStringLiteral("error")))
+        return tracks;
+    const auto trackOf = [](const QJsonObject &item, const QString &album) {
+        SpotifyTrack track;
+        track.title = cleanText(item.value(QStringLiteral("title")).toString());
+        track.artist = cleanText(item.value(QStringLiteral("artist")).toObject().value(QStringLiteral("name")).toString());
+        const QString own = cleanText(item.value(QStringLiteral("album")).toObject().value(QStringLiteral("title")).toString());
+        track.album = own.isEmpty() ? album : own;
+        track.duration = item.value(QStringLiteral("duration")).toDouble();
+        return track;
+    };
+    const QJsonValue list = root.value(QStringLiteral("tracks")).toObject().value(QStringLiteral("data"));
+    if (!list.isArray()) {
+        // A single song.
+        const SpotifyTrack track = trackOf(root, {});
+        if (!track.title.isEmpty())
+            tracks.append(track);
+        return tracks;
+    }
+    const QString name = cleanText(root.value(QStringLiteral("title")).toString());
+    if (collection)
+        *collection = name;
+    const bool album = root.value(QStringLiteral("type")).toString() == QLatin1String("album");
+    for (const QJsonValue &value : list.toArray()) {
+        const SpotifyTrack track = trackOf(value.toObject(), album ? name : QString());
+        if (!track.title.isEmpty())
+            tracks.append(track);
+    }
+    return tracks;
+}
+
 QString MediaDownloader::spotifyQuery(const SpotifyTrack &track)
 {
     // The first two artists find the upload; long features lists only hurt.
@@ -519,6 +583,14 @@ QList<MediaDownloader::PlaylistEntry> MediaDownloader::parsePlaylistJson(const Q
     return entries;
 }
 
+QString MediaDownloader::explainError(const QString &error)
+{
+    if (!YtDlpOptions::isBotCheck(error))
+        return error;
+    // yt-dlp's own text points at command-line options; say what to do here.
+    return YtDlpOptions::botCheckAdvice();
+}
+
 bool MediaDownloader::isResolving() const
 {
     return !m_resolver.isNull();
@@ -536,7 +608,7 @@ bool MediaDownloader::resolvePlaylist(const QString &url)
     }
     auto *process = new QProcess(this);
     m_resolver = process;
-    connect(process, &QProcess::finished, this, [this, process](int exitCode, QProcess::ExitStatus status) {
+    connect(process, &QProcess::finished, this, [this, process, url](int exitCode, QProcess::ExitStatus status) {
         if (m_resolver != process)
             return;
         m_resolver = nullptr;
@@ -552,10 +624,15 @@ bool MediaDownloader::resolvePlaylist(const QString &url)
             if (line.startsWith(QLatin1String("ERROR:")))
                 error = line.mid(6).trimmed();
         }
+        // YouTube's bot check: once more with the browser's cookies.
+        if (YtDlpOptions::isBotCheck(error) && YtDlpOptions::noteBotCheck()) {
+            resolvePlaylist(url);
+            return;
+        }
         if (error.isEmpty())
             error = status == QProcess::NormalExit && exitCode == 0 ? tr("This playlist has no videos that can be played.")
                                                                     : tr("yt-dlp couldn't read the playlist.");
-        Q_EMIT playlistResolved({}, {}, error);
+        Q_EMIT playlistResolved({}, {}, explainError(error));
     });
     connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart || m_resolver != process)
@@ -564,8 +641,10 @@ bool MediaDownloader::resolvePlaylist(const QString &url)
         process->deleteLater();
         Q_EMIT playlistResolved({}, {}, tr("Could not start yt-dlp: %1").arg(process->errorString()));
     });
-    process->start(program, {QStringLiteral("--flat-playlist"), QStringLiteral("--dump-single-json"),
-                             QStringLiteral("--no-warnings"), QStringLiteral("--yes-playlist"), QStringLiteral("--"), url});
+    process->start(program, YtDlpOptions::arguments()
+                                + QStringList{QStringLiteral("--flat-playlist"), QStringLiteral("--dump-single-json"),
+                                              QStringLiteral("--no-warnings"), QStringLiteral("--yes-playlist"),
+                                              QStringLiteral("--"), url});
     return true;
 }
 
@@ -593,7 +672,7 @@ bool MediaDownloader::startEntry(const QString &entry, const QString &title, For
         startSpotifyTrack();
         return true;
     }
-    if (isSpotifyUrl(source))
+    if (isCatalogUrl(source))
         return start(source, format, directory);
     return launch(arguments(source, format, directory, title));
 }
@@ -636,6 +715,19 @@ void MediaDownloader::resolveSpotify(const QString &url)
     if (m_reply)
         m_reply->abort();
     m_spotify = true;
+    if (const std::optional<SpotifyLink> deezer = parseDeezerLink(url)) {
+        // Deezer's public API lists the songs; no page to read.
+        if (!m_network)
+            m_network = new QNetworkAccessManager(this);
+        QUrl target = m_deezerBase;
+        target.setPath(QStringLiteral("/%1/%2").arg(deezer->type, deezer->id));
+        QNetworkRequest request(target);
+        request.setTransferTimeout(kSpotifyTimeoutMs);
+        QNetworkReply *reply = m_network->get(request);
+        m_reply = reply;
+        connect(reply, &QNetworkReply::finished, this, [this, reply] { onDeezerAnswer(reply); });
+        return;
+    }
     const std::optional<SpotifyLink> link = parseSpotifyLink(url);
     QUrl target;
     if (link) {
@@ -708,6 +800,41 @@ void MediaDownloader::onSpotifyPage(QNetworkReply *reply, int redirectsLeft)
         return;
     }
 
+    onCatalogTracks(tracks, collection, {});
+}
+
+void MediaDownloader::onDeezerAnswer(QNetworkReply *reply)
+{
+    reply->deleteLater();
+    if (reply != m_reply || !m_spotify)
+        return;
+    m_reply = nullptr;
+    QString collection;
+    const QByteArray body = reply->readAll();
+    const QList<SpotifyTrack> tracks = parseDeezerJson(body, &collection);
+    if (!tracks.isEmpty()) {
+        onCatalogTracks(tracks, collection, {});
+        return;
+    }
+    // Deezer answers errors with 200 and {"error": {"message": ...}}.
+    const QString message = QJsonDocument::fromJson(body).object().value(QStringLiteral("error")).toObject()
+                                .value(QStringLiteral("message")).toString();
+    onCatalogTracks({}, {}, reply->error() != QNetworkReply::NoError ? tr("Couldn't read the Deezer link: %1").arg(reply->errorString())
+                            : message.isEmpty()                      ? tr("No songs found at this Deezer link.")
+                                                                     : tr("Deezer: %1").arg(message));
+}
+
+void MediaDownloader::onCatalogTracks(const QList<SpotifyTrack> &tracks, const QString &collection, const QString &error)
+{
+    if (tracks.isEmpty()) {
+        const bool download = m_spotifyDownload;
+        m_spotify = false;
+        m_spotifyDownload = false;
+        Q_EMIT spotifyResolved({}, {}, error);
+        if (download)
+            Q_EMIT finished(false, {}, error);
+        return;
+    }
     Q_EMIT spotifyResolved(tracks, collection, {});
     if (!m_spotifyDownload) {
         m_spotify = false;
@@ -747,7 +874,7 @@ void MediaDownloader::finishSpotify()
         Q_EMIT finished(true, m_files.first(), {});
         return;
     }
-    QString error = m_errors.join(QLatin1Char('\n'));
+    QString error = explainError(m_errors.join(QLatin1Char('\n')));
     if (error.isEmpty())
         error = m_tracks.size() == 1 ? tr("Couldn't find \u201c%1\u201d on YouTube.").arg(spotifyQuery(m_tracks.first()))
                                      : tr("Couldn't find any of these songs on YouTube.");
@@ -762,8 +889,8 @@ bool MediaDownloader::start(const QString &url, Format format, const QString &di
     QDir().mkpath(directory);
     m_files.clear();
     m_failed.clear();
-    if (isSpotifyUrl(url)) {
-        // Spotify songs are always saved as MP3s, whatever the format.
+    if (isCatalogUrl(url)) {
+        // Spotify (and Deezer) songs are always saved as MP3s, whatever the format.
         m_spotifyDownload = true;
         m_directory = directory;
         m_tracks.clear();
@@ -805,7 +932,8 @@ bool MediaDownloader::launch(const QStringList &args)
     });
     if (!m_spotifyDownload)
         Q_EMIT stageChanged(tr("Starting..."));
-    process->start(program, args);
+    m_lastArgs = args;
+    process->start(program, YtDlpOptions::arguments() + args);
     return true;
 }
 
@@ -865,6 +993,13 @@ void MediaDownloader::onFinished(int exitCode, QProcess::ExitStatus status)
     readLines(m_stdout, "\n");
     readLines(m_stderr, "\n");
     const bool saved = !m_path.isEmpty() && QFileInfo::exists(m_path);
+    // YouTube's bot check: once more, now with the browser's cookies.
+    if (!saved && std::any_of(m_errors.cbegin(), m_errors.cend(), YtDlpOptions::isBotCheck)
+        && YtDlpOptions::noteBotCheck()) {
+        Q_EMIT stageChanged(tr("YouTube asked to confirm you're not a bot: trying again with your browser's sign-in..."));
+        launch(m_lastArgs);
+        return;
+    }
     if (m_spotifyDownload) {
         const bool ok = status == QProcess::NormalExit && (exitCode == 0 || exitCode == kMaxDownloadsReached) && saved;
         const SpotifyTrack track = m_tracks.value(m_track);
@@ -900,7 +1035,7 @@ void MediaDownloader::onFinished(int exitCode, QProcess::ExitStatus status)
         Q_EMIT finished(true, m_path, {});
         return;
     }
-    QString error = m_errors.join(QLatin1Char('\n'));
+    QString error = explainError(m_errors.join(QLatin1Char('\n')));
     if (error.isEmpty())
         error = status == QProcess::CrashExit ? tr("yt-dlp crashed.") : tr("yt-dlp failed (exit code %1).").arg(exitCode);
     Q_EMIT finished(false, {}, error);

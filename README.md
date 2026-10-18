@@ -35,7 +35,9 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
+> **New in 1.2.1** · ▶️ YouTube works again when it asks to confirm you're not a bot (your browser's sign-in) ·
+> 🎵 Spotify search without API keys ·
+> **From 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
 > 📤 **Share** to Telegram (or paste anywhere) and **Show in File Manager** ·
 > **From 1.1.0** · 🎨 **themes, accent colors and styles** with a new look and logo · 🎶 a **play queue** apart
 > from the playlist (Play Next, a Queue tab) · 🔀 **shuffle that never scrambles your playlist** · 🔎 **Ctrl+F**
@@ -553,6 +555,16 @@ Countries** and **every other country** alphabetically. Then:
   Video** (in the **Video quality** chosen: best, 4K, 1080p or 720p MP4) or
   **Download MP3**. Searches run through `yt-dlp` (`ytsearch`), so no account
   or key is needed.
+- **YouTube's bot check** ("Sign in to confirm you're not a bot"): YouTube
+  sometimes refuses `yt-dlp` until it sees a signed-in browser. Top Player
+  then tries again once with the cookies of the browser you use (Firefox,
+  Chrome, Chromium, Brave, Edge, Vivaldi or Opera, Flatpak ones included),
+  and keeps using them, for downloads, searches and streaming alike. Pick the
+  browser, or turn this off, under **Tools › YouTube Sign-In**; be signed in
+  to YouTube in it. Keeping `yt-dlp` up to date matters too (`sudo dnf
+  upgrade --refresh yt-dlp`, or `pip install -U "yt-dlp[default]"`); with only
+  Node.js installed (no Deno), `yt-dlp` is told to use Node for YouTube's
+  JavaScript challenges.
 - **Search Spotify...** (`Ctrl+Shift+S`, also on the start screen): songs,
   albums and playlists in their own tabs, with cover art, artists, album and
   length. **Download MP3** saves songs the way Spotify links are saved (found
@@ -576,8 +588,12 @@ Countries** and **every other country** alphabetically. Then:
   **Tools › Download What's Playing** saves the stream that plays.
 
 > [!TIP]
-> **Spotify search needs your own (free) Spotify API keys.** Spotify only
-> answers searches from registered apps:
+> **Spotify search works without any keys**: songs, albums and playlists are
+> then found in [Deezer's](https://developers.deezer.com/api) free public
+> catalog (the same songs, with cover art, artist, album and length) and
+> saved the same way: each song is found on YouTube and tagged as an MP3.
+> Searching Spotify itself takes your own API keys, and since February 2026
+> Spotify answers only apps whose owner has **Spotify Premium**:
 > 1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 >    and click **Create app**.
 > 2. Enter any name and description, a Redirect URI such as
@@ -588,9 +604,10 @@ Countries** and **every other country** alphabetically. Then:
 >    paste them. They are stored in `~/.config/top-player/settings.ini` and
 >    only used to ask Spotify for search tokens (Client Credentials flow).
 >
-> If Spotify refuses them, is rate-limiting (it says how long to wait) or
-> can't be reached, the dialog says so. Downloads and streams still come from
-> YouTube, as with Spotify links.
+> When Spotify refuses the keys or the search (for instance "Active premium
+> subscription required for the owner of the app"), the dialog says why and
+> shows Deezer's results instead. Deezer links (`deezer.com/track|album|playlist/...`)
+> also work in **Download from URL**.
 
 > [!NOTE]
 > The tools use the system's `ffmpeg` and `yt-dlp` (install them with your
@@ -631,8 +648,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.0/Top_Player-1.2.0-x86_64.AppImage
-chmod +x Top_Player-1.2.0-x86_64.AppImage && ./Top_Player-1.2.0-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.1/Top_Player-1.2.1-x86_64.AppImage
+chmod +x Top_Player-1.2.1-x86_64.AppImage && ./Top_Player-1.2.1-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -862,7 +879,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.2.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit) |
+| [**1.2.1**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.1) | 2026-10-18 | YouTube's "confirm you're not a bot" answered with your browser's sign-in (Tools › YouTube Sign-In) for downloads, searches and streams; Spotify search without keys (or when Spotify refuses) through Deezer's catalog; folders picked in the Flatpak keep their real path |
+| [1.2.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit) |
 | [1.1.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
 | [1.0.8](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
 | [1.0.7](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
@@ -890,9 +908,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.2.0 && git push origin v1.2.0`
+2. `git tag v1.2.1 && git push origin v1.2.1`
 
-A tag with a suffix such as `v1.2.0-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.2.1-rc1` is published as a pre-release.
 
 </details>
 

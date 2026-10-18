@@ -18,6 +18,11 @@ class QNetworkReply;
 // Finds songs and videos by name: on YouTube through yt-dlp's "ytsearch",
 // and on Spotify through its Web API, which needs the user's own app
 // credentials (Client ID and Client Secret, Client Credentials flow).
+//
+// Spotify only answers apps whose owner has Premium (since February 2026)
+// and is phasing out this flow; without credentials, or when Spotify refuses,
+// songs, albums and playlists are searched in Deezer's public catalog
+// instead. Their songs are found on YouTube and saved the same way.
 class MediaSearch : public QObject
 {
     Q_OBJECT
@@ -59,6 +64,8 @@ public:
         Error error = Error::None;
         QString errorText;
         int retryAfter = 0; // seconds, for Error::RateLimited
+        // Said along with the results, e.g. that they come from Deezer.
+        QString notice;
     };
 
     explicit MediaSearch(QObject *parent = nullptr);
@@ -73,6 +80,9 @@ public:
     // The songs, albums and playlists in a Spotify /v1/search answer;
     // `totals` gets how many of each there are in all.
     static QList<Result> parseSpotifySearch(const QByteArray &json, QMap<Kind, int> *totals = nullptr);
+    // The songs, albums or playlists (`kind`) in a Deezer /search answer;
+    // `total` gets how many there are in all.
+    static QList<Result> parseDeezerSearch(const QByteArray &json, Kind kind, int *total = nullptr);
     // The access token in an accounts.spotify.com /api/token answer, and
     // how many seconds it lasts.
     static QString parseSpotifyToken(const QByteArray &json, int *expiresIn = nullptr);
@@ -91,6 +101,8 @@ public:
     // https://api.spotify.com); for tests.
     void setSpotifyAccountsUrl(const QUrl &url) { m_accountsBase = url; }
     void setSpotifyApiUrl(const QUrl &url) { m_apiBase = url; }
+    // Where Deezer's API is (https://api.deezer.com); for tests.
+    void setDeezerApiUrl(const QUrl &url) { m_deezerBase = url; }
     // Where YouTube thumbnails are loaded from (https://i.ytimg.com); for tests.
     void setYouTubeThumbnailUrl(const QUrl &url) { m_thumbnailBase = url; }
     // Searches Spotify for `kinds` (songs, albums, playlists), results
@@ -117,17 +129,25 @@ private:
     void sendSpotifySearch();
     void onSpotifySearch(QNetworkReply *reply);
     void finishSpotify(Error error, const QString &text, int retryAfter = 0);
+    // Searches Deezer for the current request, saying `notice` with the results.
+    void searchDeezer(const QString &notice);
+    void onDeezerSearch();
     // A friendly message for a failed Spotify reply.
     QString spotifyErrorText(QNetworkReply *reply, const QByteArray &body, Error *error, int *retryAfter) const;
 
     QPointer<QProcess> m_process;
     QString m_youtubeQuery;
+    int m_youtubeCount = 0;
 
     QNetworkAccessManager *m_network = nullptr;
     QPointer<QNetworkReply> m_reply;
     QUrl m_accountsBase;
     QUrl m_apiBase;
     QUrl m_thumbnailBase;
+    QUrl m_deezerBase;
+    // A Deezer search: a request per kind, and what came back for each.
+    QList<QPointer<QNetworkReply>> m_deezerReplies;
+    QString m_deezerNotice;
     QString m_clientId;
     QString m_clientSecret;
     QString m_token;

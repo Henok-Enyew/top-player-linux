@@ -177,6 +177,8 @@ Q_SIGNALS:
     // The video of the file can't be shown, e.g. its codec is missing from
     // the system's FFmpeg. `codec` is mpv's codec name, if known.
     void videoDecodeFailed(const QString &codec, const QString &message);
+    // YouTube asked yt-dlp (streaming a page) to confirm it isn't a bot.
+    void streamBotCheck();
 
 protected:
     void paintEvent(QPaintEvent *event) override;

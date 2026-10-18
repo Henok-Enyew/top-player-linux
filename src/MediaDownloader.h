@@ -72,11 +72,23 @@ public:
     // else empty (yt-dlp may still support the URL).
     static QString platformName(const QString &url);
     static bool isKnownSite(const QString &url) { return !platformName(url).isEmpty(); }
+    // `error` from yt-dlp, with YouTube's bot check explained in the player's terms.
+    static QString explainError(const QString &error);
     // Parses a "[download]  45.3% of 10.00MiB at 1.2MiB/s ETA 00:05" line.
     static std::optional<Progress> parseProgress(const QString &line);
 
     // Spotify: open.spotify.com, spotify.link and "spotify:track:..." links.
     static bool isSpotifyUrl(const QString &url);
+    // Deezer: www.deezer.com/track|album|playlist/<id> (with or without a language).
+    static bool isDeezerUrl(const QString &url);
+    // A music catalog link (Spotify or Deezer): its songs are found on YouTube
+    // and saved as tagged MP3s.
+    static bool isCatalogUrl(const QString &url) { return isSpotifyUrl(url) || isDeezerUrl(url); }
+    // The type ("track", "album", "playlist") and id in a Deezer link.
+    static std::optional<SpotifyLink> parseDeezerLink(const QString &url);
+    // The songs in a Deezer API answer for a track, album or playlist;
+    // `collection` gets the album or playlist name.
+    static QList<SpotifyTrack> parseDeezerJson(const QByteArray &json, QString *collection = nullptr);
     // The type and id in an open.spotify.com link (with or without /intl-xx/).
     static std::optional<SpotifyLink> parseSpotifyLink(const QString &url);
     // The tracks on a Spotify embed or web page: its __NEXT_DATA__ JSON, else
@@ -119,6 +131,8 @@ public:
 
     // Where Spotify pages are read from (https://open.spotify.com); for tests.
     void setSpotifyBaseUrl(const QUrl &url) { m_spotifyBase = url; }
+    // Where Deezer's API is (https://api.deezer.com); for tests.
+    void setDeezerApiUrl(const QUrl &url) { m_deezerBase = url; }
     // Reads the tracks of a Spotify link; spotifyResolved() follows.
     void resolveSpotify(const QString &url);
     // The files the last download saved (several for a Spotify album or playlist).
@@ -150,6 +164,9 @@ private:
     bool launch(const QStringList &args);
     void fetchSpotify(const QUrl &url, int redirectsLeft);
     void onSpotifyPage(QNetworkReply *reply, int redirectsLeft);
+    void onDeezerAnswer(QNetworkReply *reply);
+    // The songs of a link are known (or `error` says why not): reported, then saved if downloading.
+    void onCatalogTracks(const QList<SpotifyTrack> &tracks, const QString &collection, const QString &error);
     void startSpotifyTrack();
     void finishSpotify();
     void readLines(QByteArray &buffer, const QByteArray &data);
@@ -168,11 +185,14 @@ private:
     QByteArray m_stderr;
     QString m_path;
     QStringList m_errors;
+    // The arguments of the last run, to try again after YouTube's bot check.
+    QStringList m_lastArgs;
     QStringList m_files;
 
     QNetworkAccessManager *m_network = nullptr;
     QPointer<QNetworkReply> m_reply;
     QUrl m_spotifyBase;
+    QUrl m_deezerBase;
     // A Spotify download: the tracks, the one being fetched, whether this is
     // its first (length-checked) attempt, and the tracks that failed.
     bool m_spotify = false;
