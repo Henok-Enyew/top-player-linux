@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.2.0 packaging/rpm/build-rpm.sh
+#   VERSION=1.2.1 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.2.0
+Version:        1.2.1
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -77,11 +77,14 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Sun Oct 18 2026 Henok Enyew Andargie - 1.2.1-1
+- YouTube's "confirm you're not a bot": retried with the browser's sign-in
+- Spotify search falls back to Deezer's catalog when Spotify refuses
+- Folders picked in the Flatpak keep their real path
+
 * Sun Oct 18 2026 Henok Enyew Andargie - 1.2.0-1
 - Search YouTube and Spotify by name; play, queue or download the results
 - Show in File Manager and Share (Telegram, email, copy file, links)
-- YouTube's "confirm you're not a bot": retried with the browser's sign-in
-- Spotify search falls back to Deezer's catalog when Spotify refuses
 
 * Sat Oct 17 2026 Henok Enyew Andargie - 1.1.0-1
 - Play queue apart from the playlist: Play Next, Add to Queue, a Queue tab

@@ -33,13 +33,20 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.2.1" date="2026-10-18">
+      <description>
+        <ul>
+          <li>When YouTube asks to confirm you're not a bot, downloads, searches and streams try again with your browser's YouTube sign-in (Tools, YouTube Sign-In)</li>
+          <li>Spotify search works without API keys, through Deezer's catalog, and explains why when Spotify refuses</li>
+          <li>Folders picked in the Flatpak keep their real path</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-10-18">
       <description>
         <ul>
           <li>Search YouTube and Spotify by name, and play, queue or download the results as MP3 or video; Spotify albums and playlists too</li>
           <li>Show in File Manager, and Share to Telegram, by email, or as a file to paste in any chat; online entries share their link</li>
-          <li>When YouTube asks to confirm you're not a bot, downloads, searches and streams try again with your browser's YouTube sign-in (Tools, YouTube Sign-In)</li>
-          <li>Spotify search works without API keys, through Deezer's catalog, and explains why when Spotify refuses</li>
         </ul>
       </description>
     </release>

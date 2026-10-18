@@ -35,7 +35,9 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
+> **New in 1.2.1** · ▶️ YouTube works again when it asks to confirm you're not a bot (your browser's sign-in) ·
+> 🎵 Spotify search without API keys ·
+> **From 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
 > 📤 **Share** to Telegram (or paste anywhere) and **Show in File Manager** ·
 > **From 1.1.0** · 🎨 **themes, accent colors and styles** with a new look and logo · 🎶 a **play queue** apart
 > from the playlist (Play Next, a Queue tab) · 🔀 **shuffle that never scrambles your playlist** · 🔎 **Ctrl+F**
@@ -646,8 +648,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.0/Top_Player-1.2.0-x86_64.AppImage
-chmod +x Top_Player-1.2.0-x86_64.AppImage && ./Top_Player-1.2.0-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.1/Top_Player-1.2.1-x86_64.AppImage
+chmod +x Top_Player-1.2.1-x86_64.AppImage && ./Top_Player-1.2.1-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -877,7 +879,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.2.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit), YouTube's bot check answered with your browser's sign-in (Tools › YouTube Sign-In), Spotify search without keys through Deezer's catalog |
+| [**1.2.1**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.1) | 2026-10-18 | YouTube's "confirm you're not a bot" answered with your browser's sign-in (Tools › YouTube Sign-In) for downloads, searches and streams; Spotify search without keys (or when Spotify refuses) through Deezer's catalog; folders picked in the Flatpak keep their real path |
+| [1.2.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit) |
 | [1.1.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
 | [1.0.8](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
 | [1.0.7](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
@@ -905,9 +908,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.2.0 && git push origin v1.2.0`
+2. `git tag v1.2.1 && git push origin v1.2.1`
 
-A tag with a suffix such as `v1.2.0-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.2.1-rc1` is published as a pre-release.
 
 </details>
 
