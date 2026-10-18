@@ -1,6 +1,7 @@
 #include "MpvWidget.h"
 #include "MpvHelpers.h"
 #include "PlaylistSession.h"
+#include "YtDlpOptions.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -1102,6 +1103,9 @@ void MpvWidget::processMpvEvents()
         }
         case MPV_EVENT_LOG_MESSAGE: {
             const auto *msg = static_cast<const mpv_event_log_message *>(event->data);
+            if (QString::fromUtf8(msg->prefix).startsWith(QLatin1String("ytdl"))
+                && YtDlpOptions::isBotCheck(QString::fromUtf8(msg->text)))
+                Q_EMIT streamBotCheck();
             const QString codec = missingDecoderCodec(QString::fromUtf8(msg->prefix), QString::fromUtf8(msg->text));
             if (!codec.isEmpty() && !m_reportedCodecs.contains(codec)) {
                 m_reportedCodecs.insert(codec);

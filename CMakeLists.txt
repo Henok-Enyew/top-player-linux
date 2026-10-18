@@ -159,6 +159,8 @@ add_library(top-player-core OBJECT
     src/TitleBar.h
     src/WindowPin.cpp
     src/WindowPin.h
+    src/YtDlpOptions.cpp
+    src/YtDlpOptions.h
     src/ZipArchive.cpp
     src/ZipArchive.h
 )

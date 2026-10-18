@@ -1,4 +1,5 @@
 #include "MediaSearch.h"
+#include "YtDlpOptions.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -9,6 +10,7 @@
 #include <QNetworkRequest>
 
 #include <algorithm>
+#include <utility>
 #include <cmath>
 
 namespace {
@@ -108,6 +110,7 @@ MediaSearch::MediaSearch(QObject *parent)
     , m_accountsBase(QStringLiteral("https://accounts.spotify.com"))
     , m_apiBase(QStringLiteral("https://api.spotify.com"))
     , m_thumbnailBase(QStringLiteral("https://i.ytimg.com"))
+    , m_deezerBase(QStringLiteral("https://api.deezer.com"))
     , m_spotifyLimit(kSpotifyLimit)
 {
     qRegisterMetaType<MediaSearch::Result>();
@@ -220,6 +223,117 @@ QList<MediaSearch::Result> MediaSearch::parseSpotifySearch(const QByteArray &jso
     return results;
 }
 
+QList<MediaSearch::Result> MediaSearch::parseDeezerSearch(const QByteArray &json, Kind kind, int *total)
+{
+    QList<Result> results;
+    const QJsonObject root = QJsonDocument::fromJson(json).object();
+    if (total)
+        *total = root.value(QStringLiteral("total")).toInt();
+    for (const QJsonValue &value : root.value(QStringLiteral("data")).toArray()) {
+        const QJsonObject item = value.toObject();
+        Result result;
+        result.kind = kind;
+        result.id = QString::number(item.value(QStringLiteral("id")).toVariant().toLongLong());
+        result.title = cleanText(item.value(QStringLiteral("title")).toString());
+        result.url = item.value(QStringLiteral("link")).toString();
+        switch (kind) {
+        case Kind::Track: {
+            const QJsonObject album = item.value(QStringLiteral("album")).toObject();
+            result.artists = cleanText(item.value(QStringLiteral("artist")).toObject().value(QStringLiteral("name")).toString());
+            result.album = cleanText(album.value(QStringLiteral("title")).toString());
+            result.duration = item.value(QStringLiteral("duration")).toDouble();
+            result.thumbnail = QUrl(album.value(QStringLiteral("cover_medium")).toString());
+            if (result.url.isEmpty())
+                result.url = QStringLiteral("https://www.deezer.com/track/") + result.id;
+            break;
+        }
+        case Kind::Album:
+            result.artists = cleanText(item.value(QStringLiteral("artist")).toObject().value(QStringLiteral("name")).toString());
+            result.trackCount = item.value(QStringLiteral("nb_tracks")).toInt();
+            result.thumbnail = QUrl(item.value(QStringLiteral("cover_medium")).toString());
+            if (result.url.isEmpty())
+                result.url = QStringLiteral("https://www.deezer.com/album/") + result.id;
+            break;
+        case Kind::Playlist:
+            result.artists = cleanText(item.value(QStringLiteral("user")).toObject().value(QStringLiteral("name")).toString());
+            result.trackCount = item.value(QStringLiteral("nb_tracks")).toInt();
+            result.thumbnail = QUrl(item.value(QStringLiteral("picture_medium")).toString());
+            if (result.url.isEmpty())
+                result.url = QStringLiteral("https://www.deezer.com/playlist/") + result.id;
+            break;
+        case Kind::Video:
+            break;
+        }
+        if (!result.title.isEmpty() && result.id != QLatin1String("0"))
+            results.append(result);
+    }
+    return results;
+}
+
+void MediaSearch::searchDeezer(const QString &notice)
+{
+    if (!m_network)
+        m_network = new QNetworkAccessManager(this);
+    m_spotifyBusy = true;
+    m_deezerNotice = notice;
+    m_deezerReplies.clear();
+    QList<Kind> kinds = m_request.kinds;
+    if (kinds.isEmpty())
+        kinds << Kind::Track;
+    for (Kind kind : std::as_const(kinds)) {
+        QUrl url = m_deezerBase;
+        url.setPath(QStringLiteral("/search/") + QString::fromLatin1(typeName(kind)));
+        // Encoded by hand, as for Spotify.
+        url.setQuery(QStringLiteral("q=") + QString::fromLatin1(QUrl::toPercentEncoding(m_request.query))
+                     + QStringLiteral("&index=") + QString::number(m_request.offset)
+                     + QStringLiteral("&limit=") + QString::number(m_spotifyLimit));
+        QNetworkRequest request(url);
+        request.setAttribute(QNetworkRequest::User, int(kind));
+        request.setTransferTimeout(kTimeoutMs);
+        QNetworkReply *reply = m_network->get(request);
+        m_deezerReplies.append(reply);
+        connect(reply, &QNetworkReply::finished, this, &MediaSearch::onDeezerSearch);
+    }
+}
+
+void MediaSearch::onDeezerSearch()
+{
+    // Wait for every kind's answer, then report them together.
+    for (const QPointer<QNetworkReply> &reply : std::as_const(m_deezerReplies)) {
+        if (reply && !reply->isFinished())
+            return;
+    }
+    const QList<QPointer<QNetworkReply>> replies = std::exchange(m_deezerReplies, {});
+    Page page;
+    page.source = Source::Spotify;
+    page.query = m_request.query;
+    page.offset = m_request.offset;
+    page.notice = m_deezerNotice;
+    QString failure;
+    for (const QPointer<QNetworkReply> &reply : replies) {
+        if (!reply) {
+            m_spotifyBusy = false; // cancelled
+            return;
+        }
+        reply->deleteLater();
+        const Kind kind = static_cast<Kind>(reply->request().attribute(QNetworkRequest::User).toInt());
+        const QByteArray body = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            failure = tr("Couldn't reach Deezer: %1").arg(reply->errorString());
+            continue;
+        }
+        int total = 0;
+        page.results += parseDeezerSearch(body, kind, &total);
+        page.totals.insert(kind, total);
+    }
+    m_spotifyBusy = false;
+    if (page.results.isEmpty() && !failure.isEmpty()) {
+        page.error = Error::Network;
+        page.errorText = m_deezerNotice.isEmpty() ? failure : m_deezerNotice + QLatin1Char(' ') + failure;
+    }
+    Q_EMIT finished(page);
+}
+
 QString MediaSearch::parseSpotifyToken(const QByteArray &json, int *expiresIn)
 {
     const QJsonObject root = QJsonDocument::fromJson(json).object();
@@ -278,6 +392,7 @@ bool MediaSearch::searchYouTube(const QString &query, int count)
         return false;
     cancel();
     m_youtubeQuery = query;
+    m_youtubeCount = count;
     auto *process = new QProcess(this);
     m_process = process;
     const auto fail = [this](const QString &error) {
@@ -307,8 +422,13 @@ bool MediaSearch::searchYouTube(const QString &query, int count)
             if (line.startsWith(QLatin1String("ERROR:")))
                 error = line.mid(6).trimmed();
         }
+        // YouTube's bot check: once more with the browser's cookies.
+        if (YtDlpOptions::isBotCheck(error) && YtDlpOptions::noteBotCheck()) {
+            searchYouTube(m_youtubeQuery, m_youtubeCount);
+            return;
+        }
         fail(error.isEmpty() ? tr("yt-dlp couldn't search YouTube (exit code %1).").arg(exitCode)
-                             : tr("YouTube search failed: %1").arg(error));
+                             : tr("YouTube search failed: %1").arg(MediaDownloader::explainError(error)));
     });
     connect(process, &QProcess::errorOccurred, this, [this, process, fail](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart || m_process != process)
@@ -317,7 +437,7 @@ bool MediaSearch::searchYouTube(const QString &query, int count)
         process->deleteLater();
         fail(tr("Could not start yt-dlp: %1").arg(process->errorString()));
     });
-    process->start(program, youtubeArguments(query, count));
+    process->start(program, YtDlpOptions::arguments() + youtubeArguments(query, count));
     return true;
 }
 
@@ -341,8 +461,8 @@ void MediaSearch::searchSpotify(const QString &query, const QList<Kind> &kinds, 
     m_retried = false;
     m_spotifyBusy = true;
     if (!hasSpotifyCredentials()) {
-        finishSpotify(Error::Credentials,
-                      tr("Enter your Spotify Client ID and Client Secret under “Spotify API access” to search Spotify."));
+        searchDeezer(tr("Results from Deezer's catalog: add Spotify API access to search Spotify itself. "
+                        "Songs are found on YouTube and saved the same way."));
         return;
     }
     if (!m_token.isEmpty() && QDateTime::currentDateTimeUtc() < m_tokenExpiry)
@@ -383,8 +503,9 @@ void MediaSearch::onToken(QNetworkReply *reply)
         // The accounts service answers bad credentials with 400 or 401.
         const QString code = QJsonDocument::fromJson(body).object().value(QStringLiteral("error")).toString();
         if (status == 400 || status == 401 || code == QLatin1String("invalid_client")) {
-            error = Error::Credentials;
-            text = tr("Spotify didn't accept the Client ID and Client Secret. Check them under “Spotify API access”.");
+            searchDeezer(tr("Spotify didn't accept the Client ID and Client Secret (check them under “Spotify API "
+                            "access”). Showing results from Deezer's catalog instead."));
+            return;
         }
         finishSpotify(error, text, retryAfter);
         return;
@@ -445,8 +566,12 @@ void MediaSearch::onSpotifySearch(QNetworkReply *reply)
         Error error = Error::Failed;
         int retryAfter = 0;
         const QString text = spotifyErrorText(reply, body, &error, &retryAfter);
-        if (status == 401 || status == 403)
+        if (status == 401 || status == 403) {
             m_token.clear();
+            searchDeezer(tr("%1 Showing results from Deezer's catalog instead; songs are found on YouTube and saved "
+                            "the same way.").arg(text));
+            return;
+        }
         finishSpotify(error, text, retryAfter);
         return;
     }
@@ -465,6 +590,9 @@ QString MediaSearch::spotifyErrorText(QNetworkReply *reply, const QByteArray &bo
     const QJsonValue detail = QJsonDocument::fromJson(body).object().value(QStringLiteral("error"));
     QString message = detail.isObject() ? detail.toObject().value(QStringLiteral("message")).toString()
                                         : QJsonDocument::fromJson(body).object().value(QStringLiteral("error_description")).toString();
+    // Some refusals come as plain text ("Active premium subscription required for the owner of the app.").
+    if (message.isEmpty() && !body.trimmed().startsWith('{') && !body.trimmed().startsWith('<'))
+        message = QString::fromUtf8(body).simplified().left(200);
     if (status == 0) {
         *error = Error::Network;
         return tr("Couldn't reach Spotify: %1").arg(reply->errorString());
@@ -477,8 +605,11 @@ QString MediaSearch::spotifyErrorText(QNetworkReply *reply, const QByteArray &bo
     }
     if (status == 401 || status == 403) {
         *error = Error::Credentials;
-        return message.isEmpty() ? tr("Spotify refused the search (HTTP %1). Check your Spotify API access.").arg(status)
-                                 : tr("Spotify refused the search: %1. Check your Spotify API access.").arg(message);
+        // Since February 2026 Spotify answers only apps whose owner has Premium.
+        if (status == 403 && message.isEmpty())
+            return tr("Spotify refused the search (HTTP 403): it now answers only apps whose owner has Spotify Premium.");
+        return message.isEmpty() ? tr("Spotify refused the search (HTTP %1).").arg(status)
+                                 : tr("Spotify refused the search: %1.").arg(message.endsWith(QLatin1Char('.')) ? message.chopped(1) : message);
     }
     *error = Error::Failed;
     if (status >= 500)
@@ -513,5 +644,12 @@ void MediaSearch::cancel()
     if (QNetworkReply *reply = m_reply.data()) {
         m_reply = nullptr;
         reply->abort();
+    }
+    for (const QPointer<QNetworkReply> &reply : std::exchange(m_deezerReplies, {})) {
+        if (reply) {
+            reply->disconnect(this);
+            reply->abort();
+            reply->deleteLater();
+        }
     }
 }

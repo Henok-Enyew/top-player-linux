@@ -6,6 +6,7 @@
 #include "AudioEffects.h"
 #include "ControlBar.h"
 #include "EmptyStateWidget.h"
+#include "HostTools.h"
 #include "LiveStreamDialog.h"
 #include "LyricsController.h"
 #include "LyricsView.h"
@@ -14,6 +15,7 @@
 #include "MediaSearchDialog.h"
 #include "MediaFiles.h"
 #include "MpvWidget.h"
+#include "YtDlpOptions.h"
 #ifdef TOPPLAYER_HAVE_DBUS
 #include "MprisService.h"
 #endif
@@ -284,6 +286,25 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_mpv, &MpvWidget::fileFailed, this, &MainWindow::onFileFailed);
     connect(m_mpv, &MpvWidget::renderStalled, this, &MainWindow::offerSoftwareVideo);
     connect(m_mpv, &MpvWidget::videoDecodeFailed, this, &MainWindow::onVideoDecodeFailed);
+    // YouTube streams: the same browser sign-in and JavaScript runtime as yt-dlp's downloads.
+    const auto applyYtDlpOptions = [this] {
+        m_mpv->setMpvProperty(QStringLiteral("ytdl-raw-options"), YtDlpOptions::mpvRawOptions());
+    };
+    applyYtDlpOptions();
+    connect(YtDlpOptions::notifier(), &YtDlpOptions::Notifier::changed, this, applyYtDlpOptions);
+    QTimer::singleShot(0, this, [] { YtDlpOptions::probe(); });
+    connect(m_mpv, &MpvWidget::streamBotCheck, this, [this] {
+        const int pos = m_mpv->mpvProperty(QStringLiteral("playlist-pos")).toInt();
+        if (YtDlpOptions::noteBotCheck()) {
+            // Once more with the browser's cookies (after mpv has given up on it).
+            m_osd->showValue(tr("YouTube sign-in"), tr("trying again with your browser's cookies"));
+            QTimer::singleShot(0, this, [this, pos] {
+                m_mpv->command({QStringLiteral("playlist-play-index"), QString::number(pos)});
+            });
+        } else {
+            m_osd->showValue(tr("YouTube wants a sign-in"), tr("see Tools \u203a YouTube Sign-In"));
+        }
+    });
     connect(m_controlBar, &ControlBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::fullScreenRequested, this, &MainWindow::toggleFullScreen);
     connect(m_titleBar, &TitleBar::pinToggled, this, [this](bool onTop) {
@@ -447,7 +468,7 @@ void MainWindow::openFileDialog()
 
 void MainWindow::openFolderDialog()
 {
-    const QString folder = QFileDialog::getExistingDirectory(this, tr("Open Folder"));
+    const QString folder = HostTools::realPath(QFileDialog::getExistingDirectory(this, tr("Open Folder")));
     if (!folder.isEmpty())
         m_playlist->openFolder(folder);
 }

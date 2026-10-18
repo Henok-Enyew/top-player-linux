@@ -10,6 +10,7 @@
 #include "PlaylistController.h"
 #include "ResumeManager.h"
 #include "Theme.h"
+#include "YtDlpOptions.h"
 
 #include <QActionGroup>
 #include <QFileDialog>
@@ -436,6 +437,32 @@ void PlayerMenu::buildToolsMenu()
     }
     connect(tools, &QMenu::aboutToShow, download, [this, download] {
         download->setEnabled(!m_mpv->isIdle() && DownloadQueue::canDownload(m_mpv->mpvPropertyString(QStringLiteral("path"))));
+    });
+
+    // The browser whose YouTube sign-in yt-dlp borrows when YouTube asks to
+    // confirm it isn't a bot. Listed as the menu opens: browsers come and go.
+    QMenu *signIn = tools->addMenu(tr("YouTube Sign-In"));
+    signIn->setObjectName(QStringLiteral("YouTubeSignInMenu"));
+    connect(signIn, &QMenu::aboutToShow, signIn, [signIn] {
+        signIn->clear();
+        auto *group = new QActionGroup(signIn);
+        const QString current = YtDlpOptions::cookiesSetting();
+        const auto add = [&](const QString &text, const QString &value) {
+            QAction *action = signIn->addAction(text);
+            action->setCheckable(true);
+            action->setChecked(value == current);
+            group->addAction(action);
+            QObject::connect(action, &QAction::triggered, signIn, [value] { YtDlpOptions::setCookiesSetting(value); });
+        };
+        add(tr("Automatic (When YouTube Asks)"), YtDlpOptions::autoCookies());
+        signIn->addSeparator();
+        const QList<YtDlpOptions::Browser> browsers = YtDlpOptions::detectBrowsers();
+        for (const YtDlpOptions::Browser &browser : browsers)
+            add(tr("Always Use %1").arg(browser.name), browser.id);
+        if (browsers.isEmpty())
+            signIn->addAction(tr("No browser found"))->setEnabled(false);
+        signIn->addSeparator();
+        add(tr("Never"), YtDlpOptions::noCookies());
     });
 }
 

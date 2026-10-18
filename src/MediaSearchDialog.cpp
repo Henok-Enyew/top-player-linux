@@ -1,5 +1,6 @@
 #include "MediaSearchDialog.h"
 #include "DownloadQueue.h"
+#include "HostTools.h"
 #include "MediaDownloaderDialog.h"
 #include "PlaylistSession.h"
 #include "Theme.h"
@@ -182,7 +183,9 @@ MediaSearchDialog::MediaSearchDialog(MediaSearch::Source source, QWidget *parent
         explanation->setOpenExternalLinks(true);
         explanation->setTextInteractionFlags(Qt::TextBrowserInteraction);
         explanation->setText(
-            tr("Spotify only answers searches from registered apps. Create a free app on the "
+            tr("Optional. Without it, songs, albums and playlists are found in Deezer's free catalog "
+               "(the same songs, saved the same way). Spotify itself answers only registered apps whose "
+               "owner has <b>Spotify Premium</b>: create a free app on the "
                "<a href=\"https://developer.spotify.com/dashboard\">Spotify Developer Dashboard</a> "
                "(any name and description, Redirect URI <code>http://127.0.0.1:8888/callback</code>, "
                "tick “Web API”), then copy its <b>Client ID</b> and <b>Client Secret</b> here. "
@@ -207,7 +210,8 @@ MediaSearchDialog::MediaSearchDialog(MediaSearch::Source source, QWidget *parent
         connect(m_clientId, &QLineEdit::editingFinished, this, &MediaSearchDialog::saveCredentials);
         connect(m_clientSecret, &QLineEdit::editingFinished, this, &MediaSearchDialog::saveCredentials);
         m_search->setSpotifyCredentials(m_clientId->text(), m_clientSecret->text());
-        setAccessPanelOpen(!m_search->hasSpotifyCredentials());
+        // Closed: searching works without it (through Deezer's catalog).
+        setAccessPanelOpen(false);
     }
 
     m_query->setObjectName(QStringLiteral("MediaSearchQuery"));
@@ -329,7 +333,7 @@ MediaSearchDialog::MediaSearchDialog(MediaSearch::Source source, QWidget *parent
     });
     connect(m_directory, &QLineEdit::textChanged, this, &MediaSearchDialog::updateState);
     connect(browse, &QPushButton::clicked, this, [this] {
-        const QString dir = QFileDialog::getExistingDirectory(this, tr("Save Downloads To"), directory());
+        const QString dir = HostTools::realPath(QFileDialog::getExistingDirectory(this, tr("Save Downloads To"), directory()));
         if (!dir.isEmpty())
             m_directory->setText(dir);
     });
@@ -560,6 +564,9 @@ void MediaSearchDialog::onResults(const MediaSearch::Page &page)
     else if (!more || shown > 0)
         setStatus(m_source == MediaSearch::Source::YouTube ? tr("%n video(s) found.", nullptr, shown)
                                                            : tr("Select results, then play, queue or download them."));
+    // E.g. that Spotify refused and the results come from Deezer.
+    if (!page.notice.isEmpty())
+        setStatus(page.notice);
     updateState();
 }
 

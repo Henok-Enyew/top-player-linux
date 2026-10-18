@@ -1,4 +1,5 @@
 #include "MediaDownloaderDialog.h"
+#include "HostTools.h"
 #include "PlaylistSession.h"
 
 #include <QApplication>
@@ -157,7 +158,7 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
                 accept();
             });
     connect(browse, &QPushButton::clicked, this, [this] {
-        const QString dir = QFileDialog::getExistingDirectory(this, tr("Save Downloads To"), directory());
+        const QString dir = HostTools::realPath(QFileDialog::getExistingDirectory(this, tr("Save Downloads To"), directory()));
         if (!dir.isEmpty())
             m_directory->setText(dir);
     });
@@ -219,7 +220,9 @@ MediaDownloaderDialog::MediaDownloaderDialog(QWidget *parent)
 
 QString MediaDownloaderDialog::defaultDirectory()
 {
-    const QString saved = QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("downloader/directory")).toString();
+    // (Saved by versions that kept the Flatpak portal's path: the real one now.)
+    const QString saved = HostTools::realPath(
+        QSettings(settingsFile(), QSettings::IniFormat).value(QStringLiteral("downloader/directory")).toString());
     if (!saved.isEmpty() && QFileInfo(saved).isDir())
         return saved;
     for (const auto location : {QStandardPaths::MoviesLocation, QStandardPaths::DownloadLocation}) {

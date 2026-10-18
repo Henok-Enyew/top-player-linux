@@ -9,6 +9,7 @@
 #include "MediaDownloader.h"
 #include "MediaSearch.h"
 #include "MediaSearchDialog.h"
+#include "YtDlpOptions.h"
 #include "MpvWidget.h"
 #include "PlaylistSession.h"
 #include "ResumeManager.h"
@@ -74,6 +75,10 @@ const QByteArray kFakeYtDlp =
     "  n=$(printf '%s' \"$last\" | sed 's/^ytsearch\\([0-9]*\\):.*/\\1/')\n"
     "  q=$(printf '%s' \"$last\" | sed 's/^ytsearch[0-9]*://')\n"
     "  case \"$q\" in *broken*) echo 'ERROR: Unable to download API page' >&2; exit 1;; esac\n"
+    // YouTube's bot check, unless a browser's cookies come along.
+    "  case \"$q:$*\" in *botcheck*--cookies-from-browser*) ;;"
+    " *botcheck*) echo \"ERROR: [youtube] abc: Sign in to confirm you are not a bot. Use --cookies-from-browser\" >&2;"
+    " exit 1;; esac\n"
     "  printf '{\"_type\":\"playlist\",\"id\":\"%s\",\"entries\":[' \"$q\"\n"
     "  i=1\n"
     "  while [ $i -le $n ]; do\n"
@@ -219,6 +224,23 @@ QByteArray tokenJson(const QByteArray &token, int expiresIn = 3600)
 
 } // namespace
 
+// Deezer's public API answers (trimmed).
+const QByteArray kDeezerTracksJson =
+    "{\"data\":[{\"id\":1,\"title\":\"Save Your Tears\",\"duration\":215,\"link\":\"https://www.deezer.co"
+    "m/track/1\",\"artist\":{\"name\":\"The Weeknd\"},\"album\":{\"title\":\"After Hours\",\"cover_medium"
+    "\":\"https://e-cdns/1.jpg\"}},{\"id\":2,\"title\":\"Save Your Tears (Remix)\",\"duration\":191,\"lin"
+    "k\":\"https://www.deezer.com/track/2\",\"artist\":{\"name\":\"The Weeknd\"},\"album\":{\"title\":\"R"
+    "emixes\",\"cover_medium\":\"https://e-cdns/2.jpg\"}}],\"total\":245,\"next\":\"https://api.deezer.co"
+    "m/search/track?q=x&index=20\"}";
+const QByteArray kDeezerAlbumsJson =
+    "{\"data\":[{\"id\":9,\"title\":\"After Hours\",\"nb_tracks\":14,\"link\":\"https://www.deezer.com/al"
+    "bum/9\",\"artist\":{\"name\":\"The Weeknd\"},\"cover_medium\":\"https://e-cdns/9.jpg\",\"record_type"
+    "\":\"album\"}],\"total\":30}";
+const QByteArray kDeezerAlbumJson =
+    "{\"id\":9,\"title\":\"After Hours\",\"type\":\"album\",\"tracks\":{\"data\":[{\"id\":1,\"title\":\"A"
+    "lone Again\",\"duration\":250,\"artist\":{\"name\":\"The Weeknd\"}},{\"id\":2,\"title\":\"Too Late\""
+    ",\"duration\":239,\"artist\":{\"name\":\"The Weeknd\"}}]}}";
+
 class SearchTest : public QObject
 {
     Q_OBJECT
@@ -242,6 +264,10 @@ private Q_SLOTS:
     void spotifyExpiredToken();
     void spotifyNetworkError();
     void spotifySmallerPages();
+    void parseDeezer();
+    void deezerLinks();
+    void botCheckRetry();
+    void browserDetection();
 
     // Dialogs
     void menuAndStartScreen();
@@ -501,11 +527,14 @@ void SearchTest::spotifyTokenAndSearch()
         }
         if (request.path == QLatin1String("/v1/search") && request.headers.value("authorization") == "Bearer tok-1")
             return {200, kSpotifyJson, "application/json", {}};
+        if (request.path.startsWith(QLatin1String("/search/")))
+            return {200, kDeezerTracksJson, "application/json", {}};
         return {401, R"({"error":{"status":401,"message":"No token provided"}})", "application/json", {}};
     };
     MediaSearch search;
     search.setSpotifyAccountsUrl(server.url());
     search.setSpotifyApiUrl(server.url());
+    search.setDeezerApiUrl(server.url());
     search.setSpotifyCredentials(QStringLiteral(" my-id "), QStringLiteral("my-secret"));
     QVERIFY(search.hasSpotifyCredentials());
     QSignalSpy finished(&search, &MediaSearch::finished);
@@ -543,19 +572,41 @@ void SearchTest::spotifyTokenAndSearch()
     search.searchSpotify(QStringLiteral("believer"), {MediaSearch::Kind::Track});
     QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 3, 10000);
     QCOMPARE(server.count(QStringLiteral("/api/token")), 2);
-    QCOMPARE(finished.at(2).at(0).value<MediaSearch::Page>().error, MediaSearch::Error::Credentials);
+    // Refused: the songs come from Deezer's catalog instead, saying why.
+    page = finished.at(2).at(0).value<MediaSearch::Page>();
+    QCOMPARE(page.error, MediaSearch::Error::None);
+    QVERIFY2(page.notice.contains(QLatin1String("didn't accept")) && page.notice.contains(QLatin1String("Deezer")),
+             qPrintable(page.notice));
+    QCOMPARE(page.results.size(), 2);
 }
 
 void SearchTest::spotifyMissingCredentials()
 {
+    // Without Spotify credentials, Deezer's catalog answers (no key needed).
+    FakeHttp server;
+    QVERIFY(server.listen());
+    server.handler = [](const FakeHttp::Request &request) -> FakeHttp::Response {
+        if (request.path == QLatin1String("/search/track"))
+            return {200, kDeezerTracksJson, "application/json", {}};
+        if (request.path == QLatin1String("/search/album"))
+            return {200, kDeezerAlbumsJson, "application/json", {}};
+        return {404, {}, "text/plain", {}};
+    };
     MediaSearch search;
     search.setSpotifyAccountsUrl(QUrl(QStringLiteral("http://127.0.0.1:1")));
+    search.setDeezerApiUrl(server.url());
     QSignalSpy finished(&search, &MediaSearch::finished);
-    search.searchSpotify(QStringLiteral("believer"), {MediaSearch::Kind::Track});
-    QCOMPARE(finished.size(), 1);
+    search.searchSpotify(QStringLiteral("save your tears"), {MediaSearch::Kind::Track, MediaSearch::Kind::Album});
+    QVERIFY(search.isBusy());
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 10000);
     const auto page = finished.at(0).at(0).value<MediaSearch::Page>();
-    QCOMPARE(page.error, MediaSearch::Error::Credentials);
-    QVERIFY(page.errorText.contains(QLatin1String("Client ID")));
+    QCOMPARE(page.error, MediaSearch::Error::None);
+    QVERIFY(page.notice.contains(QLatin1String("Deezer")));
+    QCOMPARE(page.results.size(), 3);
+    QCOMPARE(page.totals.value(MediaSearch::Kind::Track), 245);
+    QCOMPARE(page.results.first().displayName(), QStringLiteral("The Weeknd - Save Your Tears"));
+    QCOMPARE(page.results.last().kind, MediaSearch::Kind::Album);
+    QCOMPARE(server.requests.first().query.queryItemValue(QStringLiteral("q"), QUrl::FullyDecoded), QStringLiteral("save your tears"));
     QVERIFY(!search.isBusy());
 }
 
@@ -563,19 +614,23 @@ void SearchTest::spotifyBadCredentials()
 {
     FakeHttp server;
     QVERIFY(server.listen());
-    server.handler = [](const FakeHttp::Request &) {
+    server.handler = [](const FakeHttp::Request &request) {
+        if (request.path.startsWith(QLatin1String("/search/")))
+            return FakeHttp::Response{200, kDeezerTracksJson, "application/json", {}};
         return FakeHttp::Response{400, R"({"error":"invalid_client","error_description":"Invalid client"})", "application/json", {}};
     };
     MediaSearch search;
     search.setSpotifyAccountsUrl(server.url());
     search.setSpotifyApiUrl(server.url());
+    search.setDeezerApiUrl(server.url());
     search.setSpotifyCredentials(QStringLiteral("id"), QStringLiteral("wrong"));
     QSignalSpy finished(&search, &MediaSearch::finished);
     search.searchSpotify(QStringLiteral("believer"), {MediaSearch::Kind::Track});
     QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 10000);
     const auto page = finished.at(0).at(0).value<MediaSearch::Page>();
-    QCOMPARE(page.error, MediaSearch::Error::Credentials);
-    QVERIFY2(page.errorText.contains(QLatin1String("didn't accept")), qPrintable(page.errorText));
+    QCOMPARE(page.error, MediaSearch::Error::None);
+    QVERIFY2(page.notice.contains(QLatin1String("didn't accept")), qPrintable(page.notice));
+    QCOMPARE(page.results.size(), 2);
     QCOMPARE(server.count(QStringLiteral("/v1/search")), 0);
 }
 
@@ -631,13 +686,31 @@ void SearchTest::spotifyExpiredToken()
     server.handler = [](const FakeHttp::Request &request) -> FakeHttp::Response {
         if (request.path == QLatin1String("/api/token"))
             return {200, tokenJson("tok-x"), "application/json", {}};
+        if (request.path.startsWith(QLatin1String("/search/")))
+            return {200, kDeezerTracksJson, "application/json", {}};
         return {401, R"({"error":{"status":401,"message":"Invalid access token"}})", "application/json", {}};
     };
+    search.setDeezerApiUrl(server.url());
     search.searchSpotify(QStringLiteral("believer"), {MediaSearch::Kind::Track});
     QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 2, 10000);
     const auto refused = finished.at(1).at(0).value<MediaSearch::Page>();
-    QCOMPARE(refused.error, MediaSearch::Error::Credentials);
-    QVERIFY2(refused.errorText.contains(QLatin1String("Invalid access token")), qPrintable(refused.errorText));
+    QCOMPARE(refused.error, MediaSearch::Error::None);
+    QVERIFY2(refused.notice.contains(QLatin1String("Invalid access token")), qPrintable(refused.notice));
+    QCOMPARE(refused.results.size(), 2);
+
+    // Spotify's plain-text refusal of apps without a Premium owner is passed on.
+    server.handler = [](const FakeHttp::Request &request) -> FakeHttp::Response {
+        if (request.path == QLatin1String("/api/token"))
+            return {200, tokenJson("tok-y"), "application/json", {}};
+        if (request.path.startsWith(QLatin1String("/search/")))
+            return {200, kDeezerTracksJson, "application/json", {}};
+        return {403, "Active premium subscription required for the owner of the app.", "text/plain", {}};
+    };
+    search.searchSpotify(QStringLiteral("believer"), {MediaSearch::Kind::Track});
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 3, 10000);
+    const auto premium = finished.at(2).at(0).value<MediaSearch::Page>();
+    QVERIFY2(premium.notice.contains(QLatin1String("premium subscription required")), qPrintable(premium.notice));
+    QCOMPARE(premium.results.size(), 2);
 }
 
 void SearchTest::spotifyNetworkError()
@@ -973,6 +1046,8 @@ void SearchTest::spotifySearchDialog()
         }
         if (request.path == QLatin1String("/v1/search"))
             return {200, json, "application/json", {}};
+        if (request.path.startsWith(QLatin1String("/search/")))
+            return {200, kDeezerTracksJson, "application/json", {}};
         if (request.path.startsWith(QLatin1String("/img/")))
             return {200, pngBytes(Qt::green), "image/png", {}};
         return {404, {}, "text/plain", {}};
@@ -980,9 +1055,13 @@ void SearchTest::spotifySearchDialog()
     MediaSearchDialog *dialog = openDialog(MediaSearch::Source::Spotify);
     dialog->search()->setSpotifyAccountsUrl(server.url());
     dialog->search()->setSpotifyApiUrl(server.url());
+    dialog->search()->setDeezerApiUrl(server.url());
 
-    // No credentials yet: the access panel is open, with a link to the dashboard.
+    // No credentials yet: optional, so the access panel starts closed; it
+    // has a link to the dashboard.
     auto *panel = dialog->findChild<QWidget *>(QStringLiteral("SpotifyAccessPanel"));
+    QVERIFY(!panel->isVisible());
+    dialog->findChild<QToolButton *>(QStringLiteral("SpotifyAccessToggle"))->setChecked(true);
     QVERIFY(panel->isVisible());
     auto *help = dialog->findChild<QLabel *>(QStringLiteral("SpotifyAccessHelp"));
     QVERIFY(help->text().contains(QLatin1String("https://developer.spotify.com/dashboard")));
@@ -992,21 +1071,18 @@ void SearchTest::spotifySearchDialog()
     QCOMPARE(secret->echoMode(), QLineEdit::Password);
     auto *status = dialog->findChild<QLabel *>(QStringLiteral("MediaSearchStatus"));
 
-    // Searching without them says what to do.
+    // Searching without them finds the songs in Deezer's catalog, saying so.
     dialog->setQuery(QStringLiteral("believer"));
     dialog->startSearch();
-    QTRY_VERIFY(status->text().contains(QLatin1String("Client ID")));
-    QVERIFY(status->property("error").toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QLatin1String("Deezer")), 10000);
+    QVERIFY(!status->property("error").toBool());
+    QTRY_COMPARE(dialog->view()->topLevelItemCount(), 2);
 
-    // Wrong ones are refused in plain words, and the panel stays open.
-    auto *toggle = dialog->findChild<QToolButton *>(QStringLiteral("SpotifyAccessToggle"));
-    toggle->setChecked(false);
-    QVERIFY(!panel->isVisible());
+    // Wrong ones are refused in plain words; Deezer answers meanwhile.
     clientId->setText(QStringLiteral("dash-id"));
     secret->setText(QStringLiteral("wrong"));
     dialog->startSearch();
     QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QLatin1String("didn't accept")), 10000);
-    QVERIFY(panel->isVisible());
 
     secret->setText(QStringLiteral("dash-secret"));
     dialog->startSearch();
@@ -1096,6 +1172,123 @@ void SearchTest::spotifySearchDialog()
     }));
     QTRY_VERIFY(QFileInfo::exists(folder + QStringLiteral("/Imagine Dragons, Lil Wayne - Believer.mp3")));
 }
+
+void SearchTest::parseDeezer()
+{
+    int total = 0;
+    const QList<MediaSearch::Result> songs = MediaSearch::parseDeezerSearch(kDeezerTracksJson, MediaSearch::Kind::Track, &total);
+    QCOMPARE(total, 245);
+    QCOMPARE(songs.size(), 2);
+    QCOMPARE(songs[0].title, QStringLiteral("Save Your Tears"));
+    QCOMPARE(songs[0].artists, QStringLiteral("The Weeknd"));
+    QCOMPARE(songs[0].album, QStringLiteral("After Hours"));
+    QCOMPARE(songs[0].duration, 215.0);
+    QCOMPARE(songs[0].url, QStringLiteral("https://www.deezer.com/track/1"));
+    QCOMPARE(songs[0].thumbnail, QUrl(QStringLiteral("https://e-cdns/1.jpg")));
+    // Saved like a Spotify song: found on YouTube by artist and title, tagged.
+    QCOMPARE(MediaDownloader::spotifyQuery(songs[0].track()), QStringLiteral("The Weeknd - Save Your Tears"));
+    const QList<MediaSearch::Result> albums = MediaSearch::parseDeezerSearch(kDeezerAlbumsJson, MediaSearch::Kind::Album);
+    QCOMPARE(albums.size(), 1);
+    QCOMPARE(albums[0].trackCount, 14);
+    QVERIFY(MediaSearch::parseDeezerSearch("not json", MediaSearch::Kind::Track).isEmpty());
+}
+
+void SearchTest::deezerLinks()
+{
+    const auto link = MediaDownloader::parseDeezerLink(QStringLiteral("https://www.deezer.com/en/album/9?utm=x"));
+    QVERIFY(link);
+    QCOMPARE(link->type, QStringLiteral("album"));
+    QCOMPARE(link->id, QStringLiteral("9"));
+    QVERIFY(MediaDownloader::isCatalogUrl(QStringLiteral("deezer.com/playlist/123")));
+    QVERIFY(!MediaDownloader::isDeezerUrl(QStringLiteral("https://www.deezer.com/en/artist/abc")));
+    QVERIFY(!MediaDownloader::isDeezerUrl(QStringLiteral("https://youtu.be/abc")));
+
+    QString collection;
+    const QList<MediaDownloader::SpotifyTrack> tracks = MediaDownloader::parseDeezerJson(kDeezerAlbumJson, &collection);
+    QCOMPARE(collection, QStringLiteral("After Hours"));
+    QCOMPARE(tracks.size(), 2);
+    QCOMPARE(tracks[1].title, QStringLiteral("Too Late"));
+    QCOMPARE(tracks[1].album, QStringLiteral("After Hours"));
+    QVERIFY(MediaDownloader::parseDeezerJson(R"({"error":{"type":"DataException","message":"no data","code":800}})").isEmpty());
+
+    // An album link is read from Deezer's API, song by song.
+    FakeHttp server;
+    QVERIFY(server.listen());
+    server.handler = [](const FakeHttp::Request &request) -> FakeHttp::Response {
+        if (request.path == QLatin1String("/album/9"))
+            return {200, kDeezerAlbumJson, "application/json", {}};
+        return {200, R"({"error":{"message":"no data"}})", "application/json", {}};
+    };
+    MediaDownloader downloader;
+    downloader.setDeezerApiUrl(server.url());
+    QSignalSpy resolved(&downloader, &MediaDownloader::spotifyResolved);
+    downloader.resolveSpotify(QStringLiteral("https://www.deezer.com/album/9"));
+    QTRY_COMPARE_WITH_TIMEOUT(resolved.size(), 1, 10000);
+    QCOMPARE(resolved.at(0).at(0).value<QList<MediaDownloader::SpotifyTrack>>().size(), 2);
+    QCOMPARE(resolved.at(0).at(1).toString(), QStringLiteral("After Hours"));
+    downloader.resolveSpotify(QStringLiteral("https://www.deezer.com/playlist/404"));
+    QTRY_COMPARE_WITH_TIMEOUT(resolved.size(), 2, 10000);
+    QVERIFY(resolved.at(1).at(0).value<QList<MediaDownloader::SpotifyTrack>>().isEmpty());
+    QVERIFY(resolved.at(1).at(2).toString().contains(QLatin1String("no data")));
+}
+
+void SearchTest::botCheckRetry()
+{
+    // A browser profile to borrow the sign-in from, in a home of our own.
+    const QByteArray home = qgetenv("HOME");
+    const QString fakeHome = m_dir.filePath(QStringLiteral("home"));
+    QVERIFY(QDir().mkpath(fakeHome + QStringLiteral("/.mozilla/firefox")));
+    qputenv("HOME", fakeHome.toUtf8());
+    prependPath(m_fakeBin);
+    QCOMPARE(YtDlpOptions::cookiesSetting(), YtDlpOptions::autoCookies());
+    // Not asked yet: no cookies.
+    QVERIFY(!YtDlpOptions::arguments().contains(QStringLiteral("--cookies-from-browser")));
+
+    // YouTube asks; the search is tried again with Firefox's cookies, and works.
+    MediaSearch search;
+    QSignalSpy finished(&search, &MediaSearch::finished);
+    QVERIFY(search.searchYouTube(QStringLiteral("botcheck song"), 3));
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 10000);
+    const auto page = finished.at(0).at(0).value<MediaSearch::Page>();
+    QCOMPARE(page.error, MediaSearch::Error::None);
+    QCOMPARE(page.results.size(), 3);
+    QCOMPARE(YtDlpOptions::arguments().mid(0, 2), (QStringList{QStringLiteral("--cookies-from-browser"), QStringLiteral("firefox")}));
+    QVERIFY(YtDlpOptions::mpvRawOptions().contains(QLatin1String("cookies-from-browser=firefox")));
+
+    // Turned off: the bot check is explained instead of yt-dlp's own words.
+    YtDlpOptions::setCookiesSetting(YtDlpOptions::noCookies());
+    QVERIFY(!YtDlpOptions::arguments().contains(QStringLiteral("--cookies-from-browser")));
+    QVERIFY(search.searchYouTube(QStringLiteral("botcheck again"), 3));
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 2, 10000);
+    const auto refused = finished.at(1).at(0).value<MediaSearch::Page>();
+    QCOMPARE(refused.error, MediaSearch::Error::Failed);
+    QVERIFY2(refused.errorText.contains(QLatin1String("YouTube Sign-In")), qPrintable(refused.errorText));
+    QVERIFY(!refused.errorText.contains(QLatin1String("--cookies")));
+
+    // A chosen browser is always used.
+    YtDlpOptions::setCookiesSetting(QStringLiteral("chrome"));
+    QCOMPARE(YtDlpOptions::cookiesBrowser(), QStringLiteral("chrome"));
+    YtDlpOptions::setCookiesSetting(YtDlpOptions::autoCookies());
+    qputenv("HOME", home);
+}
+
+void SearchTest::browserDetection()
+{
+    const QByteArray home = qgetenv("HOME");
+    const QString fakeHome = m_dir.filePath(QStringLiteral("browsers"));
+    QVERIFY(QDir().mkpath(fakeHome + QStringLiteral("/.var/app/org.mozilla.firefox/.mozilla/firefox")));
+    QVERIFY(QDir().mkpath(fakeHome + QStringLiteral("/.config/google-chrome")));
+    qputenv("HOME", fakeHome.toUtf8());
+    const QList<YtDlpOptions::Browser> browsers = YtDlpOptions::detectBrowsers();
+    qputenv("HOME", home);
+    QCOMPARE(browsers.size(), 2);
+    // A Flatpak browser is handed its profile folder.
+    QCOMPARE(browsers[0].id, QStringLiteral("firefox:") + fakeHome + QStringLiteral("/.var/app/org.mozilla.firefox/.mozilla/firefox"));
+    QCOMPARE(browsers[1].id, QStringLiteral("chrome"));
+    QVERIFY(YtDlpOptions::isBotCheck(QStringLiteral("[youtube] x: Sign in to confirm you’re not a bot.")));
+    QVERIFY(!YtDlpOptions::isBotCheck(QStringLiteral("HTTP Error 404")));
+}
+
 
 int main(int argc, char *argv[])
 {

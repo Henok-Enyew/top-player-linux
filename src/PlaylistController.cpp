@@ -1,5 +1,6 @@
 #include "PlaylistController.h"
 #include "DownloadQueue.h"
+#include "HostTools.h"
 #include "MediaFiles.h"
 #include "MediaLibrary.h"
 #include "MediaProber.h"
@@ -332,7 +333,7 @@ void PlaylistController::addFilesDialog()
 
 void PlaylistController::addFolderDialog()
 {
-    const QString folder = QFileDialog::getExistingDirectory(m_dialogParent, tr("Add Folder to Playlist"));
+    const QString folder = HostTools::realPath(QFileDialog::getExistingDirectory(m_dialogParent, tr("Add Folder to Playlist")));
     if (!folder.isEmpty())
         addFolder(folder);
 }
@@ -658,7 +659,7 @@ void PlaylistController::scheduleSave()
 
 void PlaylistController::addFolderToLibraryDialog()
 {
-    const QString folder = QFileDialog::getExistingDirectory(m_dialogParent, tr("Add Folder to Library"));
+    const QString folder = HostTools::realPath(QFileDialog::getExistingDirectory(m_dialogParent, tr("Add Folder to Library")));
     if (folder.isEmpty())
         return;
     if (m_library->add(MediaLibrary::Kind::Folder, folder))

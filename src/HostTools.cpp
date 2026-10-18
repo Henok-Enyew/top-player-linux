@@ -1,11 +1,15 @@
 #include "HostTools.h"
 
 #include <QDateTime>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QPair>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QStandardPaths>
+
+#include <sys/xattr.h>
 
 namespace {
 
@@ -13,7 +17,7 @@ namespace {
 // player runs is noticed, without a process start on every keystroke.
 constexpr qint64 kCheckValidMs = 5000;
 
-bool hostHas(const QString &name)
+bool hostHasProgram(const QString &name)
 {
     static QHash<QString, QPair<qint64, bool>> checked;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -48,7 +52,29 @@ QString find(const QString &name)
     if (path.isEmpty() || !inFlatpak())
         return path;
     // The Flatpak's wrapper runs the system's tool: only there if that is.
-    return hostHas(name) ? path : QString();
+    return hostHasProgram(name) ? path : QString();
+}
+
+QString realPath(const QString &path)
+{
+    static const QRegularExpression portal(QStringLiteral("^(/run/user/\\d+/doc/[^/]+/[^/]+)(/.*)?$"));
+    const QRegularExpressionMatch m = portal.match(path);
+    if (!m.hasMatch())
+        return path;
+    // The portal names the shared file's real place in an extended attribute.
+    char buffer[4096];
+    const ssize_t size = getxattr(QFile::encodeName(m.captured(1)).constData(), "user.document-portal.host-path",
+                                  buffer, sizeof(buffer) - 1);
+    if (size <= 0)
+        return path;
+    const QString host = QFile::decodeName(QByteArray(buffer, int(size)).chopped(buffer[size - 1] == '\0' ? 1 : 0));
+    const QString real = host + m.captured(2);
+    return QFileInfo::exists(real) ? real : path;
+}
+
+bool hostHas(const QString &name)
+{
+    return inFlatpak() ? hostHasProgram(name) : !QStandardPaths::findExecutable(name).isEmpty();
 }
 
 } // namespace HostTools
