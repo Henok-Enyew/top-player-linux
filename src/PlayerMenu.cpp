@@ -2,6 +2,7 @@
 #include "AppearanceDialog.h"
 #include "AudioController.h"
 #include "DownloadQueue.h"
+#include "FileShare.h"
 #include "Icons.h"
 #include "LyricsController.h"
 #include "MainWindow.h"
@@ -300,6 +301,18 @@ void PlayerMenu::buildPlaybackMenu()
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
     addItem(this, tr("Open Playlist..."), [this] { m_window->openPlaylistDialog(); });
     addItem(this, tr("Save Playlist..."), [this] { m_window->savePlaylistDialog(); }, QKeySequence(Qt::CTRL | Qt::Key_S));
+    // Show in File Manager and Share for the file that plays, filled in as the menu opens.
+    QMenu *current = addMenu(skinIcon(IconType::Url), tr("Share / Show in Folder"));
+    current->setObjectName(QStringLiteral("CurrentFileMenu"));
+    connect(this, &QMenu::aboutToShow, current, [this, current] {
+        current->clear();
+        const QString path = m_mpv->isIdle() ? QString() : m_mpv->mpvPropertyString(QStringLiteral("path"));
+        const QString title = m_mpv->mpvPropertyString(QStringLiteral("media-title"));
+        if (!path.isEmpty())
+            FileShare::addActions(current, {path}, {title},
+                                  [this](const QString &label, const QString &value) { Q_EMIT osdRequested(label, value); });
+        current->menuAction()->setEnabled(!current->isEmpty());
+    });
     addSeparator();
 
     QMenu *playback = addMenu(tr("Playback"));

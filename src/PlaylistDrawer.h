@@ -128,6 +128,8 @@ Q_SIGNALS:
     void queuedPlayRequested(qint64 id);
     // The shuffle play button was toggled.
     void shuffleToggled(bool on);
+    // Feedback for the OSD (Share, Show in File Manager, from any page).
+    void message(const QString &label, const QString &value);
     void moveRequested(int from, int to);
     void filesDropped(const QStringList &files, int row);
     void removeRequested(const QList<int> &rows);

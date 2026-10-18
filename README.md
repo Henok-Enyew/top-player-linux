@@ -35,7 +35,9 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.1.0** · 🎨 **themes, accent colors and styles** with a new look and logo · 🎶 a **play queue** apart
+> **New in 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
+> 📤 **Share** to Telegram (or paste anywhere) and **Show in File Manager** ·
+> **From 1.1.0** · 🎨 **themes, accent colors and styles** with a new look and logo · 🎶 a **play queue** apart
 > from the playlist (Play Next, a Queue tab) · 🔀 **shuffle that never scrambles your playlist** · 🔎 **Ctrl+F**
 > search that plays through its results · 🖼️ **built-in artwork** for songs without a cover ·
 > **From 1.0.8** · 📦 the **Flatpak downloads and streams** too (YouTube, Spotify), with the system's yt-dlp ·
@@ -400,6 +402,15 @@ mpv's playlist. Each entry shows its duration, read in the background.
   songs found, and the next nine follow. Clearing the search doesn't change
   that; opening a song from another search, or without one, does.
 - **Play Next** and **Add to Queue** in the right-click menu.
+- **Show in File Manager** opens the folder with the file selected (Files,
+  Dolphin, Nemo, Thunar, ...), and **Share** sends it on: **Telegram** opens
+  Telegram Desktop's chat picker with the file attached (package, Flatpak or
+  Snap), **Email...** attaches it to a new email, and **Copy File** puts it on
+  the clipboard to paste into WhatsApp, Discord, Signal or a browser upload.
+  Online entries share their link on Telegram, WhatsApp, X, Facebook or
+  Reddit, by email, or copied. Both are also in the Queue and Library menus
+  and, for the file that plays, under **Share / Show in Folder** in the
+  right-click menu.
 - **Shuffle play** (the shuffle buttons) shuffles the order songs play in,
   never the playlist itself, and keeps what is playing.
 
@@ -620,8 +631,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.1.0/Top_Player-1.1.0-x86_64.AppImage
-chmod +x Top_Player-1.1.0-x86_64.AppImage && ./Top_Player-1.1.0-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.0/Top_Player-1.2.0-x86_64.AppImage
+chmod +x Top_Player-1.2.0-x86_64.AppImage && ./Top_Player-1.2.0-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -818,11 +829,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.1.0 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.2.0 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.1.0 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.1.0 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.1.0 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.2.0 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.2.0 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.2.0 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -851,7 +862,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.1.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
+| [**1.2.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit) |
+| [1.1.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
 | [1.0.8](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
 | [1.0.7](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
 | [1.0.6](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
@@ -878,9 +890,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.1.0 && git push origin v1.1.0`
+2. `git tag v1.2.0 && git push origin v1.2.0`
 
-A tag with a suffix such as `v1.1.0-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.2.0-rc1` is published as a pre-release.
 
 </details>
 
