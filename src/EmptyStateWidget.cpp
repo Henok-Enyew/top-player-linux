@@ -62,10 +62,14 @@ EmptyStateWidget::EmptyStateWidget(QWidget *parent)
     addButton(QStringLiteral("OpenFolderButton"), tr("Open Folder..."), IconType::Folder);
     addButton(QStringLiteral("OpenUrlButton"), tr("Open URL / Stream..."), IconType::Url);
     addButton(QStringLiteral("OpenPlaylistButton"), tr("Open Playlist..."), IconType::Playlist);
+    addButton(QStringLiteral("SearchYouTubeButton"), tr("Search YouTube..."), IconType::Search);
+    addButton(QStringLiteral("SearchSpotifyButton"), tr("Search Spotify..."), IconType::Search);
     connect(m_buttons[0], &QPushButton::clicked, this, &EmptyStateWidget::openFileRequested);
     connect(m_buttons[1], &QPushButton::clicked, this, &EmptyStateWidget::openFolderRequested);
     connect(m_buttons[2], &QPushButton::clicked, this, &EmptyStateWidget::openUrlRequested);
     connect(m_buttons[3], &QPushButton::clicked, this, &EmptyStateWidget::openPlaylistRequested);
+    connect(m_buttons[4], &QPushButton::clicked, this, &EmptyStateWidget::searchYouTubeRequested);
+    connect(m_buttons[5], &QPushButton::clicked, this, &EmptyStateWidget::searchSpotifyRequested);
 
     auto *content = new QVBoxLayout(m_content);
     content->setContentsMargins(0, 0, 0, 0);
@@ -117,6 +121,8 @@ void EmptyStateWidget::setActive(bool active, bool animate)
     if (active == m_active)
         return;
     m_active = active;
+    // While it fades out, clicks and drags go to the player underneath.
+    setAttribute(Qt::WA_TransparentForMouseEvents, !active);
     m_fade->stop();
     if (!animate) {
         m_opacity->setEnabled(false);

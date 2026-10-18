@@ -111,6 +111,9 @@ public:
     // search ("ytdl://ytsearch1:Artist - Title") saved as audio becomes a
     // tagged "Artist - Title.mp3", as Spotify downloads are.
     bool startEntry(const QString &entry, const QString &title, Format format, const QString &directory);
+    // Saves Spotify songs already known (e.g. from a Spotify search), each
+    // matched on YouTube and tagged, as a Spotify link's songs are.
+    bool startTracks(const QList<SpotifyTrack> &tracks, const QString &directory);
     // Downloads every video of a playlist link (files() lists them).
     bool startPlaylist(const QString &url, Format format, const QString &directory);
 

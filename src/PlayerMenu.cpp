@@ -293,6 +293,11 @@ void PlayerMenu::buildPlaybackMenu()
             QKeySequence(Qt::CTRL | Qt::Key_L));
     addItem(this, tr("Download from URL..."), [this] { m_window->openMediaDownloaderDialog(); },
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+    // Ctrl+F searches the playlist; Ctrl+Shift+F searches online.
+    addItem(this, tr("Search YouTube..."), [this] { m_window->openMediaSearchDialog(MediaSearch::Source::YouTube); },
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
+    addItem(this, tr("Search Spotify..."), [this] { m_window->openMediaSearchDialog(MediaSearch::Source::Spotify); },
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
     addItem(this, tr("Open Playlist..."), [this] { m_window->openPlaylistDialog(); });
     addItem(this, tr("Save Playlist..."), [this] { m_window->savePlaylistDialog(); }, QKeySequence(Qt::CTRL | Qt::Key_S));
     addSeparator();

@@ -29,6 +29,8 @@ Q_SIGNALS:
     void openFolderRequested();
     void openUrlRequested();
     void openPlaylistRequested();
+    void searchYouTubeRequested();
+    void searchSpotifyRequested();
     void urlsDropped(const QList<QUrl> &urls);
 
 protected:

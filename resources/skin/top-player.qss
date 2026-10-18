@@ -738,3 +738,91 @@ QListWidget#ArtworkGalleryList::item:selected {
     color: @text@;
     font-weight: bold;
 }
+
+/* ---- Media search dialogs --------------------------------------------- */
+
+QTreeWidget#MediaSearchResults {
+    background: @surface@;
+    color: @text@;
+    border: 1px solid @border@;
+    outline: none;
+}
+
+QTreeWidget#MediaSearchResults::item {
+    padding: 4px 6px;
+    border: none;
+}
+
+QTreeWidget#MediaSearchResults::item:hover {
+    background: @raised@;
+}
+
+QTreeWidget#MediaSearchResults::item:selected {
+    background: @selection@;
+}
+
+QTreeWidget#MediaSearchResults QHeaderView::section {
+    background: @panel@;
+    color: @text2@;
+    border: none;
+    border-right: 1px solid @border@;
+    border-bottom: 1px solid @border@;
+    padding: 5px 6px;
+}
+
+QTabBar#MediaSearchTabs::tab {
+    background: transparent;
+    color: @text2@;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+
+QTabBar#MediaSearchTabs::tab:hover {
+    color: @text@;
+}
+
+QTabBar#MediaSearchTabs::tab:selected {
+    color: @text@;
+    border-bottom-color: @accent@;
+}
+
+QProgressBar#MediaSearchProgress {
+    background: @raised@;
+    border: none;
+    border-radius: 2px;
+}
+
+QProgressBar#MediaSearchProgress::chunk {
+    background: @accent@;
+    border-radius: 2px;
+}
+
+#MediaSearchStatus {
+    color: @text2@;
+}
+
+#MediaSearchStatus[error="true"] {
+    color: @text@;
+    font-weight: bold;
+}
+
+QLabel#MediaSearchWarning {
+    background: @raised@;
+    border: 1px solid @border@;
+    border-left: 3px solid @accent@;
+    border-radius: @radiusSmall@;
+    padding: 8px;
+    color: @text@;
+}
+
+QToolButton#SpotifyAccessToggle {
+    color: @accent@;
+    font-weight: bold;
+    padding: 3px 4px;
+}
+
+#SpotifyAccessHelp {
+    color: @text2@;
+}

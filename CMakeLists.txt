@@ -101,6 +101,10 @@ add_library(top-player-core OBJECT
     src/MediaLibrary.h
     src/MediaProber.cpp
     src/MediaProber.h
+    src/MediaSearch.cpp
+    src/MediaSearch.h
+    src/MediaSearchDialog.cpp
+    src/MediaSearchDialog.h
     src/MpvHelpers.h
     src/MpvWidget.cpp
     src/MpvWidget.h

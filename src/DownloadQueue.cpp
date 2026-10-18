@@ -32,14 +32,31 @@ QString DownloadQueue::directory() const
     return m_directory.isEmpty() ? MediaDownloaderDialog::defaultDirectory() : m_directory;
 }
 
-bool DownloadQueue::enqueue(const QString &entry, const QString &title, MediaDownloader::Format format)
+bool DownloadQueue::enqueue(const QString &entry, const QString &title, MediaDownloader::Format format,
+                            const QString &directory)
 {
-    if (!canDownload(entry) || MediaDownloader::executable().isEmpty())
+    if (!canDownload(entry))
         return false;
+    return add({entry, title, format, directory, std::nullopt});
+}
+
+bool DownloadQueue::enqueueTrack(const QString &entry, const MediaDownloader::SpotifyTrack &track,
+                                 const QString &directory)
+{
+    if (entry.isEmpty() || track.title.isEmpty())
+        return false;
+    return add({entry, track.title, MediaDownloader::Format::AudioMp3, directory, track});
+}
+
+bool DownloadQueue::add(const Job &job)
+{
+    if (MediaDownloader::executable().isEmpty())
+        return false;
+    const QString &entry = job.entry;
     if ((m_current && m_current->entry == entry)
-        || std::any_of(m_jobs.cbegin(), m_jobs.cend(), [&](const Job &job) { return job.entry == entry; }))
+        || std::any_of(m_jobs.cbegin(), m_jobs.cend(), [&](const Job &queued) { return queued.entry == entry; }))
         return false;
-    m_jobs.append({entry, title, format});
+    m_jobs.append(job);
     setStatus(entry, tr("Queued"));
     if (!m_current)
         startNext();
@@ -52,7 +69,10 @@ void DownloadQueue::startNext()
         const Job job = m_jobs.takeFirst();
         m_current = job;
         setStatus(job.entry, QStringLiteral("0%"));
-        if (!m_downloader->startEntry(job.entry, job.title, job.format, directory())) {
+        const QString folder = job.directory.isEmpty() ? directory() : job.directory;
+        const bool started = job.track ? m_downloader->startTracks({*job.track}, folder)
+                                       : m_downloader->startEntry(job.entry, job.title, job.format, folder);
+        if (!started) {
             m_current.reset();
             setStatus(job.entry, tr("Failed"));
             Q_EMIT finished(job.entry, false, {}, tr("Could not start yt-dlp."));
