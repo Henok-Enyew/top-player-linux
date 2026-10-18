@@ -1,5 +1,6 @@
 #include "PlaylistDrawer.h"
 #include "DownloadQueue.h"
+#include "FileShare.h"
 #include "Icons.h"
 #include "LibraryPanel.h"
 #include "MpvWidget.h"
@@ -475,6 +476,8 @@ PlaylistDrawer::PlaylistDrawer(QWidget *parent)
         Q_EMIT shuffleToggled(on);
     });
     connect(m_queuePanel, &QueuePanel::playRequested, this, &PlaylistDrawer::queuedPlayRequested);
+    connect(m_queuePanel, &QueuePanel::message, this, &PlaylistDrawer::message);
+    connect(m_library, &LibraryPanel::message, this, &PlaylistDrawer::message);
 
     m_animation->setDuration(kAnimationMs);
     m_animation->setEasingCurve(QEasingCurve::OutCubic);
@@ -628,6 +631,19 @@ void PlaylistDrawer::showContextMenu(const QPoint &pos)
         menu.addAction(tr("Play Next"), this, [this, queueRows] { Q_EMIT playNextRequested(queueRows); });
         menu.addAction(tr("Add to Queue"), this, [this, queueRows] { Q_EMIT enqueueRequested(queueRows); });
         menu.addSeparator();
+        // Show in File Manager and Share, for the same entries.
+        QStringList entries, titles;
+        for (int row : std::as_const(queueRows)) {
+            if (const QListWidgetItem *entry = m_view->item(row)) {
+                entries.append(entry->data(kFilenameRole).toString());
+                titles.append(entry->text().section(QLatin1Char(' '), 1));
+            }
+        }
+        const int before = int(menu.actions().size());
+        FileShare::addActions(&menu, entries, titles,
+                              [this](const QString &label, const QString &value) { Q_EMIT message(label, value); });
+        if (menu.actions().size() > before)
+            menu.addSeparator();
     }
     // Download: the selection if the clicked entry is part of it, else that entry.
     QList<int> downloadRows = rows;

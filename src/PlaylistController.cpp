@@ -50,6 +50,7 @@ PlaylistController::PlaylistController(MpvWidget *mpv, PlaylistDrawer *drawer, Q
     connect(m_drawer, &PlaylistDrawer::enqueueRequested, this, &PlaylistController::enqueueRows);
     m_drawer->setQueue(m_queue);
     connect(m_drawer, &PlaylistDrawer::queuedPlayRequested, this, &PlaylistController::playQueued);
+    connect(m_drawer, &PlaylistDrawer::message, this, &PlaylistController::message);
     // Next, Previous and the end of a file go by the queue.
     m_mpv->setStepHandler([this](int step) {
         // The queue goes on from the entry mpv is at, unless one it sent is still on its way.

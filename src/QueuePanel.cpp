@@ -1,4 +1,5 @@
 #include "QueuePanel.h"
+#include "FileShare.h"
 #include "Icons.h"
 #include "PlayQueue.h"
 #include "PlaylistOps.h"
@@ -472,6 +473,22 @@ void QueuePanel::showContextMenu(const QPoint &pos)
         remove->setShortcut(QKeySequence(Qt::Key_Delete));
     }
     menu.addSeparator();
+    // Show in File Manager and Share: the playing entry too.
+    QStringList entries, titles;
+    const QList<qint64> shared = ids.isEmpty() && item && kindOf(item) == Kind::Current
+                                     ? QList<qint64>{item->data(kIdRole).toLongLong()}
+                                     : ids;
+    for (qint64 id : shared) {
+        if (const std::optional<PlayQueue::Item> entry = m_queue->item(id)) {
+            entries.append(entry->filename);
+            titles.append(itemName(m_queue, id));
+        }
+    }
+    const int before = int(menu.actions().size());
+    FileShare::addActions(&menu, entries, titles,
+                          [this](const QString &label, const QString &value) { Q_EMIT message(label, value); });
+    if (menu.actions().size() > before)
+        menu.addSeparator();
     QAction *clear = menu.addAction(skinIcon(IconType::Clear), tr("Clear Queued Songs"), m_queue, &PlayQueue::clearQueued);
     clear->setEnabled(!m_queue->queued().isEmpty());
     if (m_queue->source() == PlayQueue::Source::Search)

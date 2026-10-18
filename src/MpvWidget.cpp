@@ -355,6 +355,22 @@ void MpvWidget::loadTitledFiles(const QStringList &files, const QStringList &tit
     runOrDefer(replacing({{QStringLiteral("loadlist"), list, QStringLiteral("replace")}}));
 }
 
+void MpvWidget::appendTitledFiles(const QStringList &files, const QStringList &titles)
+{
+    if (files.isEmpty())
+        return;
+    const QString list = writeBatch(files, titles);
+    if (list.isEmpty()) {
+        insertFiles(files);
+        return;
+    }
+    QList<QStringList> commands{{QStringLiteral("loadlist"), list, QStringLiteral("append-play")}};
+    // append-play starts an idle player: like an open, that should not be paused.
+    if (!m_renderCtx || isIdle())
+        commands.prepend({QStringLiteral("set"), QStringLiteral("pause"), QStringLiteral("no")});
+    runOrDefer(commands);
+}
+
 void MpvWidget::restorePlaylist(const QStringList &files, int current, double resumeAt)
 {
     if (files.isEmpty())

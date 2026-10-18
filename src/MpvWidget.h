@@ -64,6 +64,9 @@ public:
     // Replaces the playlist with `files`, titled with `titles` (same order;
     // empty ones keep mpv's own title), and plays the first.
     void loadTitledFiles(const QStringList &files, const QStringList &titles);
+    // Appends `files`, titled with `titles`, to the playlist without
+    // interrupting what plays. Starts playback if idle.
+    void appendTitledFiles(const QStringList &files, const QStringList &titles);
     // Replaces the playlist with `files` without starting playback; Play
     // starts at entry `current`. With `resumeAt` >= 0, entry `current` is
     // opened paused at `resumeAt` seconds instead.

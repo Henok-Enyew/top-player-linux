@@ -29,6 +29,8 @@ finish-args:
   - --talk-name=org.freedesktop.Flatpak
   # Screenshots (Ctrl+E) are saved to ~/Pictures.
   - --filesystem=xdg-pictures
+  # Show in File Manager: opens the folder with the file selected.
+  - --talk-name=org.freedesktop.FileManager1
   # MPRIS, so the media keys and the desktop's media controls reach the player.
   - --own-name=org.mpris.MediaPlayer2.top_player
 cleanup:

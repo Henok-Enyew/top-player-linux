@@ -52,6 +52,8 @@ public:
 Q_SIGNALS:
     // Play queue entry `id` now.
     void playRequested(qint64 id);
+    // Feedback for the OSD (Share, Show in File Manager).
+    void message(const QString &label, const QString &value);
 
 protected:
     void showEvent(QShowEvent *event) override;

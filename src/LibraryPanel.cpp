@@ -1,4 +1,5 @@
 #include "LibraryPanel.h"
+#include "FileShare.h"
 #include "Icons.h"
 #include "MediaFiles.h"
 #include "PlaylistOps.h"
@@ -435,6 +436,14 @@ void LibraryPanel::showContextMenu(const QPoint &pos)
         menu.addAction(skinIcon(IconType::Play), tr("Play"), this, [this, item] { Q_EMIT m_view->itemActivated(item, 0); });
         menu.addAction(skinIcon(IconType::Add), tr("Add to Playlist"), this,
                        [this, type, path] { Q_EMIT queueRequested(type, path); });
+        menu.addSeparator();
+        if (type == EntryType::File) {
+            FileShare::addActions(&menu, {path}, {item->text(0)},
+                                  [this](const QString &label, const QString &value) { Q_EMIT message(label, value); });
+        } else {
+            menu.addAction(skinIcon(IconType::Folder), tr("Show in File Manager"), this,
+                           [path] { FileShare::showInFileManager({path}); });
+        }
         if (type == EntryType::Folder) {
             menu.addAction(tr("Refresh"), this, [this, item] {
                 qDeleteAll(item->takeChildren());

@@ -57,6 +57,8 @@ public:
     void expandItem(QTreeWidgetItem *item);
 
 Q_SIGNALS:
+    // Feedback for the OSD (Share, Show in File Manager).
+    void message(const QString &label, const QString &value);
     // Replace the queue with a folder, a playlist, or the folder of a file
     // starting at that file.
     // With `start` >= 0, playback starts at that entry of the playlist.
