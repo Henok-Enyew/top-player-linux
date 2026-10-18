@@ -68,7 +68,7 @@ QLabel *valueLabel(QWidget *parent)
     auto *label = new QLabel(parent);
     label->setMinimumWidth(44);
     label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    label->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent)));
+    Theme::bind(label, [label] { label->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::Accent))); });
     return label;
 }
 
@@ -418,7 +418,7 @@ LyricsStyleDialog::LyricsStyleDialog(const LyricsStyle &style, QWidget *parent)
     auto *hint = new QLabel(tr("Tip: drag or scroll the lyrics to look ahead, click a timed line to play from it, "
                                "and Ctrl+scroll over them to resize."), this);
     hint->setWordWrap(true);
-    hint->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::TextSecondary)));
+    Theme::bind(hint, [hint] { hint->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::hex(Theme::TextSecondary))); });
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
     buttons->button(QDialogButtonBox::RestoreDefaults)->setObjectName(QStringLiteral("LyricsStyleReset"));

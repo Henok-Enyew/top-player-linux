@@ -1,5 +1,6 @@
 #include "SeekBar.h"
 
+#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
 
@@ -100,9 +101,23 @@ void SeekBar::paintEvent(QPaintEvent *)
         p.drawRect(QRectF(QPointF(progressX, groove.top()), QPointF(std::min(m_hoverX, groove.right()), groove.bottom())));
     }
 
-    p.setBrush(m_progressColor);
-    p.drawRoundedRect(QRectF(groove.topLeft(), QPointF(progressX, groove.bottom())),
-                      groove.height() / 2, groove.height() / 2);
+    const QRectF progress(groove.topLeft(), QPointF(progressX, groove.bottom()));
+    if (m_glowColor.alpha() > 0 && progress.width() > 0) {
+        // Two widening, fading layers make a cheap halo.
+        for (const qreal spread : {3.0, 1.5}) {
+            QColor halo = m_glowColor;
+            halo.setAlphaF(halo.alphaF() * (spread > 2 ? 0.35f : 0.6f));
+            p.setBrush(halo);
+            const QRectF band = progress.adjusted(-spread, -spread, spread, spread);
+            p.drawRoundedRect(band, band.height() / 2, band.height() / 2);
+        }
+    }
+    // The gradient spans the whole groove, so its colors stay put as the progress grows.
+    QLinearGradient fill(groove.topLeft(), groove.topRight());
+    fill.setColorAt(0, m_progressColor);
+    fill.setColorAt(1, m_progressColor2.isValid() ? m_progressColor2 : m_progressColor);
+    p.setBrush(fill);
+    p.drawRoundedRect(progress, groove.height() / 2, groove.height() / 2);
 
     // Chapter boundaries are cut into the groove as thin gaps.
     p.setBrush(m_chapterColor);

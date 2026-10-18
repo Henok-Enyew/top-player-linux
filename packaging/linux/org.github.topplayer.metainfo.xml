@@ -8,8 +8,8 @@
   <description>
     <p>
       Top Player is a high-performance, lightweight native media player for
-      Linux powered by Qt6 and libmpv, with a borderless cyan-on-obsidian skin
-      and a keyboard-driven workflow.
+      Linux powered by Qt6 and libmpv, with a borderless electric-violet skin, ten
+      switchable themes and a keyboard-driven workflow.
     </p>
     <ul>
       <li>Borderless dark skin with an on-screen display</li>
@@ -33,6 +33,17 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.0" date="2026-10-17">
+      <description>
+        <ul>
+          <li>A play queue apart from the playlist: Play Next, Add to Queue, and a Queue tab to reorder what plays next</li>
+          <li>Shuffle changes the order songs play in, never the playlist</li>
+          <li>Ctrl+F searches the playlist; songs opened from a search play on through its results</li>
+          <li>Ten themes, ten accent colors and three styles (Appearance, Ctrl+Shift+T), a new electric violet look and logo</li>
+          <li>Built-in artwork for songs without a cover, picked in the Artwork Gallery, and a blurred backdrop behind covers</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.8" date="2026-10-10">
       <description>
         <ul>

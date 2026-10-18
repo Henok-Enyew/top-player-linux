@@ -31,7 +31,6 @@ constexpr int kResultRole = Qt::UserRole;
 constexpr int kSortRole = Qt::UserRole + 1;
 constexpr int kBadgeRole = Qt::UserRole + 2;
 
-const QColor kAccent = Theme::Accent;
 const QColor kErrorColor(0xFF, 0x6B, 0x5B);
 
 // Sorts numeric columns by value instead of text.
@@ -89,9 +88,9 @@ public:
             painter->setPen(Qt::NoPen);
             // The match badges in the accent color; others (HI) in grey.
             const bool match = badge != QLatin1String("HI");
-            painter->setBrush(match ? kAccent : Theme::TextDim);
+            painter->setBrush(match ? Theme::Accent : Theme::TextDim);
             painter->drawRoundedRect(pill, height / 2.0, height / 2.0);
-            painter->setPen(match ? Theme::Surface : Theme::TextPrimary);
+            painter->setPen(match ? Theme::OnAccent : Theme::Surface);
             painter->drawText(pill, Qt::AlignCenter, badge);
             x += pill.width() + 4;
         }

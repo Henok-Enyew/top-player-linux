@@ -80,10 +80,11 @@ AboutDialog::AboutDialog(MpvWidget *mpv, QWidget *parent)
     layout->addWidget(logo);
     layout->addSpacing(4);
 
-    QLabel *title = label(QStringLiteral("%1 <span style=\"color:%2; font-weight:normal;\">— %3</span>")
-                              .arg(tr("Top Player"), Theme::hex(Theme::Accent),
-                                   tr("Version %1").arg(QStringLiteral(APP_VERSION))),
-                          "AboutTitle", this);
+    QLabel *title = label(QString(), "AboutTitle", this);
+    Theme::bind(title, [title] {
+        title->setText(QStringLiteral("%1 <span style=\"color:%2; font-weight:normal;\">— %3</span>")
+                           .arg(tr("Top Player"), Theme::hex(Theme::Accent), tr("Version %1").arg(QStringLiteral(APP_VERSION))));
+    });
     title->setTextFormat(Qt::RichText);
     title->setAccessibleName(tr("Top Player — Version %1").arg(QStringLiteral(APP_VERSION)));
     layout->addWidget(title);
@@ -92,10 +93,12 @@ AboutDialog::AboutDialog(MpvWidget *mpv, QWidget *parent)
     layout->addSpacing(8);
     layout->addWidget(label(tr("Developed by Henok Enyew Andargie"), "AboutByline", this));
 
-    QLabel *links = label(QStringLiteral("%1 &nbsp;·&nbsp; %2 &nbsp;·&nbsp; %3")
-                              .arg(link(kGitHubUrl, tr("GitHub")), link(kTelegramUrl, tr("Telegram")),
-                                   link(kPortfolioUrl, tr("Portfolio"))),
-                          "AboutLinks", this);
+    QLabel *links = label(QString(), "AboutLinks", this);
+    Theme::bind(links, [links] {
+        links->setText(QStringLiteral("%1 &nbsp;·&nbsp; %2 &nbsp;·&nbsp; %3")
+                           .arg(link(kGitHubUrl, tr("GitHub")), link(kTelegramUrl, tr("Telegram")),
+                                link(kPortfolioUrl, tr("Portfolio"))));
+    });
     links->setTextFormat(Qt::RichText);
     links->setOpenExternalLinks(true);
     links->setTextInteractionFlags(Qt::TextBrowserInteraction);

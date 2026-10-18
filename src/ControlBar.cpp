@@ -147,11 +147,19 @@ ControlBar::ControlBar(MpvWidget *mpv, QWidget *parent)
     m_volumeSlider->setValue(m_mpv->mpvProperty(QStringLiteral("volume")).toInt());
     updateTimeLabel();
     updateModeButtons();
+    updatePlayButton();
 
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(kSaveDelayMs);
     connect(&m_saveTimer, &QTimer::timeout, this, &ControlBar::saveState);
     restoreState();
+    // The time label bakes its colors into rich text, and the play button's
+    // hover color depends on the theme.
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
+        m_timeLabel->clear();
+        updateTimeLabel();
+        updatePlayButton();
+    });
 }
 
 ControlBar::~ControlBar()
@@ -172,9 +180,11 @@ void ControlBar::restoreState()
     }
     if (settings.value(QStringLiteral("player/mute"), false).toBool())
         m_mpv->setMpvProperty(QStringLiteral("mute"), QStringLiteral("yes"));
-    // Only the mode: the queue restored from the last run keeps its order.
-    if (settings.value(QStringLiteral("player/shuffle"), false).toBool())
-        m_mpv->setMpvProperty(QStringLiteral("shuffle"), QStringLiteral("yes"));
+    // Only the mode: the playlist restored from the last run keeps its order.
+    if (settings.value(QStringLiteral("player/shuffle"), false).toBool()) {
+        m_shuffle = true;
+        updateModeButtons();
+    }
     const QString repeat = settings.value(QStringLiteral("player/repeat")).toString();
     if (repeat == QLatin1String("all"))
         m_mpv->setMpvProperty(QStringLiteral("loop-playlist"), QStringLiteral("inf"));
@@ -203,11 +213,13 @@ void ControlBar::saveState()
 
 void ControlBar::setShuffle(bool on)
 {
-    // The option is the mode the button shows; changing it doesn't reorder
-    // the playlist by itself. playlist-unshuffle restores the order from
-    // before playlist-shuffle, keeping entries added since.
-    m_mpv->setMpvProperty(QStringLiteral("shuffle"), on ? QStringLiteral("yes") : QStringLiteral("no"));
-    m_mpv->command({on ? QStringLiteral("playlist-shuffle") : QStringLiteral("playlist-unshuffle")});
+    // Shuffles the order songs play in; the playlist stays as it is.
+    if (on != m_shuffle) {
+        m_shuffle = on;
+        updateModeButtons();
+        scheduleSave();
+        Q_EMIT shuffleChanged(on);
+    }
     Q_EMIT message(tr("Shuffle"), on ? tr("On") : tr("Off"));
 }
 
@@ -334,10 +346,6 @@ void ControlBar::onPropertyUpdated(const QString &name, const QVariant &value)
         const QSignalBlocker blocker(m_volumeSlider);
         m_volumeSlider->setValue(qRound(m_volume));
         scheduleSave();
-    } else if (name == QLatin1String("shuffle")) {
-        m_shuffle = isOn(value);
-        updateModeButtons();
-        scheduleSave();
     } else if (name == QLatin1String("loop-file")) {
         m_loopFile = isOn(value);
         updateModeButtons();
@@ -364,7 +372,9 @@ void ControlBar::updatePlayButton()
 {
     // Nothing plays while idle, even though mpv's pause flag is off.
     const bool playing = !m_paused && !m_idle;
-    m_playButton->setIcon(skinIcon(playing ? IconType::Pause : IconType::Play));
+    // On a button filled with the accent, the hovered icon takes the color drawn on it.
+    const IconType icon = playing ? IconType::Pause : IconType::Play;
+    m_playButton->setIcon(Theme::solidAccentFill() ? skinIcon(icon, Theme::OnAccent) : skinIcon(icon));
 }
 
 void ControlBar::updateTimeLabel()

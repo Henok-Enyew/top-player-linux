@@ -20,7 +20,7 @@ class AudioController : public QObject
 
 public:
     // Where the cover comes from, in order of preference.
-    enum class ArtworkSource { None, Custom, Embedded, Folder, Default };
+    enum class ArtworkSource { None, Custom, Embedded, Folder, Default, Builtin };
     // What is on screen for the current file.
     enum class Display { None, Artwork, Waveform, Spectrum, Canvas };
 
@@ -49,6 +49,15 @@ public:
     bool setDefaultArtwork(const QString &imagePath);
     void clearDefaultArtwork();
 
+    // Audio -> Artwork Gallery: picks the built-in artwork songs without a
+    // cover show (see ArtworkGallery), or gives one to the current song.
+    void showArtworkGallery();
+    void setGalleryChoice(const QString &choice);
+    // Gives the current song built-in style `style` as its own artwork.
+    bool setGalleryArtworkForSong(const QString &style);
+    // The current song's file, or empty.
+    QString currentPath() const { return m_active ? m_path : QString(); }
+
     // The selected audio track ("1", "2", ... or "no"), and selecting one.
     // While a visualization runs, mpv's "aid" is not used, so the graph is
     // rebuilt for the new track instead.
@@ -64,8 +73,11 @@ private:
     void onFileLoaded();
     void onArtworkReady(const QString &path, const QImage &image);
     void updateTrackInfo();
-    // Falls back to the default artwork when the track has no cover.
+    // Falls back to the default artwork, then the built-in one, when the
+    // track has no cover.
     void useDefaultArtwork();
+    // Shows the fallback artwork again after its settings changed.
+    void refreshFallbackArtwork();
     // Shows the current state and sets up the mpv graph it needs.
     void apply();
     void setGraph(const QString &filter);

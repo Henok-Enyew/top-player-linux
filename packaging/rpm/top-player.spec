@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.0.8 packaging/rpm/build-rpm.sh
+#   VERSION=1.1.0 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.0.8
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -77,6 +77,13 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Sat Oct 17 2026 Henok Enyew Andargie - 1.1.0-1
+- Play queue apart from the playlist: Play Next, Add to Queue, a Queue tab
+- Shuffle changes the play order, never the playlist
+- Ctrl+F searches the playlist; songs opened from a search play through it
+- Themes, accent colors and styles (Appearance, Ctrl+Shift+T); new brand and logo
+- Built-in artwork gallery for songs without a cover; blurred cover backdrop
+
 * Sat Oct 10 2026 Henok Enyew Andargie - 1.0.8-1
 - Flatpak: downloads, YouTube and Spotify streaming and the media cutter
   work, using the system's yt-dlp and ffmpeg

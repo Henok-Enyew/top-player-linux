@@ -71,7 +71,7 @@ QVariant nodeToVariant(const mpv_node *node)
 // Player state mirrored by widgets through propertyUpdated() only.
 constexpr const char *kStateProperties[] = {
     "time-pos", "duration", "playlist", "chapter-list", "path", "idle-active", "playlist-pos", "metadata",
-    "shuffle", "loop-file", "loop-playlist", "video-unscaled", "video-aspect-override",
+    "loop-file", "loop-playlist", "video-unscaled", "video-aspect-override", "eof-reached",
 };
 
 // Properties whose changes are also forwarded through propertyChanged().
@@ -194,7 +194,9 @@ MpvWidget::MpvWidget(QWidget *parent)
     mpv_set_option_string(m_mpv, "hwdec", m_output == VideoOutput::Software ? "auto-copy-safe" : "auto-safe");
     if (m_output == VideoOutput::Software)
         mpv_set_option_string(m_mpv, "sw-fast", "yes");
-    mpv_set_option_string(m_mpv, "keep-open", "yes");
+    // mpv stops at the end of every file, and advance() picks the next one:
+    // the play queue's order is not the playlist's.
+    mpv_set_option_string(m_mpv, "keep-open", "always");
     mpv_set_option_string(m_mpv, "input-default-bindings", "no");
     mpv_set_option_string(m_mpv, "input-vo-keyboard", "no");
     // The OSD is drawn by Qt; mpv only renders subtitles.
@@ -546,41 +548,62 @@ void MpvWidget::stop()
 
 void MpvWidget::playlistNext()
 {
-    // mpv has no current entry to step from once stopped.
+    const int target = stepTarget(1);
+    // mpv has no current entry once stopped; with nothing after the last
+    // one, Next plays it again.
     if (isIdle()) {
-        playIndex(m_lastPlaylistPos + 1);
+        playIndex(target >= 0 ? target : m_lastPlaylistPos);
         return;
     }
-    // Skipping to another song means wanting to hear it, even from pause
-    // (unless there is nothing to skip to).
-    bool resume = false;
-    if (mpvProperty(QStringLiteral("pause")).toBool()) {
-        const int pos = mpvProperty(QStringLiteral("playlist-pos")).toInt();
-        const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
-        const QString loop = mpvPropertyString(QStringLiteral("loop-playlist"));
-        resume = pos + 1 < count || (count > 1 && !loop.isEmpty() && loop != QLatin1String("no"));
-    }
-    command({QStringLiteral("playlist-next")});
+    if (target < 0)
+        return;
+    // Skipping to another song means wanting to hear it, even from pause.
+    const bool resume = mpvProperty(QStringLiteral("pause")).toBool();
+    playIndex(target);
     if (resume)
         setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
 }
 
 void MpvWidget::playlistPrev()
 {
+    const int target = stepTarget(-1);
     if (isIdle()) {
-        playIndex(std::max(m_lastPlaylistPos - 1, 0));
+        playIndex(target >= 0 ? target : std::max(m_lastPlaylistPos, 0));
         return;
     }
-    bool resume = false;
-    if (mpvProperty(QStringLiteral("pause")).toBool()) {
-        const int pos = mpvProperty(QStringLiteral("playlist-pos")).toInt();
-        const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
-        const QString loop = mpvPropertyString(QStringLiteral("loop-playlist"));
-        resume = pos > 0 || (count > 1 && !loop.isEmpty() && loop != QLatin1String("no"));
-    }
-    command({QStringLiteral("playlist-prev")});
+    if (target < 0)
+        return;
+    const bool resume = mpvProperty(QStringLiteral("pause")).toBool();
+    playIndex(target);
     if (resume)
         setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
+}
+
+int MpvWidget::stepTarget(int step)
+{
+    if (m_stepHandler)
+        return m_stepHandler(step);
+    const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
+    if (count <= 0)
+        return -1;
+    const int pos = isIdle() ? m_lastPlaylistPos : mpvProperty(QStringLiteral("playlist-pos")).toInt();
+    const int target = pos + step;
+    if (target >= 0 && target < count)
+        return target;
+    const QString loop = mpvPropertyString(QStringLiteral("loop-playlist"));
+    if (loop.isEmpty() || loop == QLatin1String("no"))
+        return -1;
+    return target < 0 ? count - 1 : 0;
+}
+
+void MpvWidget::advance()
+{
+    const int target = stepTarget(1);
+    // At the end, keep-open leaves the last frame showing, paused.
+    if (target < 0)
+        return;
+    playIndex(target);
+    setMpvProperty(QStringLiteral("pause"), QStringLiteral("no"));
 }
 
 bool MpvWidget::playIndex(int index)
@@ -589,6 +612,7 @@ bool MpvWidget::playIndex(int index)
     if (count <= 0)
         return false;
     command({QStringLiteral("playlist-play-index"), QString::number(std::clamp(index, 0, count - 1))});
+    m_switchPending = true;
     return true;
 }
 
@@ -966,6 +990,11 @@ void MpvWidget::processMpvEvents()
                     repaintVideo();
                 } else if (name == QLatin1String("playlist-pos") && value.toInt() >= 0) {
                     m_lastPlaylistPos = value.toInt();
+                } else if (name == QLatin1String("eof-reached") && value.toBool()) {
+                    // A loop-file never gets here: mpv starts it over itself.
+                    // Nor does a file the user just skipped away from.
+                    if (!m_switchPending && mpvProperty(QStringLiteral("eof-reached")).toBool())
+                        advance();
                 } else if (name == QLatin1String("time-pos")) {
                     m_timePos = value;
                     m_timePosPending = true;
@@ -998,6 +1027,7 @@ void MpvWidget::processMpvEvents()
             sendQueuedCommands();
             break;
         case MPV_EVENT_START_FILE:
+            m_switchPending = false;
             flushTimePos();
             m_fileLoaded = false;
             m_audioOnly = false;
@@ -1018,11 +1048,22 @@ void MpvWidget::processMpvEvents()
                     break;
                 }
             }
+            // mpv moves on to the following entry by itself; the step handler
+            // may want another. Sent first, so that a replacement made for the
+            // failure (another source of a stream) comes after it and wins.
+            // Not if another entry was asked for meanwhile: the failure is
+            // then mpv giving up on this one to play that.
+            const int count = mpvProperty(QStringLiteral("playlist-count")).toInt();
+            const int pos = mpvProperty(QStringLiteral("playlist-pos")).toInt();
+            const qint64 posId = mpvProperty(QStringLiteral("playlist/%1/id").arg(pos)).toLongLong();
+            if (m_stepHandler && !m_switchPending && posId == end->playlist_entry_id && ++m_failedInARow < count)
+                advance();
             Q_EMIT fileFailed(path, QString::fromUtf8(mpv_error_string(end->error)));
             break;
         }
         case MPV_EVENT_FILE_LOADED: {
             m_fileLoaded = true;
+            m_failedInARow = 0;
             // Cover art (embedded or a cover file next to it) shows up as an
             // "albumart" video track; it doesn't make a file a video.
             bool hasAudio = false;

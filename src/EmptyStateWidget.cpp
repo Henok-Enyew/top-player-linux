@@ -20,10 +20,6 @@
 
 namespace {
 
-const QColor kCenterColor = Theme::Panel;
-const QColor kEdgeColor = Theme::Surface;
-const QColor kAccentColor = Theme::Accent;
-
 constexpr int kFadeInMs = 200;
 constexpr int kFadeOutMs = 280;
 // Logo sizes tried from largest to smallest; 0 hides the logo.
@@ -53,8 +49,10 @@ EmptyStateWidget::EmptyStateWidget(QWidget *parent)
     m_logo->setAlignment(Qt::AlignCenter);
     m_title->setObjectName(QStringLiteral("EmptyStateTitle"));
     m_title->setAlignment(Qt::AlignCenter);
-    m_title->setText(QStringLiteral("<span style='color:%1'>Top</span> <span style='color:%2'>Player</span>")
-                         .arg(Theme::hex(Theme::TextPrimary), Theme::hex(Theme::Accent)));
+    Theme::bind(m_title, [this] {
+        m_title->setText(QStringLiteral("<span style='color:%1'>Top</span> <span style='color:%2'>Player</span>")
+                             .arg(Theme::hex(Theme::TextPrimary), Theme::hex(Theme::Accent)));
+    });
     m_title->setAccessibleName(tr("Top Player"));
     m_hint->setObjectName(QStringLiteral("EmptyStateHint"));
     m_hint->setAlignment(Qt::AlignCenter);
@@ -238,19 +236,27 @@ void EmptyStateWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    // A soft spotlight behind the content.
+    // A soft spotlight behind the content, lit by two ambient accent glows.
     const QPointF center = rect().center();
-    QRadialGradient spotlight(center, std::max(width(), height()) * 0.75);
-    spotlight.setColorAt(0, kCenterColor);
-    spotlight.setColorAt(1, kEdgeColor);
+    const qreal reach = std::max(width(), height());
+    QRadialGradient spotlight(center, reach * 0.75);
+    spotlight.setColorAt(0, Theme::Panel);
+    spotlight.setColorAt(1, Theme::Surface);
     p.fillRect(rect(), spotlight);
+    const qreal strength = Theme::isLight() ? 0.1 : 0.16;
+    auto ambient = [&](const QPointF &at, qreal radius, const QColor &color) {
+        QRadialGradient glow(at, radius);
+        glow.setColorAt(0, Theme::withAlpha(color, strength));
+        glow.setColorAt(1, Theme::withAlpha(color, 0));
+        p.fillRect(rect(), glow);
+    };
+    ambient(QPointF(width() * 0.3, height() * 0.25), reach * 0.45, Theme::Accent);
+    ambient(QPointF(width() * 0.75, height() * 0.8), reach * 0.4, Theme::Accent2);
 
     if (m_dropHighlight) {
-        QColor fill = kAccentColor;
-        fill.setAlpha(18);
         const QRectF zone = QRectF(rect()).adjusted(kDropInset, kDropInset, -kDropInset, -kDropInset);
-        p.setBrush(fill);
-        p.setPen(QPen(kAccentColor, 2, Qt::DashLine));
+        p.setBrush(Theme::withAlpha(Theme::Accent, 0.07));
+        p.setPen(QPen(Theme::Accent, 2, Qt::DashLine));
         p.drawRoundedRect(zone, 10, 10);
     }
 }

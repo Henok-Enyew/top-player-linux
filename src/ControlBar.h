@@ -27,8 +27,9 @@ public:
     SeekBar *seekBar() const { return m_seekBar; }
     void setPlaylistChecked(bool checked);
 
-    // Mirrors of mpv's shuffle, loop-file/loop-playlist and
-    // video-unscaled/video-aspect-override, however they were set.
+    // Shuffle is the play queue's mode (see PlayQueue); repeat and aspect
+    // mirror mpv's loop-file/loop-playlist and video-unscaled/
+    // video-aspect-override, however they were set.
     bool isShuffle() const { return m_shuffle; }
     Repeat repeat() const { return m_repeat; }
     Aspect aspect() const { return m_aspect; }
@@ -44,6 +45,8 @@ public:
 Q_SIGNALS:
     void openRequested();
     void playlistToggled(bool visible);
+    // Shuffle was turned on or off (the button, setShuffle(), or the saved state).
+    void shuffleChanged(bool on);
     void fullScreenRequested();
     // Feedback for the OSD, e.g. ("Repeat", "All").
     void message(const QString &label, const QString &value);

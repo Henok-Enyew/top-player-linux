@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AboutDialog.h"
+#include "AppearanceDialog.h"
 #include "AudioControlDialog.h"
 #include "AudioController.h"
 #include "AudioEffects.h"
@@ -17,6 +18,7 @@
 #endif
 #include "OsdWidget.h"
 #include "PlayerMenu.h"
+#include "PlayQueue.h"
 #include "PlaylistController.h"
 #include "PlaylistDrawer.h"
 #include "ResumeManager.h"
@@ -151,7 +153,7 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(18, 19, 22, 200));
+        p.setBrush(Theme::withAlpha(Theme::Surface, 0.78));
         p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 5, 5);
         // Lines across the corner the grip sits in.
         const bool left = m_corner & Qt::LeftEdge;
@@ -357,6 +359,15 @@ void MainWindow::setupPlaylist()
         if (!expanded && m_drawer->isAncestorOf(QApplication::focusWidget()))
             m_mpv->setFocus();
     });
+    // Shuffle play: the control bar's button (which keeps the setting), the
+    // drawer's, and the queue's order.
+    m_playlist->queue()->setShuffle(m_controlBar->isShuffle());
+    m_drawer->setShuffleChecked(m_controlBar->isShuffle());
+    connect(m_controlBar, &ControlBar::shuffleChanged, this, [this](bool on) {
+        m_playlist->queue()->setShuffle(on);
+        m_drawer->setShuffleChecked(on);
+    });
+    connect(m_drawer, &PlaylistDrawer::shuffleToggled, m_controlBar, &ControlBar::setShuffle);
 }
 
 void MainWindow::setupThumbnails()
@@ -485,6 +496,15 @@ void MainWindow::openAudioControlDialog()
     m_audioControl->activateWindow();
 }
 
+void MainWindow::openAppearanceDialog()
+{
+    if (!m_appearance)
+        m_appearance = new AppearanceDialog(this);
+    m_appearance->show();
+    m_appearance->raise();
+    m_appearance->activateWindow();
+}
+
 void MainWindow::openLiveStreamDialog()
 {
     if (!m_liveStreams) {
@@ -593,6 +613,18 @@ void MainWindow::setPlaylistVisible(bool visible)
     m_drawer->setExpanded(visible);
     if (visible)
         m_drawer->raise();
+}
+
+void MainWindow::searchPlaylist()
+{
+    setPlaylistVisible(true);
+    m_drawer->focusSearch();
+}
+
+void MainWindow::showQueue()
+{
+    setPlaylistVisible(true);
+    m_drawer->setCurrentPage(PlaylistDrawer::QueuePage);
 }
 
 void MainWindow::loadSubtitle(const QString &path)

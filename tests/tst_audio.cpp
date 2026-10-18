@@ -5,12 +5,14 @@
 // display (run under xvfb-run) and ffmpeg, which generates the test media.
 
 #include "ResumeManager.h"
+#include "ArtworkGallery.h"
 #include "AudioController.h"
 #include "AudioView.h"
 #include "MainWindow.h"
 #include "MpvWidget.h"
 #include "PlayerMenu.h"
 #include "TestClip.h"
+#include "Theme.h"
 
 #include <QApplication>
 #include <QBuffer>
@@ -22,6 +24,8 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QListWidget>
+#include <QDialog>
 #include <QTimer>
 #include <QtEndian>
 
@@ -126,6 +130,7 @@ private Q_SLOTS:
     void dropImageSetsArtwork();
     void visualizationMenu();
     void defaultArtwork();
+    void builtinArtwork();
     void seekAndVolumeWithVisualization();
     void audioTrackSwitching();
     void videoAfterAudio();
@@ -215,6 +220,8 @@ void AudioTest::init()
     // CI machines have no sound card; without an output mpv would drop the audio track.
     m_mpv->setMpvProperty(QStringLiteral("ao"), QStringLiteral("null"));
     m_audio->setVisualization(AudioArtwork::Visualization::AlbumArt);
+    // Without built-in artwork, songs without a cover show the visualizer.
+    ArtworkGallery::setChoice(ArtworkGallery::noneChoice());
 }
 
 void AudioTest::cleanup()
@@ -504,6 +511,63 @@ void AudioTest::defaultArtwork()
     QVERIFY(!QFileInfo::exists(copy));
     QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::None);
     QCOMPARE(m_audio->display(), AudioController::Display::Spectrum);
+}
+
+void AudioTest::builtinArtwork()
+{
+    // Out of the box, a song without a cover gets its own built-in artwork.
+    ArtworkGallery::setChoice(ArtworkGallery::autoChoice());
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin, 10000);
+    QCOMPARE(m_audio->display(), AudioController::Display::Artwork);
+    const QString path = m_mpv->mpvPropertyString(QStringLiteral("path"));
+    QCOMPARE(m_audio->view()->artwork(), ArtworkGallery::artworkFor(path));
+
+    // Choosing one style for all, live.
+    m_audio->setGalleryChoice(QStringLiteral("vinyl"));
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin);
+    QCOMPARE(m_audio->view()->artwork(), ArtworkGallery::render(QStringLiteral("vinyl"), 1024, ArtworkGallery::seedFor(path)));
+    // The user's own default image beats it; clearing that brings it back.
+    QVERIFY(m_audio->setDefaultArtwork(m_customImage));
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Default);
+    m_audio->clearDefaultArtwork();
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin);
+    // A song with its own cover keeps it.
+    open(m_mp3);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Embedded, 10000);
+
+    // One style kept for this song alone, as its custom artwork.
+    open(m_plain);
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin, 10000);
+    QVERIFY(m_audio->setGalleryArtworkForSong(QStringLiteral("orbit")));
+    QVERIFY(m_audio->hasCustomArtwork());
+    m_audio->clearCustomArtwork();
+    QTRY_COMPARE_WITH_TIMEOUT(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin, 10000);
+
+    // None: the visualizer again.
+    m_audio->setGalleryChoice(ArtworkGallery::noneChoice());
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::None);
+    QCOMPARE(m_audio->display(), AudioController::Display::Spectrum);
+
+    // The gallery dialog applies a click at once.
+    m_audio->showArtworkGallery();
+    auto *dialog = m_window->findChild<QDialog *>(QStringLiteral("ArtworkGalleryDialog"));
+    QVERIFY(dialog);
+    auto *list = dialog->findChild<QListWidget *>(QStringLiteral("ArtworkGalleryList"));
+    QVERIFY(list && list->count() == ArtworkGallery::styles().size() + 2);
+    list->setCurrentRow(1);
+    QCOMPARE(ArtworkGallery::choice(), ArtworkGallery::styles().first().id);
+    QCOMPARE(m_audio->artworkSource(), AudioController::ArtworkSource::Builtin);
+    if (const QString dir = qEnvironmentVariable("TOPPLAYER_SCREENSHOTS"); !dir.isEmpty()) {
+        applyDarkSkin(*qApp);
+        list->setCurrentRow(0);
+        m_window->resize(1000, 600);
+        QTest::qWait(300);
+        dialog->grab().save(dir + QStringLiteral("/artwork-dialog.png"));
+        m_window->grab().save(dir + QStringLiteral("/artwork-window.png"));
+    }
+    dialog->close();
+    ArtworkGallery::setChoice(ArtworkGallery::noneChoice());
 }
 
 void AudioTest::seekAndVolumeWithVisualization()

@@ -3,6 +3,7 @@
 #include "LibraryPanel.h"
 #include "PlaylistOps.h"
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
 #include <QVariant>
@@ -14,14 +15,16 @@ class DownloadQueue;
 class MediaLibrary;
 class MediaProber;
 class MpvWidget;
+class PlayQueue;
 class PlaylistDrawer;
 class QWidget;
 
 // Carries out the playlist drawer's requests on mpv's playlist, which stays
 // the single source of truth: reordering is done with playlist-move commands
-// (like drag-and-drop), so the playing entry keeps playing. Also keeps the
-// queue saved between runs, and plays and stores the library's folders and
-// playlists.
+// (like drag-and-drop), so the playing entry keeps playing. The order entries
+// play in is the play queue's (see PlayQueue), which follows the playlist.
+// Also keeps the playlist saved between runs, and plays and stores the
+// library's folders and playlists.
 class PlaylistController : public QObject
 {
     Q_OBJECT
@@ -57,7 +60,21 @@ public:
 
     void sort(PlaylistOps::SortKey key, bool ascending);
     void reverse();
+    // Puts the playlist itself in a random order (unlike shuffle play, which
+    // only changes the order the queue plays it in).
     void shuffle();
+
+    // The order entries play in: shuffle, the context and the manual queue.
+    PlayQueue *queue() const { return m_queue; }
+    // Plays playlist entry `row` as the user opened it: the entries the
+    // drawer's search shows become what plays next, or the whole playlist
+    // without a search.
+    void playRow(int row);
+    // Plays queue entry `id` now.
+    void playQueued(qint64 id);
+    // Queues the entries at `rows` to play next, or after the queue.
+    void playRowsNext(const QList<int> &rows);
+    void enqueueRows(const QList<int> &rows);
     // The move buttons: shifts the entries at `rows`.
     void shiftRows(const QList<int> &rows, PlaylistOps::Shift shift);
     void removeRows(QList<int> rows);
@@ -98,6 +115,15 @@ private:
     void updateDrawer();
     void applyOrder(const QList<int> &order);
     void scheduleSave();
+    // Hands the last read playlist to the queue.
+    void syncQueue();
+    // mpv's playlist ids of `rows`.
+    QList<qint64> idsOf(const QList<int> &rows);
+    // Plays queue entry `id` and expects it to be the next to start.
+    void playId(qint64 id);
+    void expect(qint64 id);
+    // Tells the queue which entry mpv is playing.
+    void followPlayingEntry();
     QList<double> durations() const;
 
     MpvWidget *m_mpv;
@@ -106,6 +132,11 @@ private:
     MediaProber *m_prober;
     MediaLibrary *m_library;
     DownloadQueue *m_downloads;
+    PlayQueue *m_queue;
+    // The entry the queue just sent mpv to: other entries starting meanwhile
+    // (mpv moving on from a failed file by itself) are not the user's choice.
+    qint64 m_expectedId = -1;
+    QElapsedTimer m_expectedSince;
     QVariantList m_playlist;
     QList<PlaylistOps::Entry> m_entries;
     // A duration sort waiting for the prober to finish.

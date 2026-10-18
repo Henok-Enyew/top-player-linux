@@ -48,6 +48,8 @@ private:
     void paintCaption(QPainter &p);
     int textBlockHeight() const;
     const QPixmap &shadow(const QSize &coverSize);
+    // The cover blurred to fill the view, made for its current size.
+    const QPixmap &backdrop();
 
     Mode m_mode = Mode::Artwork;
     QImage m_artwork;
@@ -56,4 +58,6 @@ private:
     QPixmap m_shadow;
     QSize m_shadowSize;
     QPixmap m_scaledArtwork;
+    QPixmap m_backdrop;
+    QSize m_backdropSize;
 };

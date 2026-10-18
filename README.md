@@ -8,19 +8,19 @@
 
 ### Your music, videos, lyrics and live TV, in one fast native Linux player.
 
-Built on **Qt 6** and **libmpv**: plays everything mpv plays, looks sharp in an electric-cyan-on-obsidian skin,
+Built on **Qt 6** and **libmpv**: plays everything mpv plays, wears an electric-violet look with ten switchable themes,
 and stays light even on folders with thousands of files.
 
-[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=00D2FF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
+[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=7C5CFF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=FF4FD8&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Henok-Enyew/top-player-linux/ci.yml?label=CI&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-1A1C22?style=for-the-badge)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1A1B26?style=for-the-badge)](LICENSE)
 
-![Linux](https://img.shields.io/badge/Linux-121316?style=flat-square&logo=linux&logoColor=00D2FF)
-![Qt 6](https://img.shields.io/badge/Qt%206-121316?style=flat-square&logo=qt&logoColor=00D2FF)
-![libmpv](https://img.shields.io/badge/libmpv-121316?style=flat-square&logo=mpv&logoColor=00D2FF)
-![C++17](https://img.shields.io/badge/C%2B%2B17-121316?style=flat-square&logo=cplusplus&logoColor=00D2FF)
-![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-121316?style=flat-square&logo=wayland&logoColor=00D2FF)
+![Linux](https://img.shields.io/badge/Linux-15161E?style=flat-square&logo=linux&logoColor=7C5CFF)
+![Qt 6](https://img.shields.io/badge/Qt%206-15161E?style=flat-square&logo=qt&logoColor=7C5CFF)
+![libmpv](https://img.shields.io/badge/libmpv-15161E?style=flat-square&logo=mpv&logoColor=7C5CFF)
+![C++17](https://img.shields.io/badge/C%2B%2B17-15161E?style=flat-square&logo=cplusplus&logoColor=7C5CFF)
+![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-15161E?style=flat-square&logo=wayland&logoColor=7C5CFF)
 
 <h3>
   <a href="https://github.com/Henok-Enyew/top-player-linux/releases/latest">⬇ Download</a>
@@ -35,7 +35,10 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.0.8** · 📦 the **Flatpak downloads and streams** too (YouTube, Spotify), with the system's yt-dlp ·
+> **New in 1.1.0** · 🎨 **themes, accent colors and styles** with a new look and logo · 🎶 a **play queue** apart
+> from the playlist (Play Next, a Queue tab) · 🔀 **shuffle that never scrambles your playlist** · 🔎 **Ctrl+F**
+> search that plays through its results · 🖼️ **built-in artwork** for songs without a cover ·
+> **From 1.0.8** · 📦 the **Flatpak downloads and streams** too (YouTube, Spotify), with the system's yt-dlp ·
 > **From 1.0.7** · 🎬 **video that no longer stays black** on some graphics drivers, plus a **software video
 > output** for the rest · ⬇️ **download streamed songs and videos** right from the playlist (video or MP3) ·
 > 📺 **YouTube playlists** (stream or save them all) · 🌫️ **lyrics background blur** and video blur · 🪟 drag the
@@ -104,8 +107,9 @@ Preamp, bass, treble, a 10-band equalizer with presets, and night mode.
 <td valign="top">
 
 ### 📂 Playlist & Library
-Natural sorting, search, shuffle and repeat, M3U save and open, saved folders and playlists.
-Volume, shuffle and repeat are remembered.
+Natural sorting, search that plays through its results, a separate play queue with
+Play Next, shuffle that never scrambles your playlist, M3U save and open, saved folders and
+playlists. Volume, shuffle and repeat are remembered.
 
 </td>
 <td valign="top">
@@ -170,7 +174,7 @@ Every feature in detail. Click a section to open it.
 - **Hardware decoding**: Auto (Safe), Auto (Copy-back), VA-API, NVDEC, Vulkan
   or Off (Software).
 - **Speed** from 0.25x to 2.0x, in 0.1 steps (`C` / `X` / `Z`), **Loop File**,
-  **Shuffle** and **Repeat** (Off → All → One).
+  **Shuffle** (the play order, not the playlist) and **Repeat** (Off → All → One).
 - **Video**: track selection, **aspect ratio** (Default, 4:3, 16:9, 1.85:1,
   2.35:1), quick **Fit to Window / 16:9 / 100%** button, **rotate** (0°, 90°,
   180°, 270°), **deinterlace**, and **screenshots** (`Ctrl+E`, saved to
@@ -205,10 +209,30 @@ Every feature in detail. Click a section to open it.
 <details>
 <summary><b>🎨 Interface</b></summary>
 
-A flat **electric cyan on obsidian** skin (accent `#00D2FF`, surface `#121316`,
-panels `#1A1C22`) defined in [`resources/skin/top-player.qss`](resources/skin/top-player.qss)
-on top of Qt's Fusion style; self-painted widgets share the palette in
-[`src/Theme.h`](src/Theme.h). All icons are drawn as vectors in code.
+The brand is **electric violet into hot magenta** (`#7C5CFF` → `#FF4FD8`), on the
+deep blue-black **Midnight** theme by default. The whole look can be changed live
+in **Appearance** (`Ctrl+Shift+T`, or right-click → Appearance), and is kept between runs:
+
+- **Themes**, after Omarchy's: Midnight, Obsidian (the original
+  look), Matte Black, Catppuccin Mocha, Nord, Gruvbox, Rosé Pine,
+  Everforest, Kanagawa and the light Catppuccin Latte.
+- **Accent colors**, independent of the theme: Brand Violet, the theme's own
+  accent, Electric Cyan, Neon Mint, Sunset Orange, Hot Pink, Acid Lime, Gold,
+  Crimson and Ocean Blue. Shades, gradients and the text drawn on the accent
+  are worked out from it, and it is lightened or darkened to stay readable.
+- **Styles**: **Neon Glass** (soft accent gradients, a glow on the seekbar,
+  rounded corners), **Tiling Minimal** (crisp 1 px accent borders, tight
+  corners, flat fills and monospace headings, as on a Hyprland desktop) and
+  **Soft** (large radii, pill buttons, quiet edges).
+- Changes **cross-fade** across the open windows in a quarter of a second. The
+  dialog draws each theme as a small preview of the player; the right-click
+  menu has quick Theme, Accent Color and Style lists.
+
+One skin, [`resources/skin/top-player.qss`](resources/skin/top-player.qss), is
+a template whose `@tokens@` are filled in for the chosen appearance on top of
+Qt's Fusion style; self-painted widgets read the same live colors from
+[`src/Theme.h`](src/Theme.h). All icons are drawn as vectors in code, in the
+current colors.
 
 - **Start screen** while nothing is loaded, with **Open File**, **Open
   Folder**, **Open URL / Stream**, **Open Playlist** and a drop zone. It fades
@@ -218,7 +242,7 @@ on top of Qt's Fusion style; self-painted widgets share the palette in
   close, with soft animated highlights (red for close). Drag it to move the
   window, double-click to maximize.
 - **Control bar** with open, previous, play/pause, stop and next; **shuffle**
-  (lit cyan while on) and **repeat** (the icon shows a "1" in Repeat One); the
+  (lit in the accent while on) and **repeat** (the icon shows a "1" in Repeat One); the
   time; volume; an **aspect** button (Fit to Window → 16:9 → 100%); and
   playlist and fullscreen toggles. The mode buttons follow the menu (e.g. Loop
   File) and step aside in narrow windows.
@@ -269,7 +293,17 @@ black screen; seeking, volume and track switching work as for video.
   atoms), a `cover` / `folder` / `front` / `album` image next to the track, or
   the **default artwork** (**Audio → Set Default Artwork for Songs Without
   One...**), an image of your choice for every song that has none of its own,
-  streams and radio included.
+  streams and radio included, and otherwise the **built-in artwork**.
+- **Built-in artwork** (**Audio → Artwork Gallery...**): 18 original
+  generative pieces painted by the player itself (Aurora, Synthwave Sunset,
+  Vinyl, Nebula, Liquid Gradient, Bauhaus, Sound Waves, Equalizer Skyline,
+  Topographic, Bokeh Night, Mixtape, Ocean Dusk, Neon Rings, Paper Hills,
+  Halftone Pop, Prism, Memphis, Orbit), sharp at any size. By default every
+  song without a cover gets its own (**Mix: One per Song**, the same picture
+  each time it plays); pick one style for all, keep one for the playing song
+  only (**Use for This Song Only**), or **None** for the visualizer. Clicks
+  apply at once.
+- Behind the cover, its colors fill the whole view as a soft blurred backdrop.
 - **Audio → Visualizations**: **Album Art Mode** (falls back to the spectrum
   without a cover), **Waveform Visualizer**, **Frequency Spectrum** (mpv's
   `showwaves` / `showfreqs` through `lavfi-complex`), or **Off (Cover Only)**:
@@ -356,11 +390,26 @@ mpv's playlist. Each entry shows its duration, read in the background.
 - **Add Files...**, **Add Folder...** ("Added 24 items from Season 1") and
   **Add URL...**.
 - **Sort** by name, duration, file path or file size, **Reverse Order**, and
-  **Shuffle**; the playing file keeps playing.
+  **Randomize Order**; the playing file keeps playing.
 - **Remove Missing/Inaccessible Files**, **Remove Duplicates** (keeps the
   playing copy) and **Clear Playlist**.
-- A **search field** that filters as you type, matching every word against
-  names and paths, without changing the playlist.
+- A **search field** (`Ctrl+F`) that filters as you type, matching every word
+  against names and paths, without changing the playlist. A song opened from
+  the results plays on through the results: search "love", open one of the ten
+  songs found, and the next nine follow. Clearing the search doesn't change
+  that; opening a song from another search, or without one, does.
+- **Play Next** and **Add to Queue** in the right-click menu.
+- **Shuffle play** (the shuffle buttons) shuffles the order songs play in,
+  never the playlist itself, and keeps what is playing.
+
+The **Queue** tab shows what plays next, in order: **Now Playing**, the songs
+**queued** with Play Next / Add to Queue, then the rest of what it plays from
+(the playlist, or a search's results, shown on top with a button back to the
+whole playlist). Drag songs to reorder them, double-click to skip to one, or
+use **NEXT**, **DEL** (take out of the queue, not the playlist), **CLEAR** and
+the move buttons. A song from the queue plays once: the playlist carries on
+after it. Next, Previous, the media keys and songs ending all follow the queue,
+and Repeat All goes round it (reshuffled each round with shuffle on).
 - **Save Playlist...** (`Ctrl+S`): extended M3U in UTF-8 with titles and
   durations, as `.m3u8` or `.m3u`.
 - **Open Playlist...**: reads `.m3u` / `.m3u8` / `.pls` in the background,
@@ -463,7 +512,7 @@ Countries** and **every other country** alphabetically. Then:
 <summary><b>🛠️ Tools</b></summary>
 
 - **Cut / Extract Media** (`Ctrl+X`): mark the range while playing with
-  `Ctrl+[` (A) and `Ctrl+]` (B); cyan brackets show it on the seekbar. Save it
+  `Ctrl+[` (A) and `Ctrl+]` (B); brackets in a color set apart from the accent show it on the seekbar. Save it
   as a **lossless stream copy** (instant) or **audio only** (MP3, AAC or FLAC)
   with `ffmpeg`, with progress, cancel, **Open in Player** and **Show in File
   Manager**. **Clear In/Out Points** resets the range.
@@ -531,8 +580,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.0.8/Top_Player-1.0.8-x86_64.AppImage
-chmod +x Top_Player-1.0.8-x86_64.AppImage && ./Top_Player-1.0.8-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.1.0/Top_Player-1.1.0-x86_64.AppImage
+chmod +x Top_Player-1.1.0-x86_64.AppImage && ./Top_Player-1.1.0-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -623,8 +672,10 @@ mpv property or command, and check marks reflect mpv's live state.
 | Double-click video, `Enter` | Toggle fullscreen |
 | `Esc` | Leave fullscreen or the mini player |
 | `Ctrl+B` (or `F6`) | Show / hide the playlist |
+| `Ctrl+F` | Search the playlist (opens it) |
 | `Ctrl+T` | Always on top |
 | `Ctrl+M` | Mini player |
+| `Ctrl+Shift+T` | Appearance: theme, accent color and style |
 | `Alt+1`..`Alt+4` | Window size 50–200% |
 | Drag video or title bar | Move window (sideways on the video seeks, except in the mini player, where any drag moves it) |
 | Drag window edge or corner | Resize window (the mini player also has a grip) |
@@ -725,11 +776,11 @@ xvfb-run -a ctest --test-dir build --output-on-failure
 
 | Format | Recipe | Build locally |
 | --- | --- | --- |
-| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.0.8 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
+| AppImage | [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh) | `VERSION=1.1.0 packaging/appimage/build-appimage.sh` (also needs `qmake6`, optionally `qt6-wayland`) |
 | Flatpak | [`org.github.topplayer.yaml`](org.github.topplayer.yaml) (KDE 6.11 runtime, builds libmpv) | `flatpak-builder --user --install --force-clean build-flatpak org.github.topplayer.yaml` |
-| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.0.8 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
-| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.0.8 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
-| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.0.8 packaging/arch/build-arch.sh` (needs `base-devel`) |
+| `.deb` (Debian, Ubuntu) | [`packaging/debian/`](packaging/debian) | `VERSION=1.1.0 packaging/debian/build-deb.sh` (needs `devscripts` and `equivs`; builds for the release it runs on) |
+| RPM (Fedora, openSUSE) | [`packaging/rpm/top-player.spec`](packaging/rpm/top-player.spec) | `VERSION=1.1.0 packaging/rpm/build-rpm.sh` (needs `rpm-build`) |
+| Arch Linux | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | `VERSION=1.1.0 packaging/arch/build-arch.sh` (needs `base-devel`) |
 
 Packages land in `dist/`.
 
@@ -758,7 +809,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.0.8**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
+| [**1.1.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
+| [1.0.8](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
 | [1.0.7](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.7) | 2026-10-10 | Fix video staying black on some Mesa drivers, software (compatibility) video output, a clear message for missing codecs (HEVC MKVs on Fedora's ffmpeg-free), more formats, download streamed playlist entries as video or MP3, YouTube playlists, lyrics background blur and video blur, drag the mini player to move it, the playlist follows the playing song |
 | [1.0.6](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.6) | 2026-10-06 | Resize the window and the mini player from every edge and corner (resize cursors, a grip on the mini player, works over the controls and lyrics and without window manager support), songs show their cover with the visualizer off, default artwork for songs without one, mini player above every app (X11 mode on Wayland), Next / Previous play from pause, `Ctrl+B` for the playlist |
 | [1.0.5](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.5) | 2026-10-06 | Spotify downloads (songs, albums, playlists as tagged MP3s), click a lyrics line to play from it and scroll through lyrics, lyrics appearance settings, mini player on top of every workspace, volume / shuffle / repeat kept between runs, songs always start from the beginning, fullscreen controls float over the video |
@@ -784,9 +836,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.0.8 && git push origin v1.0.8`
+2. `git tag v1.1.0 && git push origin v1.1.0`
 
-A tag with a suffix such as `v1.0.8-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.1.0-rc1` is published as a pre-release.
 
 </details>
 
