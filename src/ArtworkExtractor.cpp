@@ -14,18 +14,54 @@ namespace {
 
 // Covers are scaled down to fit this size; the view never shows them larger.
 constexpr int kMaxSide = 1024;
-constexpr int kCacheEntries = 16;
+// Covers kept, by size: four of the largest, more of the usual 500-600px ones.
+constexpr int kCacheKiB = 16 * 1024;
 constexpr int kWatchdogMs = 5000;
+// The extractor (a second player) is shut down this long after the last cover.
+constexpr int kIdleReleaseMs = 15000;
 
 } // namespace
 
 ArtworkExtractor::ArtworkExtractor(QObject *parent)
     : QObject(parent)
-    , m_cache(kCacheEntries)
+    , m_cache(kCacheKiB)
 {
-    m_mpv = mpv_create();
+    m_watchdog.setSingleShot(true);
+    m_watchdog.setInterval(kWatchdogMs);
+    connect(&m_watchdog, &QTimer::timeout, this, [this] {
+        // Stuck on the file (a mount that stopped answering?): the next
+        // request starts a fresh extractor.
+        destroyMpvDetached(std::exchange(m_mpv, nullptr), std::exchange(m_renderCtx, nullptr));
+        finish({});
+    });
+    m_idleTimer.setSingleShot(true);
+    m_idleTimer.setInterval(kIdleReleaseMs);
+    connect(&m_idleTimer, &QTimer::timeout, this, [this] {
+        if (m_current.isEmpty())
+            destroyMpvDetached(std::exchange(m_mpv, nullptr), std::exchange(m_renderCtx, nullptr));
+    });
+}
+
+ArtworkExtractor::~ArtworkExtractor()
+{
     if (!m_mpv)
         return;
+    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
+    mpv_render_context_free(m_renderCtx);
+    mpv_terminate_destroy(m_mpv);
+}
+
+bool ArtworkExtractor::ensureMpv()
+{
+    if (m_mpv)
+        return true;
+    if (m_broken)
+        return false;
+    m_mpv = mpv_create();
+    if (!m_mpv) {
+        m_broken = true;
+        return false;
+    }
 
     // Only the embedded cover is decoded: no audio, and no cover files from
     // the folder (those are looked up separately).
@@ -39,7 +75,10 @@ ArtworkExtractor::ArtworkExtractor(QObject *parent)
         {"pause", "yes"},
         {"idle", "yes"},
         {"hwdec", "no"},
+        {"vd-lavc-threads", "1"},
         {"cache", "no"},
+        {"demuxer-max-bytes", "8MiB"},
+        {"demuxer-max-back-bytes", "0"},
         {"sub-auto", "no"},
         {"audio-file-auto", "no"},
         {"load-scripts", "no"},
@@ -50,35 +89,20 @@ ArtworkExtractor::ArtworkExtractor(QObject *parent)
     for (const auto &option : options)
         mpv_set_option_string(m_mpv, option[0], option[1]);
 
-    if (mpv_initialize(m_mpv) < 0) {
-        mpv_terminate_destroy(m_mpv);
-        m_mpv = nullptr;
-        return;
-    }
     mpv_render_param params[]{
         {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_SW)},
         {MPV_RENDER_PARAM_INVALID, nullptr},
     };
-    if (mpv_render_context_create(&m_renderCtx, m_mpv, params) < 0) {
+    if (mpv_initialize(m_mpv) < 0 || mpv_render_context_create(&m_renderCtx, m_mpv, params) < 0) {
         mpv_terminate_destroy(m_mpv);
         m_mpv = nullptr;
-        return;
+        m_renderCtx = nullptr;
+        m_broken = true;
+        return false;
     }
     mpv_render_context_set_update_callback(m_renderCtx, &ArtworkExtractor::onRenderUpdateCallback, this);
     mpv_set_wakeup_callback(m_mpv, &ArtworkExtractor::onWakeup, this);
-
-    m_watchdog.setSingleShot(true);
-    m_watchdog.setInterval(kWatchdogMs);
-    connect(&m_watchdog, &QTimer::timeout, this, [this] { finish({}); });
-}
-
-ArtworkExtractor::~ArtworkExtractor()
-{
-    if (!m_mpv)
-        return;
-    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
-    mpv_render_context_free(m_renderCtx);
-    mpv_terminate_destroy(m_mpv);
+    return true;
 }
 
 void ArtworkExtractor::request(const QString &path)
@@ -89,10 +113,11 @@ void ArtworkExtractor::request(const QString &path)
         QMetaObject::invokeMethod(this, [this, path, image] { Q_EMIT artworkReady(path, image); }, Qt::QueuedConnection);
         return;
     }
-    if (!m_mpv) {
+    if (!ensureMpv()) {
         QMetaObject::invokeMethod(this, [this, path] { Q_EMIT artworkReady(path, {}); }, Qt::QueuedConnection);
         return;
     }
+    m_idleTimer.stop();
     m_current = path;
     m_hasCover = false;
     m_entry = -1;
@@ -106,8 +131,11 @@ void ArtworkExtractor::finish(const QImage &image)
     const QString path = std::exchange(m_current, QString());
     if (path.isEmpty())
         return;
-    mpvCommandAsync(m_mpv, {QStringLiteral("stop")});
-    m_cache.insert(path, new QImage(image));
+    if (m_mpv) {
+        mpvCommandAsync(m_mpv, {QStringLiteral("stop")});
+        m_idleTimer.start();
+    }
+    m_cache.insert(path, new QImage(image), std::max(1, static_cast<int>(image.sizeInBytes() / 1024)));
     Q_EMIT artworkReady(path, image);
 }
 
@@ -124,6 +152,8 @@ QImage ArtworkExtractor::render()
         size.scale(kMaxSide, kMaxSide, Qt::KeepAspectRatio);
 
     QImage image(size, QImage::Format_RGBX8888);
+    if (image.isNull())
+        return {};
     int renderSize[2] = {image.width(), image.height()};
     size_t stride = static_cast<size_t>(image.bytesPerLine());
     mpv_render_param params[]{

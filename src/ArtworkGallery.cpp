@@ -817,7 +817,7 @@ QImage render(const QString &id, int size, quint32 seed)
 {
     // Song changes ask for the same few pictures again and again.
     static QMutex mutex;
-    static QCache<QString, QImage> cache(6 * 1024 * 1024 * 4 / 1024); // in KiB: about six 1024px images
+    static QCache<QString, QImage> cache(3 * 1024 * 1024 * 4 / 1024); // in KiB: three 1024px images
     const QString key = QStringLiteral("%1/%2/%3").arg(id).arg(size).arg(seed);
     {
         QMutexLocker lock(&mutex);

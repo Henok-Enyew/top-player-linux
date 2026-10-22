@@ -108,8 +108,8 @@ void ThemeTest::defaultColorsMatchTheEngine()
     QCOMPARE(Theme::TextSecondary, c.textSecondary);
     QCOMPARE(Theme::TextDim, c.textDim);
     // The brand.
-    QCOMPARE(Theme::Accent, Theme::BrandViolet);
-    QCOMPARE(Theme::Accent2, Theme::BrandMagenta);
+    QCOMPARE(Theme::Accent, Theme::BrandGold);
+    QCOMPARE(Theme::Accent2, Theme::BrandAmber);
 }
 
 void ThemeTest::templateIsFilledIn_data()
@@ -210,7 +210,7 @@ void ThemeTest::switchingUpdatesTheApp()
     QVERIFY(luminance(Theme::Surface) > luminance(Theme::TextPrimary));
 
     Theme::setAppearance(Theme::Appearance());
-    QCOMPARE(Theme::Accent, Theme::BrandViolet);
+    QCOMPARE(Theme::Accent, Theme::BrandGold);
     QVERIFY(!Theme::isLight());
 }
 
@@ -232,7 +232,7 @@ void ThemeTest::iconsFollowTheAccent()
     QVERIFY(hasColor(on(), Theme::Accent));
     Theme::setAppearance({QStringLiteral("gruvbox"), QStringLiteral("mint"), QStringLiteral("glass")});
     QVERIFY(hasColor(on(), Theme::Accent));
-    QVERIFY(!hasColor(on(), Theme::BrandViolet));
+    QVERIFY(!hasColor(on(), Theme::BrandGold));
     Theme::setAppearance(Theme::Appearance());
 }
 
@@ -293,10 +293,10 @@ void ThemeTest::appearanceDialog()
 
     // Done keeps the choice.
     dialog.show();
-    QTest::mouseClick(dialog.findChild<QAbstractButton *>(QStringLiteral("Style-tiling")), Qt::LeftButton);
+    QTest::mouseClick(dialog.findChild<QAbstractButton *>(QStringLiteral("Style-glass")), Qt::LeftButton);
     QTest::mouseClick(dialog.findChild<QAbstractButton *>(QStringLiteral("Theme-matte-black")), Qt::LeftButton);
     QTest::mouseClick(dialog.findChild<QPushButton *>(QStringLiteral("AppearanceDone")), Qt::LeftButton);
-    const Theme::Appearance kept{QStringLiteral("matte-black"), QStringLiteral("violet"), QStringLiteral("tiling")};
+    const Theme::Appearance kept{QStringLiteral("matte-black"), QStringLiteral("gold"), QStringLiteral("glass")};
     QVERIFY(Theme::appearance() == kept);
     QVERIFY(Theme::savedAppearance() == kept);
 
@@ -361,6 +361,8 @@ void ThemeTest::screenshots()
     QWidget *dialog = window.appearanceDialog();
     QVERIFY(QTest::qWaitForWindowExposed(dialog));
     const QList<Theme::Appearance> looks{
+        {QStringLiteral("midnight"), QStringLiteral("gold"), QStringLiteral("tiling")},
+        {QStringLiteral("midnight"), QStringLiteral("gold"), QStringLiteral("glass")},
         {QStringLiteral("midnight"), QStringLiteral("violet"), QStringLiteral("glass")},
         {QStringLiteral("obsidian"), QStringLiteral("cyan"), QStringLiteral("glass")},
         {QStringLiteral("catppuccin-mocha"), QStringLiteral("native"), QStringLiteral("soft")},

@@ -1,5 +1,6 @@
 #include "Icons.h"
 #include "MainWindow.h"
+#include "MemoryUsage.h"
 #include "PlaylistSession.h"
 #include "Theme.h"
 
@@ -31,6 +32,7 @@ bool hasArgument(int argc, char *argv[], const char *name)
 
 int main(int argc, char *argv[])
 {
+    MemoryUsage::tuneAllocator();
     // X11 mode: in a Wayland session, run through XWayland so the mini player
     // can stay above other apps and on every workspace (Wayland allows
     // neither). An explicit $QT_QPA_PLATFORM, or --native-wayland, wins.

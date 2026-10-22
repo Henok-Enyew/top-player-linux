@@ -2,9 +2,9 @@
 # .github/workflows/release.yml through packaging/rpm/build-rpm.sh, which
 # replaces Version with the release tag. Local build from a checkout:
 #
-#   VERSION=1.2.1 packaging/rpm/build-rpm.sh
+#   VERSION=1.3.0 packaging/rpm/build-rpm.sh
 Name:           top-player
-Version:        1.2.1
+Version:        1.3.0
 Release:        1%{?dist}
 Summary:        High-performance, lightweight native media player
 
@@ -77,6 +77,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/org.github.toppl
 %{_datadir}/icons/hicolor/scalable/apps/org.github.topplayer.svg
 
 %changelog
+* Thu Oct 22 2026 Henok Enyew Andargie - 1.3.0-1
+- A calmer look: charcoal and gold by default, muted single-hue accents, new logo
+- About half the memory: helper players run only when needed, smaller caches
+- Files gone since the last run are skipped instead of leaving the player stuck
+- Media keys move to the window still open when another one closes
+
 * Sun Oct 18 2026 Henok Enyew Andargie - 1.2.1-1
 - YouTube's "confirm you're not a bot": retried with the browser's sign-in
 - Spotify search falls back to Deezer's catalog when Spotify refuses

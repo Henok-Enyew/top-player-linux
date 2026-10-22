@@ -206,11 +206,13 @@ MpvWidget::MpvWidget(QWidget *parent)
     // Like PotPlayer, pick up subtitles next to the video or in a subtitle folder.
     mpv_set_option_string(m_mpv, "sub-auto", "fuzzy");
     mpv_set_option_string(m_mpv, "sub-file-paths", "sub:subs:subtitles:Subs:Subtitles");
-    // Decode with as many threads as there are cores, and keep enough of the
-    // stream around that seeking back and forth is served from memory.
+    // Decode with as many threads as there are cores. The demuxer cache (used
+    // for streams; local files are read as they play) holds well over a
+    // minute of 1080p ahead and some behind, so seeking back and forth is
+    // served from memory without keeping mpv's 200 MB of packets around.
     mpv_set_option_string(m_mpv, "vd-lavc-threads", "0");
-    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "150MiB");
-    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "75MiB");
+    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "64MiB");
+    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "32MiB");
     mpv_set_option_string(m_mpv, "terminal", "yes");
     mpv_set_option_string(m_mpv, "msg-level", "all=warn");
 
@@ -379,6 +381,8 @@ void MpvWidget::restorePlaylist(const QStringList &files, int current, double re
     m_pendingSubtitles.clear();
     // "append" queues without starting playback, unlike "append-play".
     QList<QStringList> commands{{QStringLiteral("stop")}};
+    if (std::exchange(m_resetStart, false))
+        commands.append({QStringLiteral("set"), QStringLiteral("start"), QStringLiteral("none")});
     commands.append(queueCommands(files, QStringLiteral("append")));
     current = std::clamp(current, -1, static_cast<int>(files.size()) - 1);
     m_lastPlaylistPos = current;
@@ -386,8 +390,10 @@ void MpvWidget::restorePlaylist(const QStringList &files, int current, double re
     if (!std::exchange(m_continueReplace, false))
         ++m_replaceTicket;
     if (resumeAt >= 0 && current >= 0) {
-        // The "start" option is global; it is reset once this file has loaded.
+        // The "start" option is global; it is reset once this file has loaded,
+        // or has failed to (a file deleted since, see processMpvEvents()).
         m_resetStart = true;
+        m_resumeEntryId = -1;
         commands.append({QStringLiteral("set"), QStringLiteral("start"), QString::number(resumeAt, 'f', 3)});
         commands.append({QStringLiteral("set"), QStringLiteral("pause"), QStringLiteral("yes")});
         commands.append({QStringLiteral("playlist-play-index"), QString::number(current)});
@@ -476,6 +482,11 @@ QList<QStringList> MpvWidget::replacing(QList<QStringList> commands)
     if (!std::exchange(m_continueReplace, false))
         ++m_replaceTicket;
     commands.prepend({QStringLiteral("set"), QStringLiteral("pause"), QStringLiteral("no")});
+    // A resume position whose file never opened must not apply to this one.
+    if (std::exchange(m_resetStart, false)) {
+        m_resumeEntryId = -1;
+        commands.prepend({QStringLiteral("set"), QStringLiteral("start"), QStringLiteral("none")});
+    }
     return commands;
 }
 
@@ -1044,6 +1055,9 @@ void MpvWidget::processMpvEvents()
             sendQueuedCommands();
             break;
         case MPV_EVENT_START_FILE:
+            // The first entry to start after a restore is the resumed one.
+            if (m_resetStart && m_resumeEntryId < 0)
+                m_resumeEntryId = static_cast<const mpv_event_start_file *>(event->data)->playlist_entry_id;
             m_switchPending = false;
             flushTimePos();
             m_fileLoaded = false;
@@ -1054,6 +1068,16 @@ void MpvWidget::processMpvEvents()
             break;
         case MPV_EVENT_END_FILE: {
             const auto *end = static_cast<const mpv_event_end_file *>(event->data);
+            // The file's decoders and buffers are gone: give their memory back.
+            MemoryUsage::releaseFreed();
+            // The resumed entry ended before it loaded (deleted or unreadable
+            // since the last run): its position would apply to the next file
+            // opened, which may be shorter and would then end at once.
+            if (m_resetStart && end->playlist_entry_id == m_resumeEntryId) {
+                m_resetStart = false;
+                m_resumeEntryId = -1;
+                setMpvProperty(QStringLiteral("start"), QStringLiteral("none"));
+            }
             if (end->reason != MPV_END_FILE_REASON_ERROR)
                 break;
             // The entry is still in the playlist; "path" was never set for it.
@@ -1094,8 +1118,10 @@ void MpvWidget::processMpvEvents()
                     hasVideo = true;
             }
             m_audioOnly = hasAudio && !hasVideo;
-            if (std::exchange(m_resetStart, false))
+            if (std::exchange(m_resetStart, false)) {
+                m_resumeEntryId = -1;
                 setMpvProperty(QStringLiteral("start"), QStringLiteral("none"));
+            }
             for (const QString &subtitle : std::exchange(m_pendingSubtitles, {}))
                 addSubtitle(subtitle);
             Q_EMIT fileLoaded();

@@ -359,43 +359,34 @@ QPixmap appLogo(int size, qreal devicePixelRatio)
     // Drawn on the 256x256 grid of packaging/linux/org.github.topplayer.svg,
     // in the brand colors whatever the theme.
     p.scale(size / 256.0, size / 256.0);
-    const QColor violet = Theme::BrandViolet;
-    const QColor magenta = Theme::BrandMagenta;
+    const QColor gold = Theme::BrandGold;
+    const QColor amber = Theme::BrandAmber;
     const QRectF tileRect(16.5, 16.5, 223, 223);
     QPainterPath tile;
     tile.addRoundedRect(tileRect, 56, 56);
 
-    // Night-violet squircle tile.
+    // Charcoal squircle tile, lit faintly from the top.
     QLinearGradient background(16, 16, 240, 240);
-    background.setColorAt(0, QColor(0x1C, 0x16, 0x33));
-    background.setColorAt(1, QColor(0x0B, 0x09, 0x14));
+    background.setColorAt(0, QColor(0x24, 0x25, 0x30));
+    background.setColorAt(1, QColor(0x12, 0x13, 0x19));
     p.fillPath(tile, background);
-
-    // Neon glow behind the play glyph, and a glassy sheen across the top.
     p.save();
     p.setClipPath(tile);
-    QRadialGradient glow(QPointF(112, 128), 104);
-    glow.setColorAt(0, Theme::withAlpha(violet, 0.45));
-    glow.setColorAt(1, Theme::withAlpha(violet, 0));
-    p.fillRect(tileRect, glow);
     QLinearGradient sheen(0, 16, 0, 128);
-    sheen.setColorAt(0, QColor(255, 255, 255, 26));
+    sheen.setColorAt(0, QColor(255, 255, 255, 18));
     sheen.setColorAt(1, QColor(255, 255, 255, 0));
     p.fillRect(tileRect, sheen);
     p.restore();
 
-    // Gradient rim.
-    QLinearGradient rim(16, 16, 240, 240);
-    rim.setColorAt(0, Theme::withAlpha(violet, 0.7));
-    rim.setColorAt(1, Theme::withAlpha(magenta, 0.5));
-    p.setPen(QPen(QBrush(rim), 2));
+    // Hairline rim.
+    p.setPen(QPen(QColor(255, 255, 255, 28), 2));
     p.setBrush(Qt::NoBrush);
     p.drawPath(tile);
 
-    // Play triangle with rounded corners, violet into magenta.
+    // Play triangle with rounded corners, gold deepening into amber.
     QLinearGradient brand(72, 64, 184, 192);
-    brand.setColorAt(0, QColor(0x8F, 0x72, 0xFF));
-    brand.setColorAt(1, magenta);
+    brand.setColorAt(0, QColor(0xF8, 0xC8, 0x5E));
+    brand.setColorAt(1, amber);
     p.setPen(QPen(QBrush(brand), 16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.setBrush(brand);
     p.drawPath(polygon({{72, 64}, {184, 128}, {72, 192}}));
@@ -410,9 +401,9 @@ QPixmap appLogo(int size, qreal devicePixelRatio)
 
     // Sound waves from the tip.
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(magenta, 9, Qt::SolidLine, Qt::RoundCap));
+    p.setPen(QPen(gold, 9, Qt::SolidLine, Qt::RoundCap));
     p.drawArc(QRectF(180 - 26, 128 - 26, 52, 52), -38 * 16, 76 * 16);
-    p.setPen(QPen(Theme::withAlpha(magenta, 0.55), 9, Qt::SolidLine, Qt::RoundCap));
+    p.setPen(QPen(Theme::withAlpha(gold, 0.45), 9, Qt::SolidLine, Qt::RoundCap));
     p.drawArc(QRectF(180 - 42, 128 - 42, 84, 84), -38 * 16, 76 * 16);
     return pixmap;
 }

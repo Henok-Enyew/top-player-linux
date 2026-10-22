@@ -1,17 +1,20 @@
 #include "AboutDialog.h"
 #include "Icons.h"
+#include "MemoryUsage.h"
 #include "MpvWidget.h"
 #include "Theme.h"
 
-#include <QAbstractButton>
 #include <QDialogButtonBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <mpv/client.h>
+
+#include <algorithm>
 
 namespace {
 
@@ -33,6 +36,23 @@ QLabel *label(const QString &text, const char *objectName, QWidget *parent)
     result->setAlignment(Qt::AlignHCenter);
     result->setWordWrap(true);
     return result;
+}
+
+constexpr int kMemoryRefreshMs = 2000;
+
+QString megabytes(qint64 bytes)
+{
+    return QString::number(std::max<qint64>(1, (bytes + 512 * 1024) / (1024 * 1024)));
+}
+
+// "182 MB (330 MB with shared libraries)".
+QString memoryText()
+{
+    const qint64 own = MemoryUsage::anonymousBytes();
+    const qint64 resident = MemoryUsage::residentBytes();
+    if (own < 0)
+        return resident < 0 ? AboutDialog::tr("Unknown") : AboutDialog::tr("%1 MB").arg(megabytes(resident));
+    return AboutDialog::tr("%1 MB (%2 MB with shared libraries)").arg(megabytes(own), megabytes(resident));
 }
 
 } // namespace
@@ -152,6 +172,13 @@ AboutDialog::AboutDialog(MpvWidget *mpv, QWidget *parent)
     addRow(tr("Video acceleration"), acceleration, "AboutHwdec");
     if (mpv && !mpv->glRenderer().isEmpty())
         addRow(tr("Renderer"), mpv->glRenderer(), "AboutRenderer");
+    // The player's own memory, kept up to date while the dialog is open.
+    addRow(tr("Memory"), memoryText(), "AboutMemory");
+    auto *memory = system->findChild<QLabel *>(QStringLiteral("AboutMemory"));
+    auto *memoryTimer = new QTimer(this);
+    memoryTimer->setInterval(kMemoryRefreshMs);
+    connect(memoryTimer, &QTimer::timeout, memory, [memory] { memory->setText(memoryText()); });
+    memoryTimer->start();
     layout->addWidget(system);
     layout->addSpacing(8);
 
@@ -160,9 +187,6 @@ AboutDialog::AboutDialog(MpvWidget *mpv, QWidget *parent)
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     buttons->setCenterButtons(true);
-    // The style's stock icons don't fit the flat skin.
-    for (QAbstractButton *button : buttons->buttons())
-        button->setIcon(QIcon());
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addSpacing(6);
     layout->addWidget(buttons);

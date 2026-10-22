@@ -273,6 +273,8 @@ private:
     bool m_audioOnly = false;
     // The "start" option was set for a resumed entry and must not apply to later files.
     bool m_resetStart = false;
+    // mpv's id of that entry once it starts, -1 before.
+    qint64 m_resumeEntryId = -1;
     // Mirrors idle-active for painting, which must not block on mpv.
     bool m_idle = true;
     // Playlist entry that played last; mpv forgets it on stop.

@@ -746,8 +746,8 @@ void TransportTest::aboutDialog()
     auto *title = about->findChild<QLabel *>(QStringLiteral("AboutTitle"));
     QVERIFY(title);
     QCOMPARE(title->accessibleName(), QStringLiteral("Top Player — Version " APP_VERSION));
-    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.2.1"));
-    QVERIFY(title->text().contains(QLatin1String("Version 1.2.1")));
+    QCOMPARE(QStringLiteral(APP_VERSION), QStringLiteral("1.3.0"));
+    QVERIFY(title->text().contains(QLatin1String("Version 1.3.0")));
     auto *links = about->findChild<QLabel *>(QStringLiteral("AboutLinks"));
     QVERIFY(links);
     QVERIFY(links->openExternalLinks());
@@ -783,6 +783,8 @@ void TransportTest::thumbnailsOnlyOnHover()
     QTRY_VERIFY(thumbnails->isAvailable());
     QTest::qWait(300);
     QVERIFY(!thumbnails->isOpen());
+    // Nor is its decoder (a whole second player) running before it is needed.
+    QVERIFY(!thumbnails->isRunning());
 
     QSignalSpy ready(thumbnails, &ThumbnailGenerator::thumbnailReady);
     QTest::mouseMove(seekBar, QPoint(seekBar->width() / 2, seekBar->height() / 2));
@@ -790,10 +792,13 @@ void TransportTest::thumbnailsOnlyOnHover()
     QTRY_VERIFY_WITH_TIMEOUT(!ready.isEmpty(), 10000);
     QVERIFY(!ready.first().at(1).value<QImage>().isNull());
 
-    // Stopping closes the preview decoder too.
+    QVERIFY(thumbnails->isRunning());
+
+    // Stopping closes the preview decoder too, and shuts it down.
     m_mpv->stop();
     QTRY_VERIFY(!thumbnails->isAvailable());
     QVERIFY(!thumbnails->isOpen());
+    QVERIFY(!thumbnails->isRunning());
 }
 
 void TransportTest::controlsRememberState()

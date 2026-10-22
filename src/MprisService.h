@@ -24,6 +24,9 @@ public:
     // Whether the service got its name on the session bus.
     bool isRegistered() const { return m_registered; }
     static QString serviceName();
+    // The name this player has on the bus: serviceName(), or while another
+    // window holds that, serviceName() + ".instance<pid>". Empty if none.
+    QString registeredName() const;
 
     MpvWidget *mpv() const { return m_mpv; }
     QWidget *window() const { return m_window; }
@@ -46,11 +49,19 @@ Q_SIGNALS:
     // OpenUri: a file or URL to play.
     void openRequested(const QString &pathOrUrl);
 
+private Q_SLOTS:
+    // org.freedesktop.DBus.NameOwnerChanged: another window of the player
+    // left the bus.
+    void onNameOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
+
 private:
     void onPropertyUpdated(const QString &name);
+    // Registers serviceName(), or if another window holds it, an instance name.
+    bool takeName();
 
     MpvWidget *m_mpv;
     QWidget *m_window;
+    QString m_name;
     bool m_registered = false;
 };
 

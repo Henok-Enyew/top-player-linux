@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPointer>
+#include <QProxyStyle>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QStyleFactory>
@@ -23,11 +24,11 @@ struct LiveColors {
     QColor surface, panel, raised, border, text, textSecondary, textDim;
 };
 
-// Midnight with Brand Violet in Neon Glass, the default appearance, as
+// Midnight with Gold in Tiling Minimal, the default appearance, as
 // Theme::colors() works it out (tst_theme checks they agree). Literals, so
 // the colors are right before anything runs.
 LiveColors g_live{
-    {0x7C, 0x5C, 0xFF}, {0x96, 0x7D, 0xFF}, {0x57, 0x40, 0xB3}, {0xFF, 0x4F, 0xD8}, {0x2E, 0x28, 0x51}, {0xFF, 0xFF, 0xFF},
+    {0xF5, 0xB8, 0x3D}, {0xF7, 0xC6, 0x64}, {0xAC, 0x81, 0x2B}, {0xE0, 0x8A, 0x1E}, {0x46, 0x3A, 0x2B}, {0x0B, 0x0C, 0x10},
     {0x15, 0x16, 0x1E}, {0x1A, 0x1B, 0x26}, {0x23, 0x25, 0x36}, {0x2C, 0x2F, 0x45},
     {0xDD, 0xE3, 0xFB}, {0xA9, 0xB1, 0xD6}, {0x64, 0x6B, 0x92},
 };
@@ -194,10 +195,10 @@ QHash<QString, QString> tokens(const Theme::Appearance &appearance)
     color("overlayLine", withAlpha(c.text, 0.09));
     color("miniBg", withAlpha(c.surface, 0.78));
     color("miniLine", withAlpha(c.text, 0.12));
-    color("accentGlow", withAlpha(c.accent, 0.35));
+    color("accentGlow", withAlpha(c.accent, 0.28));
     color("progressHover", withAlpha(c.accentHover, 0.24));
     color("progressEnd", end);
-    color("seekGlow", style.glow ? withAlpha(c.accent, c.light ? 0.22 : 0.4) : QColor(0, 0, 0, 0));
+    color("seekGlow", style.glow ? withAlpha(c.accent, c.light ? 0.18 : 0.3) : QColor(0, 0, 0, 0));
     color("groove", c.light ? mix(c.border, c.raised, 0.2) : mix(c.border, c.raised, 0.3));
     color("handle", c.light ? c.accent : rgb(0xFFFFFF));
     color("scrollHandle", style.softBorders ? mix(c.raised, c.border, 0.6) : c.border);
@@ -365,55 +366,57 @@ QColor Theme::mix(const QColor &a, const QColor &b, qreal amount)
 
 const QList<Theme::Scheme> &Theme::schemes()
 {
-    // surface, panel, raised, border; text, secondary, dim; accent, accent 2.
+    // surface, panel, raised, border; text, secondary, dim; accent, accent 2
+    // (a deeper or neighboring shade from the theme's own palette).
     static const QList<Scheme> list{
         {QStringLiteral("midnight"), QStringLiteral("Midnight"), false,
          rgb(0x15161E), rgb(0x1A1B26), rgb(0x232536), rgb(0x2C2F45),
-         rgb(0xDDE3FB), rgb(0xA9B1D6), rgb(0x646B92), rgb(0x7AA2F7), rgb(0xBB9AF7)},
+         rgb(0xDDE3FB), rgb(0xA9B1D6), rgb(0x646B92), rgb(0x7AA2F7), rgb(0x5B82D9)},
         {QStringLiteral("obsidian"), QStringLiteral("Obsidian"), false,
          rgb(0x121316), rgb(0x1A1C22), rgb(0x22252C), rgb(0x2A2D35),
-         rgb(0xFFFFFF), rgb(0xA0A5B5), rgb(0x6B7080), rgb(0x00D2FF), rgb(0x3A7BFF)},
+         rgb(0xF2F3F5), rgb(0xA0A5B5), rgb(0x6B7080), rgb(0x58B4E8), rgb(0x3B8FCC)},
         {QStringLiteral("matte-black"), QStringLiteral("Matte Black"), false,
          rgb(0x0B0B0B), rgb(0x121212), rgb(0x1B1B1B), rgb(0x262626),
-         rgb(0xEAEAEA), rgb(0xA3A3A3), rgb(0x606060), rgb(0xF0A030), rgb(0xE0582F)},
+         rgb(0xEAEAEA), rgb(0xA3A3A3), rgb(0x606060), rgb(0xE8A33D), rgb(0xC77F2A)},
         {QStringLiteral("catppuccin-mocha"), QStringLiteral("Catppuccin Mocha"), false,
          rgb(0x181825), rgb(0x1E1E2E), rgb(0x292A3E), rgb(0x313244),
-         rgb(0xCDD6F4), rgb(0xA6ADC8), rgb(0x6C7086), rgb(0xCBA6F7), rgb(0xF5C2E7)},
+         rgb(0xCDD6F4), rgb(0xA6ADC8), rgb(0x6C7086), rgb(0xCBA6F7), rgb(0xB4BEFE)},
         {QStringLiteral("nord"), QStringLiteral("Nord"), false,
          rgb(0x242933), rgb(0x2E3440), rgb(0x3B4252), rgb(0x434C5E),
-         rgb(0xECEFF4), rgb(0xB8C0D0), rgb(0x6F7A8F), rgb(0x88C0D0), rgb(0xB48EAD)},
+         rgb(0xECEFF4), rgb(0xB8C0D0), rgb(0x6F7A8F), rgb(0x88C0D0), rgb(0x81A1C1)},
         {QStringLiteral("gruvbox"), QStringLiteral("Gruvbox"), false,
          rgb(0x1D2021), rgb(0x282828), rgb(0x32302F), rgb(0x3C3836),
-         rgb(0xEBDBB2), rgb(0xBDAE93), rgb(0x7C6F64), rgb(0xFABD2F), rgb(0xFE8019)},
+         rgb(0xEBDBB2), rgb(0xBDAE93), rgb(0x7C6F64), rgb(0xFABD2F), rgb(0xD79921)},
         {QStringLiteral("rose-pine"), QStringLiteral("Rosé Pine"), false,
          rgb(0x191724), rgb(0x1F1D2E), rgb(0x26233A), rgb(0x312E48),
-         rgb(0xE0DEF4), rgb(0x908CAA), rgb(0x6E6A86), rgb(0xEBBCBA), rgb(0xC4A7E7)},
+         rgb(0xE0DEF4), rgb(0x908CAA), rgb(0x6E6A86), rgb(0xEBBCBA), rgb(0xEA9A97)},
         {QStringLiteral("everforest"), QStringLiteral("Everforest"), false,
          rgb(0x232A2E), rgb(0x2D353B), rgb(0x343F44), rgb(0x3D484D),
          rgb(0xD3C6AA), rgb(0x9DA9A0), rgb(0x7A8478), rgb(0xA7C080), rgb(0x83C092)},
         {QStringLiteral("kanagawa"), QStringLiteral("Kanagawa"), false,
          rgb(0x16161D), rgb(0x1F1F28), rgb(0x2A2A37), rgb(0x363646),
-         rgb(0xDCD7BA), rgb(0xA6A69C), rgb(0x727169), rgb(0x7E9CD8), rgb(0x957FB8)},
+         rgb(0xDCD7BA), rgb(0xA6A69C), rgb(0x727169), rgb(0x7E9CD8), rgb(0x7FB4CA)},
         {QStringLiteral("catppuccin-latte"), QStringLiteral("Catppuccin Latte"), true,
          rgb(0xE6E9EF), rgb(0xEFF1F5), rgb(0xFBFCFD), rgb(0xCCD0DA),
-         rgb(0x4C4F69), rgb(0x6C6F85), rgb(0x8C8FA1), rgb(0x8839EF), rgb(0xEA76CB)},
+         rgb(0x4C4F69), rgb(0x6C6F85), rgb(0x8C8FA1), rgb(0x8839EF), rgb(0x7287FD)},
     };
     return list;
 }
 
 const QList<Theme::AccentPalette> &Theme::accents()
 {
+    // Muted, even tones; each blends into a deeper shade of itself.
     static const QList<AccentPalette> list{
-        {QStringLiteral("violet"), QStringLiteral("Brand Violet"), BrandViolet, BrandMagenta},
+        {QStringLiteral("gold"), QStringLiteral("Gold"), BrandGold, BrandAmber},
         {QStringLiteral("native"), QStringLiteral("Theme Native"), {}, {}},
-        {QStringLiteral("cyan"), QStringLiteral("Electric Cyan"), rgb(0x00D2FF), rgb(0x3A7BFF)},
-        {QStringLiteral("mint"), QStringLiteral("Neon Mint"), rgb(0x2EF2B0), rgb(0x00B8FF)},
-        {QStringLiteral("sunset"), QStringLiteral("Sunset Orange"), rgb(0xFF7A3D), rgb(0xFF3D77)},
-        {QStringLiteral("pink"), QStringLiteral("Hot Pink"), rgb(0xFF4FA3), rgb(0xFF9A4F)},
-        {QStringLiteral("lime"), QStringLiteral("Acid Lime"), rgb(0xB6FF3B), rgb(0x2EF2B0)},
-        {QStringLiteral("gold"), QStringLiteral("Gold"), rgb(0xFFC83D), rgb(0xFF7A3D)},
-        {QStringLiteral("crimson"), QStringLiteral("Crimson"), rgb(0xFF2E63), rgb(0xFF8A5C)},
-        {QStringLiteral("ocean"), QStringLiteral("Ocean Blue"), rgb(0x3D8BFF), rgb(0x2EE6FF)},
+        {QStringLiteral("violet"), QStringLiteral("Iris"), rgb(0x8B7CF6), rgb(0x6E5CE0)},
+        {QStringLiteral("ocean"), QStringLiteral("Azure"), rgb(0x4F9CF0), rgb(0x3479D6)},
+        {QStringLiteral("cyan"), QStringLiteral("Teal"), rgb(0x2BB5C9), rgb(0x1E8FA6)},
+        {QStringLiteral("mint"), QStringLiteral("Jade"), rgb(0x3FC79A), rgb(0x2A9D7A)},
+        {QStringLiteral("lime"), QStringLiteral("Olive"), rgb(0xAFC55B), rgb(0x8DA542)},
+        {QStringLiteral("sunset"), QStringLiteral("Coral"), rgb(0xF2845C), rgb(0xD9653F)},
+        {QStringLiteral("pink"), QStringLiteral("Rose"), rgb(0xEC7A9C), rgb(0xCF5C80)},
+        {QStringLiteral("crimson"), QStringLiteral("Ruby"), rgb(0xE5535B), rgb(0xC23A44)},
     };
     return list;
 }
@@ -422,10 +425,10 @@ const QList<Theme::Style> &Theme::styles()
 {
     // radius, small, large; gradients, glow, mono, soft borders.
     static const QList<Style> list{
-        {QStringLiteral("glass"), QStringLiteral("Neon Glass"),
-         QStringLiteral("Soft gradients, translucent overlays and an accent glow."), 7, 5, 12, true, true, false, false},
         {QStringLiteral("tiling"), QStringLiteral("Tiling Minimal"),
          QStringLiteral("Crisp accent borders, tight corners, flat fills, monospace headings."), 2, 0, 3, false, false, true, false},
+        {QStringLiteral("glass"), QStringLiteral("Glass"),
+         QStringLiteral("Tonal gradients, translucent overlays and a soft accent glow."), 7, 5, 12, true, true, false, false},
         {QStringLiteral("soft"), QStringLiteral("Soft"),
          QStringLiteral("Large radii, pill buttons and quiet, low-contrast edges."), 14, 9, 18, true, false, false, true},
     };
@@ -455,7 +458,7 @@ Theme::Colors Theme::colors(const Appearance &appearance)
     c.accentHover = scheme.light ? mix(c.accent, black, 0.14) : mix(c.accent, white, 0.2);
     c.accentDeep = mix(c.accent, black, 0.3);
     c.accentTint = mix(scheme.panel, c.accent, scheme.light ? 0.14 : 0.2);
-    // White on the accent while it reads well, as on the brand violet; else near-black.
+    // White on the accent while it reads well; else near-black, as on the brand gold.
     c.onAccent = contrast(white, c.accent) >= 3.0 ? white : rgb(0x0B0C10);
     return c;
 }
@@ -567,9 +570,29 @@ void Theme::bind(QObject *context, const std::function<void()> &refresh)
     QObject::connect(notifier(), &Notifier::changed, context, refresh);
 }
 
+namespace {
+
+// Fusion, without the desktop's stock icons on dialog buttons (a green tick on
+// OK, a red cross on Cancel): they don't fit the flat skin.
+class SkinStyle : public QProxyStyle
+{
+public:
+    using QProxyStyle::QProxyStyle;
+
+    int styleHint(StyleHint hint, const QStyleOption *option, const QWidget *widget,
+                  QStyleHintReturn *returnData) const override
+    {
+        if (hint == SH_DialogButtonBox_ButtonsHaveIcons)
+            return 0;
+        return QProxyStyle::styleHint(hint, option, widget, returnData);
+    }
+};
+
+} // namespace
+
 void applyDarkSkin(QApplication &app)
 {
-    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    QApplication::setStyle(new SkinStyle(QStyleFactory::create(QStringLiteral("Fusion"))));
     Q_UNUSED(app);
     // Applied even when the saved appearance is the default one.
     g_applied = false;

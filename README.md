@@ -8,19 +8,19 @@
 
 ### Your music, videos, lyrics and live TV, in one fast native Linux player.
 
-Built on **Qt 6** and **libmpv**: plays everything mpv plays, wears an electric-violet look with ten switchable themes,
-and stays light even on folders with thousands of files.
+Built on **Qt 6** and **libmpv**: plays everything mpv plays, wears a calm charcoal-and-gold look with ten switchable
+themes, and stays light even on folders with thousands of files.
 
-[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=7C5CFF&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=FF4FD8&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
+[![Latest release](https://img.shields.io/github/v/release/Henok-Enyew/top-player-linux?label=release&color=F5B83D&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Henok-Enyew/top-player-linux/total?color=E08A1E&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Henok-Enyew/top-player-linux/ci.yml?label=CI&style=for-the-badge)](https://github.com/Henok-Enyew/top-player-linux/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1A1B26?style=for-the-badge)](LICENSE)
 
-![Linux](https://img.shields.io/badge/Linux-15161E?style=flat-square&logo=linux&logoColor=7C5CFF)
-![Qt 6](https://img.shields.io/badge/Qt%206-15161E?style=flat-square&logo=qt&logoColor=7C5CFF)
-![libmpv](https://img.shields.io/badge/libmpv-15161E?style=flat-square&logo=mpv&logoColor=7C5CFF)
-![C++17](https://img.shields.io/badge/C%2B%2B17-15161E?style=flat-square&logo=cplusplus&logoColor=7C5CFF)
-![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-15161E?style=flat-square&logo=wayland&logoColor=7C5CFF)
+![Linux](https://img.shields.io/badge/Linux-15161E?style=flat-square&logo=linux&logoColor=F5B83D)
+![Qt 6](https://img.shields.io/badge/Qt%206-15161E?style=flat-square&logo=qt&logoColor=F5B83D)
+![libmpv](https://img.shields.io/badge/libmpv-15161E?style=flat-square&logo=mpv&logoColor=F5B83D)
+![C++17](https://img.shields.io/badge/C%2B%2B17-15161E?style=flat-square&logo=cplusplus&logoColor=F5B83D)
+![Wayland & X11](https://img.shields.io/badge/Wayland%20%26%20X11-15161E?style=flat-square&logo=wayland&logoColor=F5B83D)
 
 <h3>
   <a href="https://github.com/Henok-Enyew/top-player-linux/releases/latest">⬇ Download</a>
@@ -35,7 +35,11 @@ and stays light even on folders with thousands of files.
 </div>
 
 > [!TIP]
-> **New in 1.2.1** · ▶️ YouTube works again when it asks to confirm you're not a bot (your browser's sign-in) ·
+> **New in 1.3.0** · 🎨 a **calmer, professional look**: charcoal and gold by default, muted single-hue accents and
+> a new logo · 🪶 **uses about half the memory** (see the [memory audit](docs/memory-audit.md)) · 🛟 files that are
+> **gone since last time** (Telegram's cache, a removed drive) are skipped instead of leaving the player stuck ·
+> ⌨️ **media keys move to the window still open** when you close another one ·
+> **From 1.2.1** · ▶️ YouTube works again when it asks to confirm you're not a bot (your browser's sign-in) ·
 > 🎵 Spotify search without API keys ·
 > **From 1.2.0** · 🔎 **search YouTube and Spotify by name** and play, queue or download the results ·
 > 📤 **Share** to Telegram (or paste anywhere) and **Show in File Manager** ·
@@ -120,8 +124,9 @@ playlists. Volume, shuffle and repeat are remembered.
 <td valign="top">
 
 ### ⚡ Fast and light
-Native C++, background folder scanning, no freezes on huge folders, and videos pick up where
-you left off.
+Native C++, background folder scanning, no freezes on huge folders, helper decoders that only
+run when needed (see the [memory audit](docs/memory-audit.md)), and videos pick up where you
+left off.
 
 </td>
 </tr>
@@ -191,6 +196,8 @@ Every feature in detail. Click a section to open it.
 - **Media keys** (play/pause, stop, previous, next) work wherever the focus
   is: the player speaks **MPRIS**, so the desktop hands it the keyboard's
   media keys and its sound applet, lock screen and `playerctl` control it too.
+  With two windows open, closing the one that had the keys hands them to the
+  other.
 - **Swipe to seek**, as in VLC: hold the video and drag sideways (the full
   width spans 3 minutes, or the whole file if shorter); the OSD shows the jump
   and the target time, `Esc` cancels. Sideways touchpad or tilt-wheel
@@ -214,21 +221,23 @@ Every feature in detail. Click a section to open it.
 <details>
 <summary><b>🎨 Interface</b></summary>
 
-The brand is **electric violet into hot magenta** (`#7C5CFF` → `#FF4FD8`), on the
-deep blue-black **Midnight** theme by default. The whole look can be changed live
-in **Appearance** (`Ctrl+Shift+T`, or right-click → Appearance), and is kept between runs:
+The brand is **gold deepening into amber** (`#F5B83D` → `#E08A1E`) on charcoal: by
+default the deep blue-black **Midnight** theme with the **Gold** accent in the
+**Tiling Minimal** style. Every gradient stays within one hue, so no combination
+looks loud. The whole look can be changed live in **Appearance**
+(`Ctrl+Shift+T`, or right-click → Appearance), and is kept between runs:
 
 - **Themes**, after Omarchy's: Midnight, Obsidian (the original
   look), Matte Black, Catppuccin Mocha, Nord, Gruvbox, Rosé Pine,
   Everforest, Kanagawa and the light Catppuccin Latte.
-- **Accent colors**, independent of the theme: Brand Violet, the theme's own
-  accent, Electric Cyan, Neon Mint, Sunset Orange, Hot Pink, Acid Lime, Gold,
-  Crimson and Ocean Blue. Shades, gradients and the text drawn on the accent
-  are worked out from it, and it is lightened or darkened to stay readable.
-- **Styles**: **Neon Glass** (soft accent gradients, a glow on the seekbar,
-  rounded corners), **Tiling Minimal** (crisp 1 px accent borders, tight
-  corners, flat fills and monospace headings, as on a Hyprland desktop) and
-  **Soft** (large radii, pill buttons, quiet edges).
+- **Accent colors**, independent of the theme, in muted, even tones: Gold,
+  the theme's own accent, Iris, Azure, Teal, Jade, Olive, Coral, Rose and
+  Ruby. Each blends only into a deeper shade of itself; the text drawn on the
+  accent is worked out from it, and it is lightened or darkened to stay readable.
+- **Styles**: **Tiling Minimal** (crisp 1 px accent borders, tight corners,
+  flat fills and monospace headings, as on a Hyprland desktop), **Glass**
+  (tonal gradients, a soft glow on the seekbar, rounded corners) and **Soft**
+  (large radii, pill buttons, quiet edges).
 - Changes **cross-fade** across the open windows in a quarter of a second. The
   dialog draws each theme as a small preview of the player; the right-click
   menu has quick Theme, Accent Color and Style lists.
@@ -280,7 +289,7 @@ current colors.
   > was. Switch it on or off any time under **Window → Keep Mini Player Above
   > Other Apps (X11 Mode)**, or start once natively with `top-player --native-wayland`.
 - **About Top Player** (`F1`): version, credits, links, license, and the Qt,
-  libmpv and video acceleration details.
+  libmpv and video acceleration details, and the memory the player uses.
 
 </details>
 
@@ -431,7 +440,10 @@ and Repeat All goes round it (reshuffled each round with shuffle on).
   opened ("12 items from Road Trip.m3u8 · 1 missing skipped").
 - **Remember Playlist on Exit** and **Resume Playback Position** (both on by
   default): the queue comes back on the next start, reopening the last entry
-  paused where you left it.
+  paused where you left it. Files that are gone by then (a video opened from
+  Telegram, whose cache is cleared; an unplugged drive) are left out with a
+  short note, and files on a mount that stopped answering never hold up the
+  start.
 - **Resizable and expandable**: drag the drawer's edge (the width is
   remembered), or click the expand button (or double-click the edge) to spread
   it over the video.
@@ -648,8 +660,8 @@ Settings from versions before 1.0 are copied over from
 **Quick start** (any distro, no install):
 
 ```sh
-curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.2.1/Top_Player-1.2.1-x86_64.AppImage
-chmod +x Top_Player-1.2.1-x86_64.AppImage && ./Top_Player-1.2.1-x86_64.AppImage
+curl -LO https://github.com/Henok-Enyew/top-player-linux/releases/download/v1.3.0/Top_Player-1.3.0-x86_64.AppImage
+chmod +x Top_Player-1.3.0-x86_64.AppImage && ./Top_Player-1.3.0-x86_64.AppImage
 ```
 
 Or download the package for your system from the
@@ -879,7 +891,8 @@ of their own.
 
 | Version | Date | Highlights |
 | --- | --- | --- |
-| [**1.2.1**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.1) | 2026-10-18 | YouTube's "confirm you're not a bot" answered with your browser's sign-in (Tools › YouTube Sign-In) for downloads, searches and streams; Spotify search without keys (or when Spotify refuses) through Deezer's catalog; folders picked in the Flatpak keep their real path |
+| [**1.3.0**](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.3.0) | 2026-10-22 | A calmer look: charcoal and gold by default (Midnight, Gold, Tiling Minimal), muted single-hue accents, a new logo; about half the memory (helper players run only when needed, smaller caches, glibc arenas capped; see [docs/memory-audit.md](docs/memory-audit.md)), memory shown in About; files gone since the last run (Telegram's cache) are skipped and their resume position no longer carries over to the next file; media keys move to the window still open |
+| [1.2.1](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.1) | 2026-10-18 | YouTube's "confirm you're not a bot" answered with your browser's sign-in (Tools › YouTube Sign-In) for downloads, searches and streams; Spotify search without keys (or when Spotify refuses) through Deezer's catalog; folders picked in the Flatpak keep their real path |
 | [1.2.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.2.0) | 2026-10-18 | Search YouTube (`Ctrl+Shift+F`) and Spotify (`Ctrl+Shift+S`) by name: play, queue or download songs and videos (MP3 or MP4), Spotify albums and playlists too; Show in File Manager and Share (Telegram, email, copy the file to paste in any chat; links to Telegram, WhatsApp, X, Facebook, Reddit) |
 | [1.1.0](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.1.0) | 2026-10-17 | Play queue apart from the playlist (Play Next, Add to Queue, a Queue tab), shuffle that changes the play order and never the playlist, `Ctrl+F` search whose results play on, ten themes, ten accent colors and three styles (Appearance, `Ctrl+Shift+T`) with a new electric violet look and logo, built-in artwork gallery for songs without a cover, blurred backdrop behind covers |
 | [1.0.8](https://github.com/Henok-Enyew/top-player-linux/releases/tag/v1.0.8) | 2026-10-10 | Flatpak: downloads, YouTube and Spotify streaming and Cut / Extract Media work, with the system's yt-dlp and ffmpeg |
@@ -908,9 +921,9 @@ publishes a GitHub Release with the packages and `SHA256SUMS`:
    add a `<release>` entry to
    [`packaging/linux/org.github.topplayer.metainfo.xml`](packaging/linux/org.github.topplayer.metainfo.xml),
    and commit.
-2. `git tag v1.2.1 && git push origin v1.2.1`
+2. `git tag v1.3.0 && git push origin v1.3.0`
 
-A tag with a suffix such as `v1.2.1-rc1` is published as a pre-release.
+A tag with a suffix such as `v1.3.0-rc1` is published as a pre-release.
 
 </details>
 

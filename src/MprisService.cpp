@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace {
 
@@ -42,17 +43,65 @@ MprisService::MprisService(MpvWidget *mpv, QWidget *window, QObject *parent)
     if (!bus.isConnected())
         return;
     // A second instance takes a name of its own, as the specification suggests.
-    QString name = serviceName();
-    if (!bus.registerService(name))
-        name += QStringLiteral(".instance%1").arg(QApplication::applicationPid());
-    m_registered = (name == serviceName() || bus.registerService(name))
-        && bus.registerObject(kObjectPath, this, QDBusConnection::ExportAdaptors);
+    if (!takeName())
+        return;
+    m_registered = bus.registerObject(kObjectPath, this, QDBusConnection::ExportAdaptors);
+    // The desktop sends the media keys to one player, usually the one that
+    // showed up last. When another window of the player closes, this one
+    // shows up again (or takes over the plain name), so the keys keep
+    // reaching a window that is still open.
+    bus.connect(QStringLiteral("org.freedesktop.DBus"), QStringLiteral("/org/freedesktop/DBus"),
+                QStringLiteral("org.freedesktop.DBus"), QStringLiteral("NameOwnerChanged"), this,
+                SLOT(onNameOwnerChanged(QString,QString,QString)));
 }
 
 MprisService::~MprisService()
 {
-    if (m_registered)
-        QDBusConnection::sessionBus().unregisterObject(kObjectPath);
+    if (!m_registered)
+        return;
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    bus.unregisterObject(kObjectPath);
+    // Freed at once, so another window can take it over before this process ends.
+    bus.unregisterService(m_name);
+}
+
+bool MprisService::takeName()
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    m_name = serviceName();
+    if (bus.registerService(m_name))
+        return true;
+    m_name += QStringLiteral(".instance%1").arg(QApplication::applicationPid());
+    if (bus.registerService(m_name))
+        return true;
+    m_name.clear();
+    return false;
+}
+
+QString MprisService::registeredName() const
+{
+    return m_registered ? m_name : QString();
+}
+
+void MprisService::onNameOwnerChanged(const QString &name, const QString & /*oldOwner*/, const QString &newOwner)
+{
+    if (!m_registered || !newOwner.isEmpty() || name == m_name
+        || (name != serviceName() && !name.startsWith(serviceName() + QLatin1Char('.'))))
+        return;
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (name == serviceName()) {
+        // The window with the plain name closed: take it over.
+        if (bus.registerService(serviceName()))
+            bus.unregisterService(std::exchange(m_name, serviceName()));
+        return;
+    }
+    // Another window closed; it may have been the one getting the keys.
+    // Appear anew under the plain name.
+    if (m_name != serviceName())
+        return;
+    bus.unregisterService(m_name);
+    if (!takeName())
+        m_registered = false;
 }
 
 QString MprisService::serviceName()

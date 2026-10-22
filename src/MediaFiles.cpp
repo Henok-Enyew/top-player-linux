@@ -10,6 +10,10 @@
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 namespace {
 
@@ -235,6 +239,48 @@ QString localPath(const QString &entry)
     if (url.scheme().size() > 1 && entry.contains(QLatin1String("://")))
         return url.isLocalFile() ? url.toLocalFile() : QString();
     return entry;
+}
+
+Availability checkLocalFiles(const QStringList &entries, int timeoutMs)
+{
+    QStringList local;
+    for (const QString &entry : entries) {
+        if (!localPath(entry).isEmpty())
+            local.append(entry);
+    }
+    Availability result;
+    if (local.isEmpty())
+        return result;
+
+    // A thread of its own rather than the shared pool: a stat() that never
+    // returns would otherwise hold a pool thread for the rest of the run.
+    struct Shared {
+        std::mutex mutex;
+        std::condition_variable done;
+        QSet<QString> missing;
+        qsizetype checked = 0;
+        bool finished = false;
+    };
+    auto shared = std::make_shared<Shared>();
+    std::thread([shared, local] {
+        for (const QString &entry : local) {
+            const QFileInfo info(localPath(entry));
+            const bool usable = info.isFile() && info.isReadable();
+            const std::lock_guard<std::mutex> lock(shared->mutex);
+            if (!usable)
+                shared->missing.insert(entry);
+            ++shared->checked;
+        }
+        const std::lock_guard<std::mutex> lock(shared->mutex);
+        shared->finished = true;
+        shared->done.notify_all();
+    }).detach();
+
+    std::unique_lock<std::mutex> lock(shared->mutex);
+    shared->done.wait_for(lock, std::chrono::milliseconds(timeoutMs), [&] { return shared->finished; });
+    result.missing = shared->missing;
+    result.complete = shared->checked == local.size();
+    return result;
 }
 
 } // namespace MediaFiles
