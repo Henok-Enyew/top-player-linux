@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
@@ -39,5 +40,17 @@ inline bool naturalLess(const QString &a, const QString &b) { return naturalComp
 // The local file an mpv playlist entry refers to (a path or a file:// URL),
 // or an empty string for streams and other URLs.
 QString localPath(const QString &entry);
+
+// What checkLocalFiles() found.
+struct Availability {
+    QSet<QString> missing; // entries whose file is gone or unreadable
+    bool complete = true;  // false if the check ran out of time
+};
+// Checks that the local files among `entries` (paths or file:// URLs) still
+// exist and can be read, in a worker thread, for at most `timeoutMs`: a
+// file on a mount that stopped answering (a network share, a Flatpak
+// document portal entry) must not freeze the window. Entries not checked in
+// time are not in `missing`. Streams are never checked.
+Availability checkLocalFiles(const QStringList &entries, int timeoutMs);
 
 } // namespace MediaFiles

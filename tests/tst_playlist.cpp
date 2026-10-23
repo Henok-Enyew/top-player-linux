@@ -114,6 +114,9 @@ private Q_SLOTS:
     void openStartsPlayback();
     void savePlaylistDialogAddsSuffix();
     void sessionRestore();
+    void sessionSkipsMissingFiles();
+    void sessionOnlyMissingFiles();
+    void failedResumeDoesNotCarryOver();
     void sessionDisabled();
     void largeFolderStaysResponsive();
 
@@ -995,6 +998,63 @@ void PlaylistTest::sessionRestore()
     m_mpv->play();
     QTRY_COMPARE_WITH_TIMEOUT(prop("playlist-pos").toInt(), 1, 10000);
     PlaylistSession::setResumePlayback(true);
+}
+
+void PlaylistTest::sessionSkipsMissingFiles()
+{
+    // A video opened from Telegram lives in its cache, which is cleared
+    // before the next start: the rest of the queue comes back without it.
+    const QString gone = m_dir.filePath(QStringLiteral("telegram-video.mkv"));
+    QVERIFY(QFile::copy(m_expected[4], gone));
+    PlaylistSession::State state;
+    state.entries = {{m_expected[0], {}, 2}, {gone, {}, 5}, {m_expected[1], {}, 3}};
+    state.current = 1;
+    state.position = 3;
+    QVERIFY(PlaylistSession::save(state));
+    QVERIFY(QFile::remove(gone));
+
+    QVERIFY(m_window->startSession(true));
+    const QStringList kept{m_expected[0], m_expected[1]};
+    QTRY_COMPARE_WITH_TIMEOUT(mpvFiles(), kept, 10000);
+    QTRY_COMPARE(viewFiles(), kept);
+    // The entry after the missing one is next, without the missing one's position.
+    QTest::qWait(300);
+    QVERIFY(m_mpv->isIdle());
+    m_mpv->play();
+    QTRY_COMPARE_WITH_TIMEOUT(prop("path").toString(), m_expected[1], 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(prop("time-pos").isValid(), 10000);
+    QVERIFY(prop("time-pos").toDouble() < 1);
+}
+
+void PlaylistTest::sessionOnlyMissingFiles()
+{
+    const QString gone = m_dir.filePath(QStringLiteral("gone.mkv"));
+    PlaylistSession::State state;
+    state.entries = {{gone, {}, 5}};
+    state.current = 0;
+    state.position = 3;
+    QVERIFY(PlaylistSession::save(state));
+
+    // Nothing to reopen: the start screen, not a queue that can't play.
+    QVERIFY(!m_window->startSession(true));
+    QTest::qWait(300);
+    QVERIFY(mpvFiles().isEmpty());
+    QVERIFY(m_mpv->isIdle());
+    QVERIFY(!QFileInfo::exists(PlaylistSession::sessionFile()));
+}
+
+void PlaylistTest::failedResumeDoesNotCarryOver()
+{
+    // The saved file vanishes between the check and mpv opening it.
+    const QString gone = m_dir.filePath(QStringLiteral("vanished.mkv"));
+    m_mpv->restorePlaylist({gone}, 0, 3.5);
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->isIdle() && mpvFiles() == QStringList{gone}, 10000);
+    QTest::qWait(300);
+    // Its resume position must not apply to the next file: a shorter one
+    // would start past its end and stop at once.
+    load({m_expected[2]});
+    QVERIFY(prop("time-pos").toDouble() < 1);
+    QVERIFY(!prop("eof-reached").toBool());
 }
 
 void PlaylistTest::sessionDisabled()

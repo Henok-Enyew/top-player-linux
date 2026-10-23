@@ -10,6 +10,7 @@
 #include "PlaylistSession.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
@@ -30,6 +31,8 @@ constexpr int kPlaylistRefreshMs = 30;
 constexpr int kSaveDelayMs = 1000;
 // While playing, the position is saved this often in case the player is killed.
 constexpr int kPositionSaveMs = 30000;
+// How long startup waits to learn whether the saved files are still there.
+constexpr int kRestoreCheckMs = 1500;
 // How long an entry sent to mpv is waited for before others count again.
 constexpr int kExpectedEntryMs = 10000;
 
@@ -613,15 +616,44 @@ bool PlaylistController::startSession(bool restore, bool handoff)
     if (!state || state->entries.isEmpty())
         return false;
 
+    // Files opened from a chat app or a download folder are often gone by the
+    // next start (Telegram clears its cache): they are left out, and so is
+    // the resume position if the file it belongs to is gone or not known to
+    // be there.
+    QStringList saved;
+    for (const PlaylistOps::Entry &entry : state->entries)
+        saved.append(entry.filename);
+    const MediaFiles::Availability availability = MediaFiles::checkLocalFiles(saved, kRestoreCheckMs);
+    const QString currentFile = saved.value(state->current);
+    const bool currentChecked = availability.complete || MediaFiles::localPath(currentFile).isEmpty();
     QStringList files;
-    for (const PlaylistOps::Entry &entry : state->entries) {
+    int current = -1;
+    for (qsizetype i = 0; i < state->entries.size(); ++i) {
+        const PlaylistOps::Entry &entry = state->entries[i];
+        if (availability.missing.contains(entry.filename))
+            continue;
+        // The saved entry, or the one after it if that is gone.
+        if (current < 0 && i >= state->current && state->current >= 0)
+            current = static_cast<int>(files.size());
         files.append(entry.filename);
         m_prober->setDuration(entry.filename, entry.duration);
     }
-    if (handoff || PlaylistSession::resumePlayback())
-        m_mpv->restorePlaylist(files, state->current, state->position);
+    const qsizetype gone = state->entries.size() - files.size();
+    if (gone == 1 && availability.missing.contains(currentFile))
+        Q_EMIT message(tr("No longer available:"), PlaylistOps::displayName(state->entries[state->current]));
+    else if (gone > 0)
+        Q_EMIT message(tr("No longer available:"), tr("%n file(s) from last time", nullptr, int(gone)));
+    if (files.isEmpty()) {
+        // Nothing left to reopen: start clean rather than with a dead queue.
+        QFile::remove(PlaylistSession::sessionFile());
+        return false;
+    }
+    const bool resume = (handoff || PlaylistSession::resumePlayback()) && currentChecked
+        && !availability.missing.contains(currentFile) && current >= 0 && files[current] == currentFile;
+    if (resume)
+        m_mpv->restorePlaylist(files, current, state->position);
     else
-        m_mpv->restorePlaylist(files, state->current);
+        m_mpv->restorePlaylist(files, current);
     return true;
 }
 

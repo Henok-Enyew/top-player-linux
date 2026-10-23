@@ -12,15 +12,51 @@
 namespace {
 
 constexpr int kWatchdogMs = 5000;
+// The prober (a second player) is shut down this long after its queue ran
+// empty, instead of keeping the last file open for the rest of the run.
+constexpr int kIdleReleaseMs = 3000;
 
 } // namespace
 
 MediaProber::MediaProber(QObject *parent)
     : QObject(parent)
 {
-    m_mpv = mpv_create();
+    m_watchdog.setSingleShot(true);
+    m_watchdog.setInterval(kWatchdogMs);
+    connect(&m_watchdog, &QTimer::timeout, this, [this] {
+        // A file that takes this long may be on a mount that stopped
+        // answering, and would hold up every file after it: the next one
+        // starts in a fresh prober.
+        destroyMpvDetached(std::exchange(m_mpv, nullptr));
+        finishCurrent(-1);
+    });
+    m_idleTimer.setSingleShot(true);
+    m_idleTimer.setInterval(kIdleReleaseMs);
+    connect(&m_idleTimer, &QTimer::timeout, this, [this] {
+        if (!isBusy())
+            destroyMpvDetached(std::exchange(m_mpv, nullptr));
+    });
+}
+
+MediaProber::~MediaProber()
+{
     if (!m_mpv)
         return;
+    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
+    mpv_terminate_destroy(m_mpv);
+}
+
+bool MediaProber::ensureMpv()
+{
+    if (m_mpv)
+        return true;
+    if (m_broken)
+        return false;
+    m_mpv = mpv_create();
+    if (!m_mpv) {
+        m_broken = true;
+        return false;
+    }
 
     // Open files paused into null outputs: the duration is known once the
     // demuxer has read the headers, and at most a frame is decoded. (With every
@@ -35,6 +71,8 @@ MediaProber::MediaProber(QObject *parent)
         {"pause", "yes"},
         {"idle", "yes"},
         {"cache", "no"},
+        {"demuxer-max-bytes", "4MiB"},
+        {"demuxer-max-back-bytes", "0"},
         {"sub-auto", "no"},
         {"audio-file-auto", "no"},
         {"load-scripts", "no"},
@@ -48,29 +86,16 @@ MediaProber::MediaProber(QObject *parent)
     if (mpv_initialize(m_mpv) < 0) {
         mpv_terminate_destroy(m_mpv);
         m_mpv = nullptr;
-        return;
+        m_broken = true;
+        return false;
     }
     mpv_set_wakeup_callback(m_mpv, &MediaProber::onWakeup, this);
-
-    m_watchdog.setSingleShot(true);
-    m_watchdog.setInterval(kWatchdogMs);
-    connect(&m_watchdog, &QTimer::timeout, this, [this] {
-        mpvCommandAsync(m_mpv, {QStringLiteral("stop")});
-        finishCurrent(-1);
-    });
-}
-
-MediaProber::~MediaProber()
-{
-    if (!m_mpv)
-        return;
-    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
-    mpv_terminate_destroy(m_mpv);
+    return true;
 }
 
 void MediaProber::probe(const QStringList &entries)
 {
-    if (!m_mpv)
+    if (m_broken)
         return;
     for (const QString &entry : entries) {
         if (m_durations.contains(entry) || entry == m_current || m_queued.contains(entry))
@@ -105,9 +130,18 @@ void MediaProber::startNext()
     if (!m_current.isEmpty())
         return;
     if (m_queue.isEmpty()) {
+        if (m_mpv)
+            m_idleTimer.start();
         Q_EMIT finished();
         return;
     }
+    if (!ensureMpv()) {
+        m_queue.clear();
+        m_queued.clear();
+        Q_EMIT finished();
+        return;
+    }
+    m_idleTimer.stop();
     m_current = m_queue.takeFirst();
     m_queued.remove(m_current);
     m_watchdog.start();

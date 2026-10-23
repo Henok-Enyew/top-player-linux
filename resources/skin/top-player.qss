@@ -201,6 +201,13 @@ QComboBox QAbstractItemView {
     selection-color: @text@;
 }
 
+/* Lists and tables without rules of their own (Live TV, ...): the selection
+   is a wash of the accent, as in the playlist, so it reads on any accent. */
+QAbstractItemView {
+    selection-background-color: @accentTint@;
+    selection-color: @text@;
+}
+
 QCheckBox,
 QRadioButton {
     color: @text@;
@@ -332,6 +339,8 @@ QSlider::handle:vertical:hover {
     background: @accentGlow@;
 }
 
+/* In the UI font even in Tiling Minimal: three monospace labels and the
+   count don't fit a narrow drawer. */
 QTabBar#PlaylistTabs::tab {
     background: transparent;
     color: @text2@;
@@ -339,7 +348,6 @@ QTabBar#PlaylistTabs::tab {
     border-bottom: 2px solid transparent;
     padding: 6px 9px;
     font-weight: bold;
-    @headingFont@
 }
 
 QTabBar#PlaylistTabs::tab:hover {

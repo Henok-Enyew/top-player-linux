@@ -20,7 +20,7 @@ namespace Theme {
 // The live colors of the current appearance, for widgets that paint
 // themselves. They change when the appearance does: read them while
 // painting, or refresh through bind(), instead of copying them once.
-extern const QColor &Accent;        // brand violet by default
+extern const QColor &Accent;        // brand gold by default
 extern const QColor &AccentHover;
 extern const QColor &AccentDeep;
 extern const QColor &Accent2;       // the second color of accent gradients
@@ -34,9 +34,10 @@ extern const QColor &TextPrimary;
 extern const QColor &TextSecondary;
 extern const QColor &TextDim;
 
-// The fixed brand colors (logo, About), whatever the appearance.
-inline constexpr QColor BrandViolet{0x7C, 0x5C, 0xFF};
-inline constexpr QColor BrandMagenta{0xFF, 0x4F, 0xD8};
+// The fixed brand colors (logo, About), whatever the appearance: a warm
+// gold that deepens into amber, the default accent.
+inline constexpr QColor BrandGold{0xF5, 0xB8, 0x3D};
+inline constexpr QColor BrandAmber{0xE0, 0x8A, 0x1E};
 
 // "#rrggbb", for rich text.
 inline QString hex(const QColor &color) { return color.name(QColor::HexRgb); }
@@ -56,7 +57,8 @@ struct Scheme {
     QColor accent, accent2; // the theme's own accent ("Theme Native")
 };
 
-// An accent palette; "native" takes the theme's own accent.
+// An accent palette; "native" takes the theme's own accent. The second color
+// is a deeper shade of the first, so gradients stay within one hue.
 struct AccentPalette {
     QString id;
     QString name;
@@ -82,11 +84,11 @@ const QList<AccentPalette> &accents();
 const QList<Style> &styles();
 
 // What the user picked; ids from the lists above. Unknown ids fall back to
-// the defaults.
+// the defaults (the first of each list).
 struct Appearance {
     QString theme = QStringLiteral("midnight");
-    QString accent = QStringLiteral("violet");
-    QString style = QStringLiteral("glass");
+    QString accent = QStringLiteral("gold");
+    QString style = QStringLiteral("tiling");
 
     bool operator==(const Appearance &other) const
     {

@@ -13,18 +13,53 @@
 namespace {
 
 constexpr int kThumbnailWidth = 256;
-constexpr int kCacheEntries = 300;
+// Previews kept for the file, by size: about a hundred 16:9 frames.
+constexpr int kCacheKiB = 16 * 1024;
 constexpr int kWatchdogMs = 3000;
+// The decoder (a whole second player, with its threads and buffers) is shut
+// down this long after the last preview, and started again on the next.
+constexpr int kIdleReleaseMs = 20000;
 
 } // namespace
 
 ThumbnailGenerator::ThumbnailGenerator(QObject *parent)
     : QObject(parent)
-    , m_cache(kCacheEntries)
+    , m_cache(kCacheKiB)
 {
-    m_mpv = mpv_create();
+    m_watchdog.setSingleShot(true);
+    m_watchdog.setInterval(kWatchdogMs);
+    connect(&m_watchdog, &QTimer::timeout, this, [this] { finishCurrent(false); });
+    m_idleTimer.setSingleShot(true);
+    m_idleTimer.setInterval(kIdleReleaseMs);
+    connect(&m_idleTimer, &QTimer::timeout, this, [this] {
+        if (m_inFlight >= 0)
+            m_idleTimer.start();
+        else
+            releaseMpv();
+    });
+}
+
+ThumbnailGenerator::~ThumbnailGenerator()
+{
+    // Here and now, not in a thread that could still run as the process exits.
     if (!m_mpv)
         return;
+    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
+    mpv_render_context_free(m_renderCtx);
+    mpv_terminate_destroy(m_mpv);
+}
+
+bool ThumbnailGenerator::ensureMpv()
+{
+    if (m_mpv)
+        return true;
+    if (m_broken)
+        return false;
+    m_mpv = mpv_create();
+    if (!m_mpv) {
+        m_broken = true;
+        return false;
+    }
 
     // Decode as cheaply as possible: no audio, subtitles, scripts or caching,
     // and reduced-quality decoding. Seeks are exact so the preview matches the
@@ -42,6 +77,8 @@ ThumbnailGenerator::ThumbnailGenerator(QObject *parent)
         {"vd-lavc-skiploopfilter", "all"},
         {"vd-lavc-threads", "2"},
         {"cache", "no"},
+        {"demuxer-max-bytes", "8MiB"},
+        {"demuxer-max-back-bytes", "0"},
         {"sub-auto", "no"},
         {"audio-file-auto", "no"},
         {"load-scripts", "no"},
@@ -52,42 +89,35 @@ ThumbnailGenerator::ThumbnailGenerator(QObject *parent)
     for (const auto &option : options)
         mpv_set_option_string(m_mpv, option[0], option[1]);
 
-    if (mpv_initialize(m_mpv) < 0) {
-        mpv_terminate_destroy(m_mpv);
-        m_mpv = nullptr;
-        return;
-    }
-
     mpv_render_param params[]{
         {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_SW)},
         {MPV_RENDER_PARAM_INVALID, nullptr},
     };
-    if (mpv_render_context_create(&m_renderCtx, m_mpv, params) < 0) {
+    if (mpv_initialize(m_mpv) < 0 || mpv_render_context_create(&m_renderCtx, m_mpv, params) < 0) {
         mpv_terminate_destroy(m_mpv);
         m_mpv = nullptr;
-        return;
+        m_renderCtx = nullptr;
+        m_broken = true;
+        return false;
     }
     mpv_render_context_set_update_callback(m_renderCtx, &ThumbnailGenerator::onRenderUpdateCallback, this);
     mpv_set_wakeup_callback(m_mpv, &ThumbnailGenerator::onWakeup, this);
-
-    m_watchdog.setSingleShot(true);
-    m_watchdog.setInterval(kWatchdogMs);
-    connect(&m_watchdog, &QTimer::timeout, this, [this] { finishCurrent(false); });
+    return true;
 }
 
-ThumbnailGenerator::~ThumbnailGenerator()
+void ThumbnailGenerator::releaseMpv()
 {
-    if (!m_mpv)
-        return;
-    mpv_set_wakeup_callback(m_mpv, nullptr, nullptr);
-    mpv_render_context_free(m_renderCtx);
-    mpv_terminate_destroy(m_mpv);
+    m_watchdog.stop();
+    m_idleTimer.stop();
+    destroyMpvDetached(std::exchange(m_mpv, nullptr), std::exchange(m_renderCtx, nullptr));
+    // The file opens again on the next request; the previews made stay.
+    m_opened = false;
+    m_loaded = false;
+    m_inFlight = -1;
 }
 
 void ThumbnailGenerator::setFile(const QString &path)
 {
-    if (!m_mpv)
-        return;
     if (path == m_path)
         return;
     m_cache.clear();
@@ -97,21 +127,27 @@ void ThumbnailGenerator::setFile(const QString &path)
     m_watchdog.stop();
     m_path = path;
     // Close the previous file; the new one opens on the first hover.
-    if (std::exchange(m_opened, false))
+    if (std::exchange(m_opened, false) && m_mpv)
         mpvCommandAsync(m_mpv, {QStringLiteral("stop")});
+    // Nothing to preview: the decoder can go now.
+    if (m_path.isEmpty())
+        releaseMpv();
 }
 
 void ThumbnailGenerator::request(double seconds)
 {
     if (!isAvailable())
         return;
-    if (!std::exchange(m_opened, true))
-        mpvCommandAsync(m_mpv, {QStringLiteral("loadfile"), m_path});
     const int second = std::max(0, static_cast<int>(seconds));
     if (const QImage *cached = m_cache.object(second)) {
         Q_EMIT thumbnailReady(second, *cached);
         return;
     }
+    if (!ensureMpv())
+        return;
+    m_idleTimer.start();
+    if (!std::exchange(m_opened, true))
+        mpvCommandAsync(m_mpv, {QStringLiteral("loadfile"), m_path});
     m_pending = second;
     startNext();
 }
@@ -149,7 +185,7 @@ void ThumbnailGenerator::finishCurrent(bool render)
             // mpv leaves the padding byte at 0; RGB32 makes it opaque so the frame
             // is not blended away when composited over the video surface.
             image.convertTo(QImage::Format_RGB32);
-            m_cache.insert(second, new QImage(image));
+            m_cache.insert(second, new QImage(image), static_cast<int>(image.sizeInBytes() / 1024));
             Q_EMIT thumbnailReady(second, image);
         }
     }
@@ -178,8 +214,11 @@ void ThumbnailGenerator::processEvents()
             mpv_get_property(m_mpv, "dheight", MPV_FORMAT_INT64, &h);
             if (w > 0 && h > 0) {
                 const int height = std::clamp(static_cast<int>(std::lround(kThumbnailWidth * double(h) / double(w))), 32, kThumbnailWidth);
-                m_size = QSize(kThumbnailWidth, height & ~1);
-                m_cache.clear();
+                // The decoder restarting on the same file keeps the previews made.
+                if (const QSize size(kThumbnailWidth, height & ~1); size != m_size) {
+                    m_size = size;
+                    m_cache.clear();
+                }
             }
             break;
         }

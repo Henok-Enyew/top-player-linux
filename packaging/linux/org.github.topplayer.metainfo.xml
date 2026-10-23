@@ -8,7 +8,7 @@
   <description>
     <p>
       Top Player is a high-performance, lightweight native media player for
-      Linux powered by Qt6 and libmpv, with a borderless electric-violet skin, ten
+      Linux powered by Qt6 and libmpv, with a borderless charcoal-and-gold skin, ten
       switchable themes and a keyboard-driven workflow.
     </p>
     <ul>
@@ -33,6 +33,17 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.3.0" date="2026-10-22">
+      <description>
+        <ul>
+          <li>A calmer, more professional look: charcoal and gold by default, muted accent colors that each stay within one hue, and a new logo</li>
+          <li>Uses about half the memory: the decoders for previews, durations and covers run only while needed, and caches are smaller</li>
+          <li>About Top Player shows the memory the player uses</li>
+          <li>Files that are gone since the last run (such as videos opened from Telegram) are skipped with a note, instead of leaving the player stuck</li>
+          <li>With two windows open, closing the one that had the media keys hands them to the other</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.1" date="2026-10-18">
       <description>
         <ul>

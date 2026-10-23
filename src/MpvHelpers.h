@@ -1,12 +1,16 @@
 #pragma once
 
+#include "MemoryUsage.h"
+
 #include <QByteArray>
 #include <QStringList>
 #include <QVariantMap>
 
 #include <mpv/client.h>
+#include <mpv/render.h>
 
 #include <deque>
+#include <thread>
 #include <vector>
 
 namespace MpvDetail {
@@ -87,4 +91,23 @@ inline int mpvCommandNodeAsync(mpv_handle *mpv, const QVariantMap &args, uint64_
     mpv_node node = builder.build(args);
     // mpv parses the command before returning, so the nodes may go away then.
     return mpv_command_node_async(mpv, reply, &node);
+}
+
+// Frees a helper player (and its render context, if any) in a thread of its
+// own: one that hangs on a file (a mount that stopped answering) must not
+// freeze the window while it shuts down. Its wakeup and render callbacks
+// are cleared first, so nothing reaches the caller afterwards.
+inline void destroyMpvDetached(mpv_handle *mpv, mpv_render_context *renderCtx = nullptr)
+{
+    if (!mpv)
+        return;
+    mpv_set_wakeup_callback(mpv, nullptr, nullptr);
+    if (renderCtx)
+        mpv_render_context_set_update_callback(renderCtx, nullptr, nullptr);
+    std::thread([mpv, renderCtx] {
+        if (renderCtx)
+            mpv_render_context_free(renderCtx);
+        mpv_terminate_destroy(mpv);
+        MemoryUsage::releaseFreed();
+    }).detach();
 }

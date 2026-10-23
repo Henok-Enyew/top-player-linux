@@ -9,7 +9,8 @@
 struct mpv_handle;
 
 // Reads the durations of local media files, one at a time, with a second,
-// headless libmpv instance that opens each file without decoding it.
+// headless libmpv instance that opens each file without decoding it. The
+// instance runs only while there is something to probe.
 class MediaProber : public QObject
 {
     Q_OBJECT
@@ -37,14 +38,18 @@ private Q_SLOTS:
 
 private:
     static void onWakeup(void *ctx);
+    // Starts the prober if it isn't running; false if libmpv can't.
+    bool ensureMpv();
     void startNext();
     void finishCurrent(double seconds);
 
     mpv_handle *m_mpv = nullptr;
+    bool m_broken = false;
     QHash<QString, double> m_durations; // includes failures, as -1
     QStringList m_queue;
     // Entries in m_queue, for constant-time lookups in long playlists.
     QSet<QString> m_queued;
     QString m_current;
     QTimer m_watchdog;
+    QTimer m_idleTimer;
 };

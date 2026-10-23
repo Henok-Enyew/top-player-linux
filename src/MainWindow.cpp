@@ -440,9 +440,11 @@ void MainWindow::onStateUpdated(const QString &name, const QVariant &value)
     } else if (name == QLatin1String("playlist")) {
         m_playlist->setPlaylist(value.toList());
     } else if (name == QLatin1String("path")) {
-        // Previews come from a second decoder, so only local files are worth it.
+        // Previews come from a second decoder, so only local files are worth
+        // it. Not looked up on disk here: a file on a mount that stopped
+        // answering would freeze the window; the decoder finds out by itself.
         const QString path = value.toString();
-        m_thumbnails->setFile(QFileInfo(path).isFile() ? path : QString());
+        m_thumbnails->setFile(MediaFiles::localPath(path).isEmpty() ? QString() : path);
         // In/Out points belong to the file they were set in.
         if (m_clipIn >= 0 || m_clipOut >= 0)
             clearClipRange();
@@ -569,8 +571,14 @@ void MainWindow::onFileFailed(const QString &path, const QString & /*error*/)
 {
     if (m_liveStreams)
         m_liveStreams->markUnavailable(path);
-    if (path.isEmpty() || path != m_stream.url)
+    if (path.isEmpty())
         return;
+    if (path != m_stream.url) {
+        // Say why nothing plays, e.g. a file deleted since it was queued.
+        const QString local = MediaFiles::localPath(path);
+        m_osd->showValue(tr("Can't open:"), local.isEmpty() ? path : QFileInfo(local).fileName());
+        return;
+    }
     const QString name = m_stream.name;
     m_stream = {};
     if (!m_streamFallbacks.isEmpty()) {

@@ -242,22 +242,19 @@ void EmptyStateWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    // A soft spotlight behind the content, lit by two ambient accent glows.
+    // A soft spotlight behind the content, warmed by a faint wash of the
+    // accent above it: enough to tie the page to the theme, quiet enough
+    // that the logo and the buttons stay what the eye finds first.
     const QPointF center = rect().center();
     const qreal reach = std::max(width(), height());
     QRadialGradient spotlight(center, reach * 0.75);
     spotlight.setColorAt(0, Theme::Panel);
     spotlight.setColorAt(1, Theme::Surface);
     p.fillRect(rect(), spotlight);
-    const qreal strength = Theme::isLight() ? 0.1 : 0.16;
-    auto ambient = [&](const QPointF &at, qreal radius, const QColor &color) {
-        QRadialGradient glow(at, radius);
-        glow.setColorAt(0, Theme::withAlpha(color, strength));
-        glow.setColorAt(1, Theme::withAlpha(color, 0));
-        p.fillRect(rect(), glow);
-    };
-    ambient(QPointF(width() * 0.3, height() * 0.25), reach * 0.45, Theme::Accent);
-    ambient(QPointF(width() * 0.75, height() * 0.8), reach * 0.4, Theme::Accent2);
+    QRadialGradient wash(QPointF(width() * 0.5, height() * 0.3), reach * 0.5);
+    wash.setColorAt(0, Theme::withAlpha(Theme::Accent, Theme::isLight() ? 0.05 : 0.07));
+    wash.setColorAt(1, Theme::withAlpha(Theme::Accent, 0));
+    p.fillRect(rect(), wash);
 
     if (m_dropHighlight) {
         const QRectF zone = QRectF(rect()).adjusted(kDropInset, kDropInset, -kDropInset, -kDropInset);
